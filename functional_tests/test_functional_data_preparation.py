@@ -4,7 +4,7 @@ Tests the data preparation scripts.
 import os
 import numpy as np
 
-from DataPreparation import convert_mat_file_to_numpy_file
+from data_preparation import DataPreparation
 
 
 class TestDataPreparation:
@@ -23,7 +23,7 @@ class TestDataPreparation:
 
         # Run the conversion script.
         mat_file_path = os.path.join('data', 'nyu_depth_v2_labeled.mat')
-        convert_mat_file_to_numpy_file(mat_file_path)
+        DataPreparation.convert_mat_file_to_numpy_file(mat_file_path)
 
         # Check that the files are created.
         assert os.path.isfile(images_numpy_file_path)
