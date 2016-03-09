@@ -25,7 +25,7 @@ class DataPreparation:
         np.save(os.path.join('data', 'depths_' + basename) + '.npy', depths)
 
     @staticmethod
-    def convert_mat_data_to_numpy_array(mat_data, variable_name_in_mat_data):
+    def convert_mat_data_to_numpy_array(mat_data, variable_name_in_mat_data, number_of_samples=None):
         """
         Converts a mat data variable to a numpy array.
 
@@ -37,4 +37,7 @@ class DataPreparation:
         :rtype: np.ndarray
         """
         mat_variable = mat_data.get(variable_name_in_mat_data)
-        return np.array(mat_variable).transpose()
+        untransposed_array = np.array(mat_variable)
+        if number_of_samples:
+            untransposed_array = untransposed_array[:number_of_samples]
+        return untransposed_array.transpose()

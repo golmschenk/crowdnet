@@ -1,10 +1,9 @@
 """
 Unit tests for the data_preparation module.
 """
-import os
 from unittest.mock import patch, Mock
-
-#import numpy as np
+import os
+import numpy as np
 
 from data_preparation import DataPreparation
 
@@ -53,3 +52,13 @@ class TestDataPreparation:
 
         assert mock_numpy_save.call_args_list[0] == ((os.path.join('data', 'images_') + '.npy', 1),)
         assert mock_numpy_save.call_args_list[1] == ((os.path.join('data', 'depths_') + '.npy', 2),)
+
+    def test_convert_mat_data_to_numpy_array_can_specify_the_number_of_images_to_extract(self):
+        data_preparation = DataPreparation()
+        mock_mat_data = Mock()
+        mock_mat_data.get.return_value = np.array([[1], [2], [3]])
+
+        transposed_array = data_preparation.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable',
+                                                                            number_of_samples=2)
+
+        assert np.array_equal(transposed_array, np.array([[1, 2]]))
