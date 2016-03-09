@@ -24,7 +24,8 @@ class DataPreparation:
         np.save(os.path.join('data', 'images_' + basename) + '.npy', images)
         np.save(os.path.join('data', 'depths_' + basename) + '.npy', depths)
 
-    def convert_mat_data_to_numpy_array(self, mat_data, variable_name_in_mat_data):
+    @staticmethod
+    def convert_mat_data_to_numpy_array(mat_data, variable_name_in_mat_data):
         """
         Converts a mat data variable to a numpy array.
 

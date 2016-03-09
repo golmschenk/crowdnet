@@ -33,15 +33,15 @@ class TestDataPreparation:
         assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[1] == (('fake mat data', 'depths'),)
         assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[0] == (('fake mat data', 'images'),)
 
-    # def test_convert_mat_data_to_numpy_array_extracts_and_tranposes_the_data(self):
-    #     data_preparation = DataPreparation()
-    #     mock_mat_data = Mock()
-    #     mock_mat_data.get.return_value = np.array([[1, 2, 3]])
-    #
-    #     transposed_array = data_preparation.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable')
-    #
-    #     assert mock_mat_data.get.call_args == (('fake variable',),)
-    #     assert np.array_equal(transposed_array, np.array([[1], [2], [3]]))
+    def test_convert_mat_data_to_numpy_array_extracts_and_tranposes_the_data(self):
+        data_preparation = DataPreparation()
+        mock_mat_data = Mock()
+        mock_mat_data.get.return_value = np.array([[1, 2, 3]])
+
+        transposed_array = data_preparation.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable')
+
+        assert mock_mat_data.get.call_args == (('fake variable',),)
+        assert np.array_equal(transposed_array, np.array([[1], [2], [3]]))
 
     @patch('h5py.File')
     @patch('numpy.save')
