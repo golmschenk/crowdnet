@@ -29,8 +29,8 @@ class TestDataPreparation:
 
         data_preparation.convert_mat_file_to_numpy_file('')
 
-        assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[1] == (('fake mat data', 'depths'),)
-        assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[0] == (('fake mat data', 'images'),)
+        assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[1][0] == ('fake mat data', 'depths')
+        assert data_preparation.convert_mat_data_to_numpy_array.call_args_list[0][0] == ('fake mat data', 'images')
 
     def test_convert_mat_data_to_numpy_array_extracts_and_tranposes_the_data(self):
         data_preparation = DataPreparation()
@@ -62,3 +62,16 @@ class TestDataPreparation:
                                                                             number_of_samples=2)
 
         assert np.array_equal(transposed_array, np.array([[1, 2]]))
+
+    @patch('h5py.File')
+    @patch('numpy.save')
+    def test_convert_mat_file_to_numpy_file_passes_can_be_called_on_a_specific_number_of_images(self,
+                                                                                                mock_numpy_save,
+                                                                                                h5py_file_mock):
+        data_preparation = DataPreparation()
+        mock_convert = Mock()
+        data_preparation.convert_mat_data_to_numpy_array = mock_convert
+
+        data_preparation.convert_mat_file_to_numpy_file('', number_of_samples=2)
+
+        assert mock_convert.call_args[1]['number_of_samples'] == 2
