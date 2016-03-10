@@ -15,6 +15,7 @@ class TestDataPreparation:
         mat_file_name = 'fake name'
         data_preparation = DataPreparation()
         data_preparation.crop_data = Mock()
+        data_preparation.convert_mat_data_to_numpy_array = Mock()
 
         data_preparation.convert_mat_file_to_numpy_file(mat_file_name)
 
@@ -37,12 +38,12 @@ class TestDataPreparation:
     def test_convert_mat_data_to_numpy_array_extracts_and_tranposes_the_data(self):
         data_preparation = DataPreparation()
         mock_mat_data = Mock()
-        mock_mat_data.get.return_value = np.array([[1, 2, 3]])
+        mock_mat_data.get.return_value = np.array([[[[1, 2, 3]]]])
 
         transposed_array = data_preparation.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable')
 
         assert mock_mat_data.get.call_args == (('fake variable',),)
-        assert np.array_equal(transposed_array, np.array([[1], [2], [3]]))
+        assert np.array_equal(transposed_array, np.array([[[[1]], [[2]], [[3]]]]))
 
     @patch('h5py.File')
     @patch('numpy.save')
@@ -59,12 +60,12 @@ class TestDataPreparation:
     def test_convert_mat_data_to_numpy_array_can_specify_the_number_of_images_to_extract(self):
         data_preparation = DataPreparation()
         mock_mat_data = Mock()
-        mock_mat_data.get.return_value = np.array([[1], [2], [3]])
+        mock_mat_data.get.return_value = np.array([[[[1]]], [[[2]]], [[[3]]]])
 
         transposed_array = data_preparation.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable',
                                                                             number_of_samples=2)
 
-        assert np.array_equal(transposed_array, np.array([[1, 2]]))
+        assert np.array_equal(transposed_array, np.array([[[[1]]], [[[2]]]]))
 
     @patch('h5py.File')
     @patch('numpy.save')
@@ -82,8 +83,8 @@ class TestDataPreparation:
 
     def test_crop_data_removes_edge_data(self):
         data_preparation = DataPreparation()
-        array = np.arange(324.0).reshape((18, 18))
+        array = np.arange(324.0).reshape((1, 18, 18))
 
         cropped_array = data_preparation.crop_data(array)
 
-        assert np.array_equal(cropped_array, array[8:10, 8:10])
+        assert np.array_equal(cropped_array, array[:, 8:10, 8:10])

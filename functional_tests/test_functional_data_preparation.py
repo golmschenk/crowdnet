@@ -34,6 +34,6 @@ class TestDataPreparation:
 
         # Check that magic values are correct when the data is reloaded from numpy files.
         images = np.load(images_numpy_file_path)
-        assert images[10, 10, 1, 10] == 89
+        assert images[10, 10, 10, 1] == 117
         depths = np.load(depths_numpy_file_path)
-        assert math.isclose(depths[10, 10, 10], 2.27751, abs_tol=0.001)
+        assert math.isclose(depths[10, 10, 10], 2.274, abs_tol=0.001)

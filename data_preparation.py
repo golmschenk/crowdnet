@@ -4,6 +4,7 @@ Code for preparing data.
 import os
 import h5py
 import numpy as np
+from matplotlib import pyplot as plt
 
 
 class DataPreparation:
@@ -46,7 +47,10 @@ class DataPreparation:
         untransposed_array = np.array(mat_variable)
         if number_of_samples:
             untransposed_array = untransposed_array[:number_of_samples]
-        return untransposed_array.transpose()
+        if untransposed_array.ndim == 3:  # For depth images.
+            return untransposed_array.transpose((0, 2, 1))
+        else:  # For RGB images.
+            return untransposed_array.transpose((0, 3, 2, 1))
 
     @staticmethod
     def crop_data(data):
@@ -58,9 +62,23 @@ class DataPreparation:
         :return: The cropped data.
         :rtype: np.ndarray
         """
-        return data[8:-8, 8:-8]
+        return data[:, 8:-8, 8:-8]
 
 
 if __name__ == '__main__':
     data_preparation = DataPreparation()
-    data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat', number_of_samples=10)
+    # data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat', number_of_samples=10)
+
+    images = np.load('data/images_nyu_depth_v2_labeled.npy')
+    depths = np.load('data/depths_nyu_depth_v2_labeled.npy')
+
+    image = images[7]
+    depth = depths[7]
+
+    f = plt.figure()
+    i = f.add_subplot(2, 1, 1)
+    i.imshow(image, interpolation='nearest')
+    d = f.add_subplot(2, 1, 2)
+    d.imshow(depth, interpolation='nearest')
+    plt.show()
+    plt.waitforbuttonpress()
