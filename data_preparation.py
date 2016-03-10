@@ -21,7 +21,9 @@ class DataPreparation:
         """
         mat_data = h5py.File(mat_file_path, 'r')
         images = self.convert_mat_data_to_numpy_array(mat_data, 'images', number_of_samples=number_of_samples)
+        images = self.crop_data(images)
         depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths', number_of_samples=number_of_samples)
+        depths = self.crop_data(depths)
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
         np.save(os.path.join('data', 'images_' + basename) + '.npy', images)
         np.save(os.path.join('data', 'depths_' + basename) + '.npy', depths)
@@ -46,7 +48,19 @@ class DataPreparation:
             untransposed_array = untransposed_array[:number_of_samples]
         return untransposed_array.transpose()
 
+    @staticmethod
+    def crop_data(data):
+        """
+        Crop the NYU data to remove dataless borders.
+
+        :param data: The numpy array to crop
+        :type data: np.ndarray
+        :return: The cropped data.
+        :rtype: np.ndarray
+        """
+        return data[8:-8, 8:-8]
+
 
 if __name__ == '__main__':
     data_preparation = DataPreparation()
-    data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat')
+    data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat', number_of_samples=10)

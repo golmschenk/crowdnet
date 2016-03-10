@@ -14,6 +14,7 @@ class TestDataPreparation:
     def test_convert_mat_file_to_numpy_file_reads_the_mat_file(self, h5py_file_mock, mock_numpy_save):
         mat_file_name = 'fake name'
         data_preparation = DataPreparation()
+        data_preparation.crop_data = Mock()
 
         data_preparation.convert_mat_file_to_numpy_file(mat_file_name)
 
@@ -26,6 +27,7 @@ class TestDataPreparation:
         h5py_file_mock.return_value = 'fake mat data'
         data_preparation = DataPreparation()
         data_preparation.convert_mat_data_to_numpy_array = Mock()
+        data_preparation.crop_data = Mock()
 
         data_preparation.convert_mat_file_to_numpy_file('')
 
@@ -47,6 +49,7 @@ class TestDataPreparation:
     def test_convert_mat_file_to_numpy_file_writes_extracted_numpys_to_files(self, mock_numpy_save, h5py_file_mock):
         data_preparation = DataPreparation()
         data_preparation.convert_mat_data_to_numpy_array = Mock(side_effect=[1, 2])
+        data_preparation.crop_data = lambda x: x
 
         data_preparation.convert_mat_file_to_numpy_file('')
 
@@ -71,7 +74,16 @@ class TestDataPreparation:
         data_preparation = DataPreparation()
         mock_convert = Mock()
         data_preparation.convert_mat_data_to_numpy_array = mock_convert
+        data_preparation.crop_data = Mock()
 
         data_preparation.convert_mat_file_to_numpy_file('', number_of_samples=2)
 
         assert mock_convert.call_args[1]['number_of_samples'] == 2
+
+    def test_crop_data_removes_edge_data(self):
+        data_preparation = DataPreparation()
+        array = np.arange(324.0).reshape((18, 18))
+
+        cropped_array = data_preparation.crop_data(array)
+
+        assert np.array_equal(cropped_array, array[8:10, 8:10])
