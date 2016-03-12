@@ -26,8 +26,9 @@ class DataPreparation:
         depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths', number_of_samples=number_of_samples)
         depths = self.crop_data(depths)
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
-        np.save(os.path.join('data', 'images_' + basename) + '.npy', images)
-        np.save(os.path.join('data', 'depths_' + basename) + '.npy', depths)
+        data_directory = os.path.dirname(mat_file_path)
+        np.save(os.path.join(data_directory, 'images_' + basename) + '.npy', images)
+        np.save(os.path.join(data_directory, 'depths_' + basename) + '.npy', depths)
 
     @staticmethod
     def convert_mat_data_to_numpy_array(mat_data, variable_name_in_mat_data, number_of_samples=None):
