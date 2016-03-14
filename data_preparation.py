@@ -5,12 +5,14 @@ import os
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
+import tensorflow as tf
 
 
 class DataPreparation:
     """
     A class for data preparation.
     """
+
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
         """
         Generate image and depth numpy files from the passed mat file path.
@@ -65,21 +67,70 @@ class DataPreparation:
         """
         return data[:, 8:-8, 8:-8]
 
+    def convert_mat_to_tfrecord(self, mat_file_path, data_directory='data'):
+        """
+        Converts the mat file data into a TFRecords file.
+
+        :param mat_file_path: The path to mat file to convert.
+        :type mat_file_path: str
+        :param data_directory: Currently unused.
+        :type data_directory: str
+        """
+        mat_data = h5py.File(mat_file_path, 'r')
+        uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
+        images = self.crop_data(uncropped_images)
+        uncropped_depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
+        depths = self.crop_data(uncropped_depths)
+        basename = os.path.basename(os.path.splitext(mat_file_path)[0])
+        data_directory = os.path.dirname(mat_file_path)
+        self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)
+
+    @staticmethod
+    def convert_to_tfrecord(images, depths, name, data_directory):
+        """
+        Converts the data to a TFRecord.
+
+        :param images: The images to be converted.
+        :type images: np.ndarray
+        :param depths: The depths to be converted.
+        :type depths: np.ndarray
+        :param name: The name of the file to be saved (usually the type [i.e. train, validation, or test]).
+        :type name: str
+        :param data_directory: The directory of in which to save the data.
+        :type data_directory: str
+        """
+        number_of_examples = depths.shape[0]
+        if images.shape[0] != number_of_examples:
+            raise ValueError("Images size %d does not match label size %d." %
+                             (images.shape[0], number_of_examples))
+        rows = images.shape[1]
+        cols = images.shape[2]
+        depth = images.shape[3]
+
+        filename = os.path.join(data_directory, name + '.tfrecords')
+        print('Writing', filename)
+        writer = tf.python_io.TFRecordWriter(filename)
+        for index in range(number_of_examples):
+            image_raw = images[index].tostring()
+            depth_raw = depths[index].tostring()
+            example = tf.train.Example(features=tf.train.Features(feature={
+                'height': _int64_feature(rows),
+                'width': _int64_feature(cols),
+                'channels': _int64_feature(depth),
+                'image_raw': _bytes_feature(image_raw),
+                'depth_raw': _bytes_feature(depth_raw),
+            }))
+            writer.write(example.SerializeToString())
+
+
+def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
 
 if __name__ == '__main__':
     data_preparation = DataPreparation()
     # data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat', number_of_samples=10)
-
-    images = np.load('data/images_nyu_depth_v2_labeled.npy')
-    depths = np.load('data/depths_nyu_depth_v2_labeled.npy')
-
-    image = images[7]
-    depth = depths[7]
-
-    f = plt.figure()
-    i = f.add_subplot(2, 1, 1)
-    i.imshow(image, interpolation='nearest')
-    d = f.add_subplot(2, 1, 2)
-    d.imshow(depth, interpolation='nearest')
-    plt.show()
-    plt.waitforbuttonpress()
