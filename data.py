@@ -10,7 +10,7 @@ class Data:
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='data', data_name='nyud'):
+    def __init__(self, data_directory='examples', data_name='nyud'):
         self.data_directory = data_directory
         self.data_name = data_name
         self.height = 464
