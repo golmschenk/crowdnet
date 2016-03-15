@@ -67,7 +67,7 @@ class DataPreparation:
         """
         return data[:, 8:-8, 8:-8]
 
-    def convert_mat_to_tfrecord(self, mat_file_path, data_directory='data'):
+    def convert_mat_to_tfrecord(self, mat_file_path, data_directory='examples'):
         """
         Converts the mat file data into a TFRecords file.
 
@@ -133,4 +133,4 @@ def _bytes_feature(value):
 
 if __name__ == '__main__':
     data_preparation = DataPreparation()
-    # data_preparation.convert_mat_file_to_numpy_file('data/nyu_depth_v2_labeled.mat', number_of_samples=10)
+    data_preparation.convert_mat_to_tfrecord('examples/nyud_micro.mat')
