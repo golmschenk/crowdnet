@@ -56,6 +56,23 @@ class DepthNet:
     def training(self, value_to_minimize):
         return tf.train.AdamOptimizer(self.initial_learning_rate).minimize(value_to_minimize)
 
+    def convert_to_heat_map_rgb(self, tensor):
+        """
+        Convert a tensor to a heat map.
+
+        :param tensor: The tensor values to be converted.
+        :type tensor:
+        :return: The heat map image tensor.
+        :rtype: tf.Tensor
+        """
+        maximum = tf.reduce_max(tensor)
+        minimum = tf.reduce_min(tensor)
+        ratio = 2 * (tensor - minimum) / (maximum - minimum)
+        b = tf.cast(tf.maximum(0, 255 * (1 - ratio)), tf.uint8)
+        r = tf.cast(tf.maximum(0, 255 * (ratio - 1)), tf.uint8)
+        g = 255 - b - r
+        return tf.concat(3, [r, g, b])
+
     def train_network(self):
         """
         Adds the training operations and runs the training loop.
