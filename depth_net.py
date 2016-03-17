@@ -15,8 +15,8 @@ class DepthNet:
 
     def __init__(self):
         self.batch_size = 5
-        self.number_of_epochs = 10000
-        self.initial_learning_rate = 0.01
+        self.number_of_epochs = 50000
+        self.initial_learning_rate = 0.001
         self.summary_step_period = 1
 
     @staticmethod
@@ -33,25 +33,20 @@ class DepthNet:
             w_conv1 = weight_variable([5, 5, 3, 8])
             b_conv1 = bias_variable([8])
 
-            h_conv1 = tf.nn.relu(conv2d(images, w_conv1) + b_conv1)
+            h_conv = tf.nn.relu(conv2d(images, w_conv1) + b_conv1)
 
-        with tf.name_scope('conv2'):
-            w_conv2 = weight_variable([5, 5, 8, 8])
-            b_conv2 = bias_variable([8])
+        for index in range(50):
+            with tf.name_scope('conv' + str(index + 2)):
+                w_conv = weight_variable([5, 5, 8, 8])
+                b_conv = bias_variable([8])
 
-            h_conv2 = tf.nn.relu(conv2d(h_conv1, w_conv2) + b_conv2)
+                h_conv = tf.nn.relu(conv2d(h_conv, w_conv) + b_conv)
 
-        with tf.name_scope('conv3'):
-            w_conv3 = weight_variable([5, 5, 8, 8])
-            b_conv3 = bias_variable([8])
+        with tf.name_scope('conv52'):
+            w_conv52 = weight_variable([5, 5, 8, 1])
+            b_conv52 = bias_variable([1])
 
-            h_conv3 = tf.nn.relu(conv2d(h_conv2, w_conv3) + b_conv3)
-
-        with tf.name_scope('conv4'):
-            w_conv4 = weight_variable([5, 5, 8, 1])
-            b_conv4 = bias_variable([1])
-
-            predicted_depths = tf.nn.relu(conv2d(h_conv3, w_conv4) + b_conv4)
+            predicted_depths = tf.nn.relu(conv2d(h_conv, w_conv52) + b_conv52)
 
         return predicted_depths
 
