@@ -4,7 +4,6 @@ Code for preparing data.
 import os
 import h5py
 import numpy as np
-from matplotlib import pyplot as plt
 import tensorflow as tf
 
 
@@ -132,5 +131,6 @@ def _bytes_feature(value):
 
 
 if __name__ == '__main__':
+    os.nice(10)
     data_preparation = DataPreparation()
     data_preparation.convert_mat_to_tfrecord('examples/nyud_micro.mat')

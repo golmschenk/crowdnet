@@ -19,26 +19,35 @@ class DepthNet:
         self.initial_learning_rate = 0.01
         self.summary_step_period = 1
 
-    def inference(self, images):
-        with tf.name_scope('conv1') as scope:
+    @staticmethod
+    def inference(images):
+        """
+        Performs a forward pass estimating depth maps from RGB images.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The depth maps tensor.
+        :rtype: tf.Tensor
+        """
+        with tf.name_scope('conv1'):
             w_conv1 = weight_variable([5, 5, 3, 8])
             b_conv1 = bias_variable([8])
 
             h_conv1 = tf.nn.relu(conv2d(images, w_conv1) + b_conv1)
 
-        with tf.name_scope('conv2') as scope:
+        with tf.name_scope('conv2'):
             w_conv2 = weight_variable([5, 5, 8, 8])
             b_conv2 = bias_variable([8])
 
             h_conv2 = tf.nn.relu(conv2d(h_conv1, w_conv2) + b_conv2)
 
-        with tf.name_scope('conv3') as scope:
+        with tf.name_scope('conv3'):
             w_conv3 = weight_variable([5, 5, 8, 8])
             b_conv3 = bias_variable([8])
 
             h_conv3 = tf.nn.relu(conv2d(h_conv2, w_conv3) + b_conv3)
 
-        with tf.name_scope('conv4') as scope:
+        with tf.name_scope('conv4'):
             w_conv4 = weight_variable([5, 5, 8, 1])
             b_conv4 = bias_variable([1])
 
@@ -46,14 +55,34 @@ class DepthNet:
 
         return predicted_depths
 
-    def relative_differences(self, predicted_depths, depths):
+    @staticmethod
+    def relative_differences(predicted_depths, depths):
+        """
+        Determines the absolute L1 relative differences between two depth maps.
+
+        :param predicted_depths: The first depth map tensor (usually the predicted depths).
+        :type predicted_depths: tf.Tensor
+        :param depths: The second depth map tensor (usually the actual depths).
+        :type depths: tf.Tensor
+        :return: The difference tensor.
+        :rtype: tf.Tensor
+        """
         difference = tf.abs(predicted_depths - depths)
         return difference / depths
 
     def training(self, value_to_minimize):
+        """
+        Create and add the training op to the graph.
+
+        :param value_to_minimize: The value to train on.
+        :type value_to_minimize: tf.Tensor
+        :return: The training op.
+        :rtype: tf.Operation
+        """
         return tf.train.AdamOptimizer(self.initial_learning_rate).minimize(value_to_minimize)
 
-    def convert_to_heat_map_rgb(self, tensor):
+    @staticmethod
+    def convert_to_heat_map_rgb(tensor):
         """
         Convert a tensor to a heat map.
 
@@ -107,7 +136,7 @@ class DepthNet:
             predicted_depths = self.inference(images)
 
             # Add the loss operations to the graph.
-            with tf.name_scope('loss') as scope:
+            with tf.name_scope('loss'):
                 relative_differences = self.relative_differences(predicted_depths, depths)
                 relative_difference_sum = tf.reduce_sum(relative_differences)
                 tf.scalar_summary("Relative difference sum", relative_difference_sum)
