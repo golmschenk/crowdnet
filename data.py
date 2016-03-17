@@ -44,7 +44,7 @@ class Data:
 
         depth = tf.decode_raw(features['depth_raw'], tf.float32)
         #depth.set_shape([self.height, self.width])
-        depth = tf.reshape(depth, [self.height, self.width])
+        depth = tf.reshape(depth, [self.height, self.width, 1])
 
         return image, depth
 
