@@ -78,8 +78,10 @@ class DataPreparation:
         mat_data = h5py.File(mat_file_path, 'r')
         uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
         images = self.crop_data(uncropped_images)
+        images = images[:, ::4, ::4, :]
         uncropped_depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
         depths = self.crop_data(uncropped_depths)
+        depths = depths[:, ::4, ::4]
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
         data_directory = os.path.dirname(mat_file_path)
         self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)

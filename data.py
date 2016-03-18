@@ -13,8 +13,8 @@ class Data:
     def __init__(self, data_directory='examples', data_name='nyud'):
         self.data_directory = data_directory
         self.data_name = data_name
-        self.height = 464
-        self.width = 624
+        self.height = 464 // 4
+        self.width = 624 // 4
         self.channels = 3
 
     def read_and_decode(self, filename_queue):
