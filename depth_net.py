@@ -29,20 +29,20 @@ class DepthNet:
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
-            w_conv1 = weight_variable([5, 5, 3, 50])
-            b_conv1 = bias_variable([50])
+            w_conv1 = weight_variable([5, 5, 3, 8])
+            b_conv1 = bias_variable([8])
 
             h_conv = self.leaky_relu(conv2d(images, w_conv1) + b_conv1)
 
         for index in range(50):
             with tf.name_scope('conv' + str(index + 2)):
-                w_conv = weight_variable([5, 5, 50, 50])
-                b_conv = bias_variable([50])
+                w_conv = weight_variable([5, 5, 8, 8])
+                b_conv = bias_variable([8])
 
                 h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
         with tf.name_scope('conv52'):
-            w_conv52 = weight_variable([5, 5, 50, 1])
+            w_conv52 = weight_variable([5, 5, 8, 1])
             b_conv52 = bias_variable([1])
 
             predicted_depths = self.leaky_relu(conv2d(h_conv, w_conv52) + b_conv52)

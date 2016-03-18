@@ -7,7 +7,6 @@ import numpy as np
 import tensorflow as tf
 from pytest import fail
 
-from data_preparation import DataPreparation
 from data import Data
 
 
@@ -19,7 +18,7 @@ class TestFunctionalData:
         mat_file_path = os.path.join('functional_tests', 'test_data', 'nyud_micro.mat')
 
         # Run the conversion script.
-        DataPreparation().convert_mat_file_to_numpy_file(mat_file_path)
+        Data().convert_mat_file_to_numpy_file(mat_file_path)
 
         # Check that the files are created.
         assert os.path.isfile(images_numpy_file_path)
@@ -42,7 +41,7 @@ class TestFunctionalData:
         tfrecords_file_path = os.path.join(data_directory, 'nyud_micro.train.tfrecords')
 
         # Run the conversion script.
-        DataPreparation().convert_mat_to_tfrecord(mat_file_path)
+        Data().convert_mat_to_tfrecord(mat_file_path)
 
         # Check that the file is created.
         assert os.path.isfile(tfrecords_file_path)
