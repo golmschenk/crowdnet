@@ -64,19 +64,19 @@ class DepthNet:
             w_conv = weight_variable([7, 7, 3, 16])
             b_conv = bias_variable([16])
 
-            h_conv = tf.nn.relu(conv2d(images, w_conv) + b_conv)
+            h_conv = self.leaky_relu(conv2d(images, w_conv) + b_conv)
 
         with tf.name_scope('conv2'):
             w_conv = weight_variable([7, 7, 16, 24])
             b_conv = bias_variable([24])
 
-            h_conv = tf.nn.relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+            h_conv = self.leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('conv3'):
             w_conv = weight_variable([7, 7, 24, 32])
             b_conv = bias_variable([32])
 
-            h_conv = tf.nn.relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+            h_conv = self.leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
             fc0_size = self.size_from_stride_four(self.data.height) * self.size_from_stride_four(self.data.width) * 32
@@ -85,21 +85,21 @@ class DepthNet:
             w_fc = weight_variable([fc0_size, fc1_size])
             b_fc = bias_variable([fc1_size])
 
-            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
 
         with tf.name_scope('fc2'):
             fc2_size = fc1_size // 2
             w_fc = weight_variable([fc1_size, fc2_size])
             b_fc = bias_variable([fc2_size])
 
-            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
 
         with tf.name_scope('fc3'):
             fc3_size = self.data.height * self.data.width
             w_fc = weight_variable([fc2_size, fc3_size])
             b_fc = bias_variable([fc3_size])
 
-            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
             predicted_depths = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_depths
