@@ -59,12 +59,12 @@ class DepthNet:
         :rtype: tf.Tensor
         """
         pixel_count = Data().height * Data().width
-        #flat_images = tf.reshape(images, [-1, pixel_count * Data().channels])
+        flat_images = tf.reshape(images, [-1, pixel_count * Data().channels])
         weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.01)
         biases = bias_variable([pixel_count], constant=0.01)
 
-        predicted_depths = tf.matmul(tf.reshape(images, [-1, pixel_count * Data().channels]), weights) + biases
-        predicted_depths = tf.reshape(predicted_depths, [-1, Data().height, Data().width, 1])
+        flat_predicted_depths = tf.matmul(flat_images, weights) + biases
+        predicted_depths = tf.reshape(flat_predicted_depths, [-1, Data().height, Data().width, 1])
         return predicted_depths
 
     @staticmethod
