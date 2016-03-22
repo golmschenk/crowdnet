@@ -18,6 +18,7 @@ class DepthNet:
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.001
         self.summary_step_period = 1
+        self.log_directory = "logs"
 
     def inference(self, images):
         """
@@ -150,7 +151,7 @@ class DepthNet:
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
-            predicted_depths = self.linear_classifier_inference(images)
+            predicted_depths = self.inference(images)
 
             # Add the loss operations to the graph.
             with tf.name_scope('loss'):
@@ -173,7 +174,7 @@ class DepthNet:
 
             # Prepare the summary operations.
             summaries_op = tf.merge_all_summaries()
-            writer = tf.train.SummaryWriter("/tmp/depth_net_logs", session.graph_def)
+            writer = tf.train.SummaryWriter(self.log_directory, session.graph_def)
 
             # Initialize the variables.
             session.run(initialize_op)
