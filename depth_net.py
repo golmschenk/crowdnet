@@ -216,7 +216,9 @@ class DepthNet:
             with tf.name_scope('loss'):
                 relative_differences = self.relative_differences(predicted_depths, depths)
                 relative_difference_sum = tf.reduce_sum(relative_differences)
+                average_relative_difference = tf.reduce_mean(relative_differences)
                 tf.scalar_summary("Relative difference sum", relative_difference_sum)
+                tf.scalar_summary("Average relative difference", average_relative_difference)
 
             with tf.name_scope('comparison_summary'):
                 self.side_by_side_image_summary(images, depths, predicted_depths, relative_differences)
