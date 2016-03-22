@@ -58,10 +58,11 @@ class DepthNet:
         :return: The depth maps tensor.
         :rtype: tf.Tensor
         """
+        self.initial_learning_rate = 0.00001
         pixel_count = Data().height * Data().width
         flat_images = tf.reshape(images, [-1, pixel_count * Data().channels])
-        weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.01)
-        biases = bias_variable([pixel_count], constant=0.01)
+        weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.001)
+        biases = bias_variable([pixel_count], constant=0.001)
 
         flat_predicted_depths = tf.matmul(flat_images, weights) + biases
         predicted_depths = tf.reshape(flat_predicted_depths, [-1, Data().height, Data().width, 1])
