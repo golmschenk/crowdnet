@@ -145,10 +145,10 @@ class Data:
         mat_data = h5py.File(mat_file_path, 'r')
         uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
         images = self.crop_data(uncropped_images)
-        images = images[:, ::4, ::4, :] #self.rebin(images, self.height, self.width)
+        self.rebin(images, self.height, self.width)
         uncropped_depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
         depths = self.crop_data(uncropped_depths)
-        depths = depths[:, ::4, ::4] #self.rebin(depths, self.height, self.width)
+        self.rebin(depths, self.height, self.width)
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
         data_directory = os.path.dirname(mat_file_path)
         self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)
@@ -158,7 +158,7 @@ class Data:
         """
         Converts the data to a TFRecord.
 
-        :param images: The images to be converted.
+        :param images: The images to be converted.m
         :type images: np.ndarray
         :param depths: The depths to be converted.
         :type depths: np.ndarray

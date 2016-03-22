@@ -49,6 +49,24 @@ class DepthNet:
 
         return predicted_depths
 
+    def linear_classifier_inference(self, images):
+        """
+        Performs a forward pass estimating depth maps from RGB images using only a linear classifier.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The depth maps tensor.
+        :rtype: tf.Tensor
+        """
+        pixel_count = Data().height * Data().width
+        flat_images = tf.reshape(images, [-1, pixel_count * Data().channels])
+        weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.01)
+        biases = bias_variable([pixel_count], constant=0.01)
+
+        flat_predicted_depths = tf.matmul(flat_images, weights) + biases
+        predicted_depths = tf.reshape(flat_predicted_depths, [-1, Data().height, Data().width, 1])
+        return predicted_depths
+
     @staticmethod
     def leaky_relu(x):
         return tf.maximum(0.0001 * x, x)
@@ -131,7 +149,7 @@ class DepthNet:
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
-            predicted_depths = self.inference(images)
+            predicted_depths = self.linear_classifier_inference(images)
 
             # Add the loss operations to the graph.
             with tf.name_scope('loss'):
@@ -191,29 +209,33 @@ class DepthNet:
             session.close()
 
 
-def weight_variable(shape):
+def weight_variable(shape, stddev=0.1):
     """
     Create a generic weight variable.
 
     :param shape: The shape of the weight variable.
     :type shape: list[int]
+    :param stddev: The standard deviation to initialize the weights to.
+    :type stddev: float
     :return: The weight variable.
     :rtype: tf.Variable
     """
-    initial = tf.truncated_normal(shape, stddev=0.1)
+    initial = tf.truncated_normal(shape, stddev=stddev)
     return tf.Variable(initial)
 
 
-def bias_variable(shape):
+def bias_variable(shape, constant=0.1):
     """
     Create a generic bias variable.
 
     :param shape: The shape of the bias variable.
     :type shape: list[int]
+    :param constant: The initial value of the biases.
+    :type constant: float
     :return: The bias variable.
     :rtype: tf.Variable
     """
-    initial = tf.constant(0.1, shape=shape)
+    initial = tf.constant(constant, shape=shape)
     return tf.Variable(initial)
 
 
