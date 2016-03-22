@@ -15,8 +15,8 @@ class Data:
     def __init__(self, data_directory='examples', data_name='nyud'):
         self.data_directory = data_directory
         self.data_name = data_name
-        self.height = 464 // 4
-        self.width = 624 // 4
+        self.height = 464 // 8
+        self.width = 624 // 8
         self.channels = 3
         self.original_height = 464
         self.original_width = 624

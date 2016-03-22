@@ -1,7 +1,7 @@
 """
 Code related to the DepthNet.
 """
-
+import math
 import tensorflow as tf
 import time
 
@@ -16,9 +16,10 @@ class DepthNet:
     def __init__(self):
         self.batch_size = 5
         self.number_of_epochs = 50000
-        self.initial_learning_rate = 0.001
+        self.initial_learning_rate = 0.00001
         self.summary_step_period = 1
         self.log_directory = "logs"
+        self.data = Data(data_directory='examples', data_name='nyud_micro')
 
     def inference(self, images):
         """
@@ -49,6 +50,65 @@ class DepthNet:
             predicted_depths = self.leaky_relu(conv2d(h_conv, w_conv52) + b_conv52)
 
         return predicted_depths
+
+    def standard_net_inference(self, images):
+        """
+        Performs a forward pass estimating depth maps from RGB images using a standard graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The depth maps tensor.
+        :rtype: tf.Tensor
+        """
+        with tf.name_scope('conv1'):
+            w_conv = weight_variable([7, 7, 3, 16])
+            b_conv = bias_variable([16])
+
+            h_conv = tf.nn.relu(conv2d(images, w_conv) + b_conv)
+
+        with tf.name_scope('conv2'):
+            w_conv = weight_variable([7, 7, 16, 24])
+            b_conv = bias_variable([24])
+
+            h_conv = tf.nn.relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+
+        with tf.name_scope('conv3'):
+            w_conv = weight_variable([7, 7, 24, 32])
+            b_conv = bias_variable([32])
+
+            h_conv = tf.nn.relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+
+        with tf.name_scope('fc1'):
+            fc0_size = self.size_from_stride_four(self.data.height) * self.size_from_stride_four(self.data.width) * 32
+            fc1_size = fc0_size // 2
+            h_fc = tf.reshape(h_conv, [-1, fc0_size])
+            w_fc = weight_variable([fc0_size, fc1_size])
+            b_fc = bias_variable([fc1_size])
+
+            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+
+        with tf.name_scope('fc2'):
+            fc2_size = fc1_size // 2
+            w_fc = weight_variable([fc1_size, fc2_size])
+            b_fc = bias_variable([fc2_size])
+
+            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+
+        with tf.name_scope('fc3'):
+            fc3_size = self.data.height * self.data.width
+            w_fc = weight_variable([fc2_size, fc3_size])
+            b_fc = bias_variable([fc3_size])
+
+            h_fc = tf.nn.relu(tf.matmul(h_fc, w_fc) + b_fc)
+            predicted_depths = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
+
+        return predicted_depths
+
+    def size_from_stride_two(self, size):
+        return math.ceil(size / 2)
+
+    def size_from_stride_four(self, size):
+        return self.size_from_stride_two(self.size_from_stride_two(size))
 
     def linear_classifier_inference(self, images):
         """
@@ -145,13 +205,12 @@ class DepthNet:
         with tf.Graph().as_default():
             print('Preparing data...')
             # Setup the inputs.
-            data = Data(data_directory='examples', data_name='nyud_micro')
-            images, depths = data.inputs(data_type='train', batch_size=self.batch_size,
+            images, depths = self.data.inputs(data_type='train', batch_size=self.batch_size,
                                          num_epochs=self.number_of_epochs)
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
-            predicted_depths = self.inference(images)
+            predicted_depths = self.standard_net_inference(images)
 
             # Add the loss operations to the graph.
             with tf.name_scope('loss'):
@@ -241,7 +300,7 @@ def bias_variable(shape, constant=0.1):
     return tf.Variable(initial)
 
 
-def conv2d(images, weights):
+def conv2d(images, weights, strides=None):
     """
     Create a generic convolutional operation.
 
@@ -249,10 +308,14 @@ def conv2d(images, weights):
     :type images: tf.Tensor
     :param weights: The weight variable to be applied.
     :type weights: tf.Variable
+    :param strides: The strides to perform the convolution on.
+    :type strides: list[int]
     :return: The convolutional operation.
     :rtype: tf.Tensor
     """
-    return tf.nn.conv2d(images, weights, strides=[1, 1, 1, 1], padding='SAME')
+    if strides is None:
+        strides = [1, 1, 1, 1]
+    return tf.nn.conv2d(images, weights, strides=strides, padding='SAME')
 
 
 if __name__ == '__main__':
