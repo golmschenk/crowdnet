@@ -88,3 +88,17 @@ class TestData:
         cropped_array = data.crop_data(array)
 
         assert np.array_equal(cropped_array, array[:, 8:10, 8:10])
+
+    def test_rebin_outputs_the_right_types_based_on_dimensions(self):
+        four_dimensions = np.array([[[[1]]]])  # Collection of images.
+        three_dimensions = np.array([[[1]]])  # Collection of depths.
+        data = Data()
+        data.width = 1
+        data.height = 1
+        data.channels = 1
+
+        rebinned_four_dimensions = data.rebin(four_dimensions, 1, 1)
+        rebinned_three_dimensions = data.rebin(three_dimensions, 1, 1)
+
+        assert rebinned_four_dimensions.dtype == np.uint8
+        assert rebinned_three_dimensions.dtype == np.float64

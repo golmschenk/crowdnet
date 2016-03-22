@@ -18,6 +18,8 @@ class Data:
         self.height = 464 // 4
         self.width = 624 // 4
         self.channels = 3
+        self.original_height = 464
+        self.original_width = 624
 
     def read_and_decode(self, filename_queue):
         """
@@ -143,10 +145,10 @@ class Data:
         mat_data = h5py.File(mat_file_path, 'r')
         uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
         images = self.crop_data(uncropped_images)
-        images = images[:, ::4, ::4, :]
+        images = images[:, ::4, ::4, :] #self.rebin(images, self.height, self.width)
         uncropped_depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
         depths = self.crop_data(uncropped_depths)
-        depths = depths[:, ::4, ::4]
+        depths = depths[:, ::4, ::4] #self.rebin(depths, self.height, self.width)
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
         data_directory = os.path.dirname(mat_file_path)
         self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)
@@ -187,6 +189,32 @@ class Data:
                 'depth_raw': _bytes_feature(depth_raw),
             }))
             writer.write(example.SerializeToString())
+
+    def rebin(self, array, height, width):
+        """
+        Rebins the NumPy array into a new size, averaging the bins between.
+
+        :param array: The array to resize.
+        :type array: np.ndarray
+        :param height: The height to rebin to.
+        :type height: int
+        :param width: THe width to rebin to.
+        :type width: int
+        :return: The resized array.
+        :rtype: np.ndarray
+        """
+        compression_shape = [
+            array.shape[0],
+            height,
+            array.shape[1] // height,
+            width,
+            array.shape[2] // width,
+        ]
+        if len(array.shape) == 4:
+            compression_shape.append(self.channels)
+            return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
+        else:
+            return array.reshape(compression_shape).mean(4).mean(2)
 
 
 def _int64_feature(value):
