@@ -3,9 +3,6 @@ Code related to the DepthNet.
 """
 import math
 import os
-
-from getch import getch
-
 import datetime
 import tensorflow as tf
 import time
@@ -112,10 +109,27 @@ class DepthNet(multiprocessing.Process):
 
         return predicted_depths
 
-    def size_from_stride_two(self, size):
+    @staticmethod
+    def size_from_stride_two(size):
+        """
+        Provides the appropriate size that will be output with a stride two filter.
+
+        :param size: The original size.
+        :type size: int
+        :return: The filter output size.
+        :rtype: int
+        """
         return math.ceil(size / 2)
 
     def size_from_stride_four(self, size):
+        """
+        Provides the appropriate size that will be output with a stride four filter.
+
+        :param size: The original size.
+        :type size: int
+        :return: The filter output size.
+        :rtype: int
+        """
         return self.size_from_stride_two(self.size_from_stride_two(size))
 
     def linear_classifier_inference(self, images):
@@ -139,6 +153,14 @@ class DepthNet(multiprocessing.Process):
 
     @staticmethod
     def leaky_relu(x):
+        """
+        A basic implementation of a leaky ReLU.
+
+        :param x: The input of the ReLU activation.
+        :type x: tf.Tensor
+        :return: The tensor filtering on the leaky activation.
+        :rtype: tf.Tensor
+        """
         return tf.maximum(0.0001 * x, x)
 
     @staticmethod
@@ -214,7 +236,7 @@ class DepthNet(multiprocessing.Process):
             print('Preparing data...')
             # Setup the inputs.
             images, depths = self.data.inputs(data_type='train', batch_size=self.batch_size,
-                                         num_epochs=self.number_of_epochs)
+                                              num_epochs=self.number_of_epochs)
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
@@ -296,6 +318,9 @@ class DepthNet(multiprocessing.Process):
             session.close()
 
     def run(self):
+        """
+        Allow for training the network from a multiprocessing standpoint.
+        """
         self.train_network()
 
 
