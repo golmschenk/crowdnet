@@ -2,24 +2,32 @@
 Code related to the DepthNet.
 """
 import math
+import os
+
+from getch import getch
+
+import datetime
 import tensorflow as tf
 import time
+import multiprocessing
 
 from data import Data
 
 
-class DepthNet:
+class DepthNet(multiprocessing.Process):
     """
     The class to build and interact with the DepthNet TensorFlow graph.
     """
 
-    def __init__(self):
+    def __init__(self, message_queue=None):
+        super().__init__()
         self.batch_size = 5
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.summary_step_period = 1
         self.log_directory = "logs"
         self.data = Data(data_directory='examples', data_name='nyud_micro')
+        self.queue = message_queue
 
     def inference(self, images):
         """
@@ -53,7 +61,7 @@ class DepthNet:
 
     def standard_net_inference(self, images):
         """
-        Performs a forward pass estimating depth maps from RGB images using a standard graph setup.
+        Performs a forward pass estimating depth maps from RGB images using a AlexNet-like graph setup.
 
         :param images: The RGB images tensor.
         :type images: tf.Tensor
@@ -229,14 +237,18 @@ class DepthNet:
             # The op for initializing the variables.
             initialize_op = tf.initialize_all_variables()
 
-            print('Starting training...')
+            # Prepare the saver.
+            saver = tf.train.Saver()
+
             # Create a session for running operations in the Graph.
             session = tf.Session()
 
             # Prepare the summary operations.
             summaries_op = tf.merge_all_summaries()
-            writer = tf.train.SummaryWriter(self.log_directory, session.graph_def)
+            summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+            writer = tf.train.SummaryWriter(summary_path, session.graph_def)
 
+            print('Starting training...')
             # Initialize the variables.
             session.run(initialize_op)
 
@@ -246,8 +258,9 @@ class DepthNet:
 
             # Preform the training loop.
             step = 0
+            stop_signal = False
             try:
-                while not coordinator.should_stop():
+                while not coordinator.should_stop() and not stop_signal:
                     # Regular training step.
                     start_time = time.time()
                     _, relative_difference_sum_value, summaries = session.run([train_op, relative_difference_sum,
@@ -261,6 +274,17 @@ class DepthNet:
                                                                                       relative_difference_sum_value,
                                                                                       duration))
                     step += 1
+
+                    # If a stop has been called for clean up and save.
+                    if self.queue:
+                        if not self.queue.empty():
+                            message = self.queue.get(block=False)
+                            if message == 'save':
+                                save_path = saver.save(session, "models/iteration_%d.ckpt" % step)
+                                print("Model saved in file: %s" % save_path)
+                                stop_signal = True
+                            if message == 'quit':
+                                stop_signal = True
             except tf.errors.OutOfRangeError:
                 print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, step))
             finally:
@@ -270,6 +294,9 @@ class DepthNet:
             # Wait for threads to finish.
             coordinator.join(threads)
             session.close()
+
+    def run(self):
+        self.train_network()
 
 
 def weight_variable(shape, stddev=0.1):
@@ -321,5 +348,20 @@ def conv2d(images, weights, strides=None):
 
 
 if __name__ == '__main__':
-    depth_net = DepthNet()
-    depth_net.train_network()
+    queue_ = multiprocessing.Queue()
+    depth_net = DepthNet(message_queue=queue_)
+    depth_net.start()
+    while True:
+        user_input = input()
+        if user_input == 's':
+            print('Save and exit requested. Quitting.')
+            queue_.put('save')
+            print('Waiting for graph to save.')
+            depth_net.join()
+            break
+        elif user_input == 'q':
+            print('Exit without saving requested. Quitting.')
+            queue_.put('quit')
+            print('Waiting for graph to quit.')
+            depth_net.join()
+            break
