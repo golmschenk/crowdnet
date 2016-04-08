@@ -302,7 +302,9 @@ class DepthNet(multiprocessing.Process):
                         if not self.queue.empty():
                             message = self.queue.get(block=False)
                             if message == 'save':
-                                save_path = saver.save(session, "models/iteration_%d.ckpt" % step)
+                                save_path = saver.save(session, os.path.join('models', 'depthnet.ckpt'),
+                                                       global_step=step)
+                                tf.train.write_graph(session.graph_def, 'models', 'depthnet.pb')
                                 print("Model saved in file: %s" % save_path)
                                 stop_signal = True
                             if message == 'quit':

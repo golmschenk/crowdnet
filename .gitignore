@@ -1,6 +1,7 @@
 ### Project specific
 examples/*
 logs/*
+models/*
 
 
 # Created by .ignore support plugin (hsz.mobi)
