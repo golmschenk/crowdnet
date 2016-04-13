@@ -28,11 +28,11 @@ class DepthNet(multiprocessing.Process):
 
     def inference(self, images):
         """
-        Performs a forward pass estimating depth maps from RGB images.
+        Performs a forward pass estimating label maps from RGB images.
 
         :param images: The RGB images tensor.
         :type images: tf.Tensor
-        :return: The depth maps tensor.
+        :return: The label maps tensor.
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
@@ -52,17 +52,17 @@ class DepthNet(multiprocessing.Process):
             w_conv52 = weight_variable([5, 5, 8, 1])
             b_conv52 = bias_variable([1])
 
-            predicted_depths = self.leaky_relu(conv2d(h_conv, w_conv52) + b_conv52)
+            predicted_labels = self.leaky_relu(conv2d(h_conv, w_conv52) + b_conv52)
 
-        return predicted_depths
+        return predicted_labels
 
     def standard_net_inference(self, images):
         """
-        Performs a forward pass estimating depth maps from RGB images using a AlexNet-like graph setup.
+        Performs a forward pass estimating label maps from RGB images using a AlexNet-like graph setup.
 
         :param images: The RGB images tensor.
         :type images: tf.Tensor
-        :return: The depth maps tensor.
+        :return: The label maps tensor.
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
@@ -105,9 +105,9 @@ class DepthNet(multiprocessing.Process):
             b_fc = bias_variable([fc3_size])
 
             h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_depths = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
+            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
-        return predicted_depths
+        return predicted_labels
 
     @staticmethod
     def size_from_stride_two(size):
@@ -134,11 +134,11 @@ class DepthNet(multiprocessing.Process):
 
     def linear_classifier_inference(self, images):
         """
-        Performs a forward pass estimating depth maps from RGB images using only a linear classifier.
+        Performs a forward pass estimating label maps from RGB images using only a linear classifier.
 
         :param images: The RGB images tensor.
         :type images: tf.Tensor
-        :return: The depth maps tensor.
+        :return: The label maps tensor.
         :rtype: tf.Tensor
         """
         self.initial_learning_rate = 0.00001
@@ -147,9 +147,9 @@ class DepthNet(multiprocessing.Process):
         weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.001)
         biases = bias_variable([pixel_count], constant=0.001)
 
-        flat_predicted_depths = tf.matmul(flat_images, weights) + biases
-        predicted_depths = tf.reshape(flat_predicted_depths, [-1, Data().height, Data().width, 1])
-        return predicted_depths
+        flat_predicted_labels = tf.matmul(flat_images, weights) + biases
+        predicted_labels = tf.reshape(flat_predicted_labels, [-1, Data().height, Data().width, 1])
+        return predicted_labels
 
     @staticmethod
     def leaky_relu(x):
@@ -161,22 +161,22 @@ class DepthNet(multiprocessing.Process):
         :return: The tensor filtering on the leaky activation.
         :rtype: tf.Tensor
         """
-        return tf.maximum(0.0001 * x, x)
+        return tf.maximum(tf.mul(0.01, x), x)
 
     @staticmethod
-    def relative_differences(predicted_depths, depths):
+    def relative_differences(predicted_labels, labels):
         """
-        Determines the absolute L1 relative differences between two depth maps.
+        Determines the absolute L1 relative differences between two label maps.
 
-        :param predicted_depths: The first depth map tensor (usually the predicted depths).
-        :type predicted_depths: tf.Tensor
-        :param depths: The second depth map tensor (usually the actual depths).
-        :type depths: tf.Tensor
+        :param predicted_labels: The first label map tensor (usually the predicted labels).
+        :type predicted_labels: tf.Tensor
+        :param labels: The second label map tensor (usually the actual labels).
+        :type labels: tf.Tensor
         :return: The difference tensor.
         :rtype: tf.Tensor
         """
-        difference = tf.abs(predicted_depths - depths)
-        return difference / depths
+        difference = tf.abs(predicted_labels - labels)
+        return difference / labels
 
     def training(self, value_to_minimize):
         """
@@ -207,25 +207,25 @@ class DepthNet(multiprocessing.Process):
         g = 1 - b - r
         return tf.concat(3, [r, g, b]) - 0.5
 
-    def side_by_side_image_summary(self, images, depths, predicted_depths, depth_differences):
+    def side_by_side_image_summary(self, images, labels, predicted_labels, label_differences):
         """
-        Combines the image, depth, and difference tensors together into a presentable image. Then adds the
+        Combines the image, label, and difference tensors together into a presentable image. Then adds the
         image summary op to the graph.
 
         :param images: The original image.
         :type images: tf.Tensor
-        :param depths: The tensor containing the actual depth values.
-        :type depths: tf.Tensor
-        :param predicted_depths: The tensor containing the predicted depths.
-        :type predicted_depths: tf.Tensor
-        :param depth_differences: The tensor containing the difference between the actual and predicted depths.
-        :type depth_differences: tf.Tensor
+        :param labels: The tensor containing the actual label values.
+        :type labels: tf.Tensor
+        :param predicted_labels: The tensor containing the predicted labels.
+        :type predicted_labels: tf.Tensor
+        :param label_differences: The tensor containing the difference between the actual and predicted labels.
+        :type label_differences: tf.Tensor
         """
-        depth_heat_map = self.convert_to_heat_map_rgb(depths)
-        predicted_depth_heat_map = self.convert_to_heat_map_rgb(predicted_depths)
-        depth_difference_heat_map = self.convert_to_heat_map_rgb(depth_differences)
+        label_heat_map = self.convert_to_heat_map_rgb(labels)
+        predicted_label_heat_map = self.convert_to_heat_map_rgb(predicted_labels)
+        label_difference_heat_map = self.convert_to_heat_map_rgb(label_differences)
 
-        comparison_image = tf.concat(1, [images, depth_heat_map, predicted_depth_heat_map, depth_difference_heat_map])
+        comparison_image = tf.concat(1, [images, label_heat_map, predicted_label_heat_map, label_difference_heat_map])
         tf.image_summary('comparison', comparison_image)
 
     def train_network(self):
@@ -235,23 +235,23 @@ class DepthNet(multiprocessing.Process):
         with tf.Graph().as_default():
             print('Preparing data...')
             # Setup the inputs.
-            images, depths = self.data.inputs(data_type='train', batch_size=self.batch_size,
+            images, labels = self.data.inputs(data_type='train', batch_size=self.batch_size,
                                               num_epochs=self.number_of_epochs)
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
-            predicted_depths = self.standard_net_inference(images)
+            predicted_labels  = self.standard_net_inference(images)
 
             # Add the loss operations to the graph.
             with tf.name_scope('loss'):
-                relative_differences = self.relative_differences(predicted_depths, depths)
+                relative_differences = self.relative_differences(predicted_labels, labels)
                 relative_difference_sum = tf.reduce_sum(relative_differences)
                 average_relative_difference = tf.reduce_mean(relative_differences)
-                tf.scalar_summary("Relative difference sum", relative_difference_sum)
-                tf.scalar_summary("Average relative difference", average_relative_difference)
+                tf.scalar_summary("Loss", relative_difference_sum)
+                tf.scalar_summary("Loss per pixel", average_relative_difference)
 
             with tf.name_scope('comparison_summary'):
-                self.side_by_side_image_summary(images, depths, predicted_depths, relative_differences)
+                self.side_by_side_image_summary(images, labels, predicted_labels, relative_differences)
 
             # Add the training operations to the graph.
             train_op = self.training(relative_difference_sum)
