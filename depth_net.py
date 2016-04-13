@@ -306,7 +306,6 @@ class DepthNet(multiprocessing.Process):
                                                        global_step=step)
                                 tf.train.write_graph(session.graph_def, 'models', 'depthnet.pb')
                                 print("Model saved in file: %s" % save_path)
-                                stop_signal = True
                             if message == 'quit':
                                 stop_signal = True
             except tf.errors.OutOfRangeError:
@@ -381,13 +380,11 @@ if __name__ == '__main__':
     while True:
         user_input = input()
         if user_input == 's':
-            print('Save and exit requested. Quitting.')
+            print('Save requested.')
             queue_.put('save')
-            print('Waiting for graph to save.')
-            depth_net.join()
-            break
+            continue
         elif user_input == 'q':
-            print('Exit without saving requested. Quitting.')
+            print('Exit requested. Quitting.')
             queue_.put('quit')
             print('Waiting for graph to quit.')
             depth_net.join()
