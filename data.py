@@ -5,6 +5,7 @@ import os
 import h5py
 import numpy as np
 import tensorflow as tf
+import cv2
 
 
 class Data:
@@ -198,7 +199,7 @@ class Data:
         :type array: np.ndarray
         :param height: The height to rebin to.
         :type height: int
-        :param width: THe width to rebin to.
+        :param width: The width to rebin to.
         :type width: int
         :return: The resized array.
         :rtype: np.ndarray
@@ -215,6 +216,67 @@ class Data:
             return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
         else:
             return array.reshape(compression_shape).mean(4).mean(2)
+
+    @staticmethod
+    def gaussian_noise_augmentation(images):
+        """
+        Applies random gaussian noise to a set of images.
+
+        :param images: The images to add the noise to.
+        :type images: np.ndarray
+        :return: The noisy images.
+        :rtype: np.ndarray
+        """
+        noise = np.zeros(images.shape).astype(np.int32)
+        cv2.randn(noise, 0, 5)
+        return (images.astype(np.int32) + noise).clip(0, 255).astype(np.uint8)
+
+    def offset_array(self, array, offset, axis):
+        """
+        Offsets an array by the given amount (simply by copying the array to the given portion).
+        Note, this is only working for very specific cases at the moment.
+
+        :param array: The array to offset.
+        :type array: np.ndarray
+        :param offset: The amount of the offset.
+        :type offset: int
+        :param axis: The axis to preform the offset on.
+        :type axis: int
+        :return: The offset array.
+        :rtype: np.ndarray
+        """
+        offset_array = np.copy(array)
+        if axis == 1:
+            if offset == 1:
+                offset_array[:, 1:] = offset_array[:, :-1]
+            elif offset == -1:
+                offset_array[:, :-1] = offset_array[:, 1:]
+        elif axis == 2:
+            if offset == 1:
+                offset_array[:, :, 1:] = offset_array[:, :, :-1]
+            elif offset == -1:
+                offset_array[:, :, :-1] = offset_array[:, :, 1:]
+        return offset_array
+
+    def augment_dataset(self, images, depths):
+        offset_images0 = self.offset_array(images, 1, 1)
+        offset_depths0 = self.offset_array(depths, 1, 1)
+        offset_images1 = self.offset_array(images, -1, 1)
+        offset_depths1 = self.offset_array(depths, -1, 1)
+        offset_images2 = self.offset_array(images, 1, 2)
+        offset_depths2 = self.offset_array(depths, 1, 2)
+        offset_images3 = self.offset_array(images, -1, 2)
+        offset_depths3 = self.offset_array(depths, -1, 2)
+        images = np.concatenate((images, offset_images0, offset_images1, offset_images2, offset_images3))
+        depths = np.concatenate((depths, offset_depths0, offset_depths1, offset_depths2, offset_depths3))
+
+        noisy_images0 = self.gaussian_noise_augmentation(images)
+        noisy_images1 = self.gaussian_noise_augmentation(images)
+        noisy_images2 = self.gaussian_noise_augmentation(images)
+        noisy_images3 = self.gaussian_noise_augmentation(images)
+        images = np.concatenate((images, noisy_images0, noisy_images1, noisy_images2, noisy_images3))
+        depths = np.concatenate((depths, depths, depths, depths, depths))
+        return images, depths
 
 
 def _int64_feature(value):
