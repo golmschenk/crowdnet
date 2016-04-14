@@ -21,6 +21,8 @@ class Data:
         self.channels = 3
         self.original_height = 464
         self.original_width = 624
+        self.images = None
+        self.labels = None
 
     def read_and_decode(self, filename_queue):
         """
@@ -254,6 +256,24 @@ class Data:
             offset_array[:offset] = offset_array[offset:]
         offset_array = np.swapaxes(offset_array, 0, axis)
         return offset_array
+
+    def offset_augmentation(self, offset_limit):
+        """
+        Augments the data using a crude spatial shifting based on a given offset.
+
+        :param offset_limit: The value of the maximum offset.
+        :type offset_limit: int
+        """
+        augmented_images_list = [self.images]
+        augmented_labels_list = [self.labels]
+        for axis in [1, 2]:
+            for offset in range(-offset_limit, offset_limit+1):
+                if offset == 0:
+                    continue
+                augmented_images_list.append(self.offset_array(self.images, offset, axis))
+                augmented_labels_list.append(self.offset_array(self.labels, offset, axis))
+        self.images = np.concatenate(augmented_images_list)
+        self.labels = np.concatenate(augmented_labels_list)
 
     def augment_dataset(self, images, depths):
         offset_images0 = self.offset_array(images, 1, 1)
