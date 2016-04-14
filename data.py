@@ -219,19 +219,21 @@ class Data:
         else:
             return array.reshape(compression_shape).mean(4).mean(2)
 
-    @staticmethod
-    def gaussian_noise_augmentation(images):
+    def gaussian_noise_augmentation(self, standard_deviation, number_of_variations):
         """
-        Applies random gaussian noise to a set of images.
+        Applies random gaussian noise to the images.
 
-        :param images: The images to add the noise to.
-        :type images: np.ndarray
-        :return: The noisy images.
-        :rtype: np.ndarray
+        :param standard_deviation: The standard deviation of the gaussian noise.
+        :type standard_deviation: float
+        :param number_of_variations: The number of noisy copies to create.
+        :type number_of_variations: int
         """
-        noise = np.zeros(images.shape).astype(np.int32)
-        cv2.randn(noise, 0, 5)
-        return (images.astype(np.int32) + noise).clip(0, 255).astype(np.uint8)
+        augmented_images_list = [self.images]
+        for _ in range(number_of_variations):
+            # noinspection PyTypeChecker
+            augmented_images_list.append(np.random.normal(self.images.astype(np.int16),
+                                                          standard_deviation).clip(0, 255).astype(np.uint8))
+        self.images = np.concatenate(augmented_images_list)
 
     @staticmethod
     def offset_array(array, offset, axis):
@@ -275,7 +277,7 @@ class Data:
         self.images = np.concatenate(augmented_images_list)
         self.labels = np.concatenate(augmented_labels_list)
 
-    def augment_dataset(self, images, depths):
+    def augment_data_set(self, images, depths):
         offset_images0 = self.offset_array(images, 1, 1)
         offset_depths0 = self.offset_array(depths, 1, 1)
         offset_images1 = self.offset_array(images, -1, 1)
