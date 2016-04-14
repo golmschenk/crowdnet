@@ -231,7 +231,8 @@ class Data:
         cv2.randn(noise, 0, 5)
         return (images.astype(np.int32) + noise).clip(0, 255).astype(np.uint8)
 
-    def offset_array(self, array, offset, axis):
+    @staticmethod
+    def offset_array(array, offset, axis):
         """
         Offsets an array by the given amount (simply by copying the array to the given portion).
         Note, this is only working for very specific cases at the moment.
@@ -246,16 +247,12 @@ class Data:
         :rtype: np.ndarray
         """
         offset_array = np.copy(array)
-        if axis == 1:
-            if offset == 1:
-                offset_array[:, 1:] = offset_array[:, :-1]
-            elif offset == -1:
-                offset_array[:, :-1] = offset_array[:, 1:]
-        elif axis == 2:
-            if offset == 1:
-                offset_array[:, :, 1:] = offset_array[:, :, :-1]
-            elif offset == -1:
-                offset_array[:, :, :-1] = offset_array[:, :, 1:]
+        offset_array = np.swapaxes(offset_array, 0, axis)
+        if offset > 0:
+            offset_array[offset:] = offset_array[:offset]
+        else:
+            offset_array[:offset] = offset_array[offset:]
+        offset_array = np.swapaxes(offset_array, 0, axis)
         return offset_array
 
     def augment_dataset(self, images, depths):
