@@ -18,7 +18,7 @@ class DepthNet(multiprocessing.Process):
 
     def __init__(self, message_queue=None):
         super().__init__()
-        self.batch_size = 5
+        self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.summary_step_period = 1
@@ -36,23 +36,53 @@ class DepthNet(multiprocessing.Process):
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
-            w_conv1 = weight_variable([5, 5, 3, 8])
-            b_conv1 = bias_variable([8])
+            w_conv = weight_variable([5, 5, 3, 32])
+            b_conv = bias_variable([32])
 
-            h_conv = self.leaky_relu(conv2d(images, w_conv1) + b_conv1)
+            h_conv = self.leaky_relu(conv2d(images, w_conv) + b_conv)
 
-        for index in range(2):
-            with tf.name_scope('conv' + str(index + 2)):
-                w_conv = weight_variable([5, 5, 8, 8])
-                b_conv = bias_variable([8])
+        with tf.name_scope('conv2'):
+            w_conv = weight_variable([5, 5, 32, 128])
+            b_conv = bias_variable([128])
+
+            h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+
+        for index in range(9):
+            with tf.name_scope('conv' + str(index + 3)):
+                w_conv = weight_variable([5, 5, 128, 128])
+                b_conv = bias_variable([128])
 
                 h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
         with tf.name_scope('conv12'):
-            w_conv52 = weight_variable([5, 5, 8, 1])
-            b_conv52 = bias_variable([1])
+            w_conv = weight_variable([5, 5, 128, 32])
+            b_conv = bias_variable([32])
 
-            predicted_labels = self.leaky_relu(conv2d(h_conv, w_conv52) + b_conv52)
+            h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+
+        with tf.name_scope('fc1'):
+            fc0_size = self.data.height * self.data.width * 32
+            fc1_size = fc0_size // 4096
+            h_fc = tf.reshape(h_conv, [-1, fc0_size])
+            w_fc = weight_variable([fc0_size, fc1_size])
+            b_fc = bias_variable([fc1_size])
+
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+
+        with tf.name_scope('fc2'):
+            fc2_size = fc1_size // 2
+            w_fc = weight_variable([fc1_size, fc2_size])
+            b_fc = bias_variable([fc2_size])
+
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+
+        with tf.name_scope('fc3'):
+            fc3_size = self.data.height * self.data.width
+            w_fc = weight_variable([fc2_size, fc3_size])
+            b_fc = bias_variable([fc3_size])
+
+            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
 
@@ -132,6 +162,17 @@ class DepthNet(multiprocessing.Process):
         """
         return self.size_from_stride_two(self.size_from_stride_two(size))
 
+    def size_from_stride_eight(self, size):
+        """
+        Provides the appropriate size that will be output with a stride eight filter.
+
+        :param size: The original size.
+        :type size: int
+        :return: The filter output size.
+        :rtype: int
+        """
+        return self.size_from_stride_four(self.size_from_stride_four(size))
+
     def linear_classifier_inference(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using only a linear classifier.
@@ -161,7 +202,7 @@ class DepthNet(multiprocessing.Process):
         :return: The tensor filtering on the leaky activation.
         :rtype: tf.Tensor
         """
-        return tf.maximum(tf.mul(0.01, x), x)
+        return tf.maximum(tf.mul(0.001, x), x)
 
     @staticmethod
     def relative_differences(predicted_labels, labels):
@@ -240,7 +281,7 @@ class DepthNet(multiprocessing.Process):
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
-            predicted_labels  = self.standard_net_inference(images)
+            predicted_labels = self.inference(images)
 
             # Add the loss operations to the graph.
             with tf.name_scope('loss'):
@@ -325,7 +366,7 @@ class DepthNet(multiprocessing.Process):
         self.train_network()
 
 
-def weight_variable(shape, stddev=0.1):
+def weight_variable(shape, stddev=0.001):
     """
     Create a generic weight variable.
 
@@ -340,7 +381,7 @@ def weight_variable(shape, stddev=0.1):
     return tf.Variable(initial)
 
 
-def bias_variable(shape, constant=0.1):
+def bias_variable(shape, constant=0.001):
     """
     Create a generic bias variable.
 
