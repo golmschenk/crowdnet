@@ -124,25 +124,23 @@ class Data:
             return untransposed_array.transpose((0, 3, 2, 1))
 
     @staticmethod
-    def crop_data(data):
+    def crop_data(array):
         """
         Crop the NYU data to remove dataless borders.
 
-        :param data: The numpy array to crop
-        :type data: np.ndarray
+        :param array: The numpy array to crop
+        :type array: np.ndarray
         :return: The cropped data.
         :rtype: np.ndarray
         """
-        return data[:, 8:-8, 8:-8]
+        return array[:, 8:-8, 8:-8]
 
-    def convert_mat_to_tfrecord(self, mat_file_path, data_directory='examples'):
+    def convert_mat_to_tfrecord(self, mat_file_path):
         """
         Converts the mat file data into a TFRecords file.
 
         :param mat_file_path: The path to mat file to convert.
         :type mat_file_path: str
-        :param data_directory: Currently unused.
-        :type data_directory: str
         """
         mat_data = h5py.File(mat_file_path, 'r')
         uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
@@ -291,25 +289,22 @@ class Data:
         self.images = np.concatenate(augmented_images_list)
         self.labels = np.concatenate(augmented_labels_list)
 
-    def augment_data_set(self, images, depths):
-        offset_images0 = self.offset_array(images, 1, 1)
-        offset_depths0 = self.offset_array(depths, 1, 1)
-        offset_images1 = self.offset_array(images, -1, 1)
-        offset_depths1 = self.offset_array(depths, -1, 1)
-        offset_images2 = self.offset_array(images, 1, 2)
-        offset_depths2 = self.offset_array(depths, 1, 2)
-        offset_images3 = self.offset_array(images, -1, 2)
-        offset_depths3 = self.offset_array(depths, -1, 2)
-        images = np.concatenate((images, offset_images0, offset_images1, offset_images2, offset_images3))
-        depths = np.concatenate((depths, offset_depths0, offset_depths1, offset_depths2, offset_depths3))
+    def augment_data_set(self, images, labels):
+        """
+        Augments the data set with some basic approaches
 
-        noisy_images0 = self.gaussian_noise_augmentation(images)
-        noisy_images1 = self.gaussian_noise_augmentation(images)
-        noisy_images2 = self.gaussian_noise_augmentation(images)
-        noisy_images3 = self.gaussian_noise_augmentation(images)
-        images = np.concatenate((images, noisy_images0, noisy_images1, noisy_images2, noisy_images3))
-        depths = np.concatenate((depths, depths, depths, depths, depths))
-        return images, depths
+        :param images: The images array.
+        :type images: np.ndarray
+        :param labels: The labels array.
+        :type labels: np.ndarray
+        :return: The images and the labels
+        :rtype: (np.ndarray, np.ndarray)
+        """
+        self.images = images
+        self.labels = labels
+        self.offset_augmentation(1)
+        self.gaussian_noise_augmentation(10, 4)
+        return self.images, self.labels
 
 
 def _int64_feature(value):
