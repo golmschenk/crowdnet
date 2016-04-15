@@ -4,6 +4,7 @@ Code for managing the TFRecord data.
 import os
 import h5py
 import numpy as np
+import scipy.misc
 import tensorflow as tf
 
 
@@ -144,14 +145,11 @@ class Data:
         """
         mat_data = h5py.File(mat_file_path, 'r')
         uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
-        images = self.crop_data(uncropped_images)
-        images = self.rebin(images, self.height, self.width)
-        uncropped_depths = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
-        depths = self.crop_data(uncropped_depths)
-        depths = self.rebin(depths, self.height, self.width)
-        basename = os.path.basename(os.path.splitext(mat_file_path)[0])
-        data_directory = os.path.dirname(mat_file_path)
-        self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)
+        self.images = self.crop_data(uncropped_images)
+        uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
+        self.labels = self.crop_data(uncropped_labels)
+        self.rebin()
+        self.convert_to_tfrecord()
 
     def numpy_files_to_tfrecords(self, images_numpy_file_path, labels_numpy_file_path):
         """
@@ -162,40 +160,29 @@ class Data:
         :param labels_numpy_file_path: The path to the labels NumPy file.
         :type labels_numpy_file_path: str
         """
-        images = np.load(images_numpy_file_path)
-        images = self.rebin(images, self.height, self.width)
-        densities = np.load(labels_numpy_file_path)
-        densities = self.rebin(densities, self.height, self.width)
-        self.convert_to_tfrecord(images, densities, self.data_name, self.data_directory)
+        self.images = np.load(images_numpy_file_path)
+        self.labels = np.load(labels_numpy_file_path)
+        self.rebin()
+        self.convert_to_tfrecord()
 
-    @staticmethod
-    def convert_to_tfrecord(images, depths, name, data_directory):
+    def convert_to_tfrecord(self):
         """
         Converts the data to a TFRecord.
-
-        :param images: The images to be converted.m
-        :type images: np.ndarray
-        :param depths: The depths to be converted.
-        :type depths: np.ndarray
-        :param name: The name of the file to be saved (usually the type [i.e. train, validation, or test]).
-        :type name: str
-        :param data_directory: The directory of in which to save the data.
-        :type data_directory: str
         """
-        number_of_examples = depths.shape[0]
-        if images.shape[0] != number_of_examples:
+        number_of_examples = self.labels.shape[0]
+        if self.images.shape[0] != number_of_examples:
             raise ValueError("Images size %d does not match label size %d." %
-                             (images.shape[0], number_of_examples))
-        rows = images.shape[1]
-        cols = images.shape[2]
-        depth = images.shape[3]
+                             (self.images.shape[0], number_of_examples))
+        rows = self.images.shape[1]
+        cols = self.images.shape[2]
+        depth = self.images.shape[3]
 
-        filename = os.path.join(data_directory, name + '.tfrecords')
+        filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
         print('Writing', filename)
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
-            image_raw = images[index].tostring()
-            depth_raw = depths[index].tostring()
+            image_raw = self.images[index].tostring()
+            depth_raw = self.labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'height': _int64_feature(rows),
                 'width': _int64_feature(cols),
@@ -205,31 +192,17 @@ class Data:
             }))
             writer.write(example.SerializeToString())
 
-    def rebin(self, array, height, width):
+    def rebin(self):
         """
-        Rebins the NumPy array into a new size, averaging the bins between.
-
-        :param array: The array to resize.
-        :type array: np.ndarray
-        :param height: The height to rebin to.
-        :type height: int
-        :param width: The width to rebin to.
-        :type width: int
-        :return: The resized array.
-        :rtype: np.ndarray
+        Rebins the data arrays into the specified data size.
         """
-        compression_shape = [
-            array.shape[0],
-            height,
-            array.shape[1] // height,
-            width,
-            array.shape[2] // width,
-        ]
-        if len(array.shape) == 4:
-            compression_shape.append(self.channels)
-            return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
-        else:
-            return array.reshape(compression_shape).mean(4).mean(2)
+        rebinned_images = np.zeros((self.images.shape[0], self.height, self.width, self.channels), dtype=np.uint8)
+        rebinned_labels = np.zeros((self.labels.shape[0], self.height, self.width), dtype=np.float32)
+        for index in range(self.images.shape[0]):
+            rebinned_images[index] = scipy.misc.imresize(self.images[index], (self.height, self.width, self.channels))
+            rebinned_labels[index] = scipy.misc.imresize(self.labels[index], (self.height, self.width))
+        self.images = rebinned_images
+        self.labels = rebinned_labels
 
     def gaussian_noise_augmentation(self, standard_deviation, number_of_variations):
         """
