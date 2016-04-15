@@ -214,11 +214,14 @@ class Data:
         :type number_of_variations: int
         """
         augmented_images_list = [self.images]
+        augmented_labels_list = [self.labels]
         for _ in range(number_of_variations):
             # noinspection PyTypeChecker
             augmented_images_list.append(np.random.normal(self.images.astype(np.int16),
                                                           standard_deviation).clip(0, 255).astype(np.uint8))
+            augmented_labels_list.append(self.labels)
         self.images = np.concatenate(augmented_images_list)
+        self.labels = np.concatenate(augmented_labels_list)
 
     @staticmethod
     def offset_array(array, offset, axis):
