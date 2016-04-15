@@ -243,7 +243,7 @@ class Data:
         if offset > 0:
             offset_array[offset:] = offset_array[:-offset]
         else:
-            offset_array[:-offset] = offset_array[offset:]
+            offset_array[:offset] = offset_array[-offset:]
         offset_array = np.swapaxes(offset_array, 0, axis)
         return offset_array
 
