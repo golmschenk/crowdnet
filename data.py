@@ -5,7 +5,6 @@ import os
 import h5py
 import numpy as np
 import tensorflow as tf
-import cv2
 
 
 class Data:
@@ -155,6 +154,21 @@ class Data:
         basename = os.path.basename(os.path.splitext(mat_file_path)[0])
         data_directory = os.path.dirname(mat_file_path)
         self.convert_to_tfrecord(images, depths, basename + '.train', data_directory)
+
+    def numpy_files_to_tfrecords(self, images_numpy_file_path, labels_numpy_file_path):
+        """
+        Converts NumPy files to a TFRecords file.
+
+        :param images_numpy_file_path: The path to the images NumPy file.
+        :type images_numpy_file_path: str
+        :param labels_numpy_file_path: The path to the labels NumPy file.
+        :type labels_numpy_file_path: str
+        """
+        images = np.load(images_numpy_file_path)
+        images = self.rebin(images, self.height, self.width)
+        densities = np.load(labels_numpy_file_path)
+        densities = self.rebin(densities, self.height, self.width)
+        self.convert_to_tfrecord(images, densities, self.data_name, self.data_directory)
 
     @staticmethod
     def convert_to_tfrecord(images, depths, name, data_directory):
