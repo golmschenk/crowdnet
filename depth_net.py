@@ -330,7 +330,7 @@ class DepthNet(multiprocessing.Process):
                 while not coordinator.should_stop() and not stop_signal:
                     # Regular training step.
                     start_time = time.time()
-                    _, relative_difference_sum_value, summaries = session.run(
+                    _, average_relative_difference_value, summaries = session.run(
                         [train_op, average_relative_difference, summaries_op],
                         feed_dict={self.dropout_keep_probability: 0.5}
                     )
@@ -339,8 +339,8 @@ class DepthNet(multiprocessing.Process):
                     # Information print and summary write step.
                     if step % self.summary_step_period == 0:
                         writer.add_summary(summaries, step)
-                        print('Step %d: Loss per pixel = %.2f (%.3f sec)' % (step,
-                                                                             average_relative_difference,
+                        print('Step %d: Loss per pixel = %.5f (%.3f sec)' % (step,
+                                                                             average_relative_difference_value,
                                                                              duration))
                     step += 1
 
