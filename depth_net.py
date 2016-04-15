@@ -84,8 +84,8 @@ class DepthNet(multiprocessing.Process):
             w_fc = weight_variable([fc2_size, fc3_size])
             b_fc = bias_variable([fc3_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc_drop, [-1, self.data.height, self.data.width, 1])
+            h_fc = self.leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
+            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
 
