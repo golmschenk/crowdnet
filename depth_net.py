@@ -25,6 +25,7 @@ class DepthNet(multiprocessing.Process):
         self.log_directory = "logs"
         self.data = Data(data_directory='examples', data_name='nyud_micro')
         self.queue = message_queue
+        self.dropout_keep_probability = None
 
     def inference(self, images):
         """
@@ -68,13 +69,15 @@ class DepthNet(multiprocessing.Process):
             b_fc = bias_variable([fc1_size])
 
             h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
 
         with tf.name_scope('fc2'):
             fc2_size = fc1_size // 2
             w_fc = weight_variable([fc1_size, fc2_size])
             b_fc = bias_variable([fc2_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = self.leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
+            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
 
         with tf.name_scope('fc3'):
             fc3_size = self.data.height * self.data.width
@@ -82,7 +85,7 @@ class DepthNet(multiprocessing.Process):
             b_fc = bias_variable([fc3_size])
 
             h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
+            predicted_labels = tf.reshape(h_fc_drop, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
 
@@ -281,6 +284,7 @@ class DepthNet(multiprocessing.Process):
 
             print('Building graph...')
             # Add the forward pass operations to the graph.
+            self.dropout_keep_probability = tf.placeholder(tf.float32)
             predicted_labels = self.inference(images)
 
             # Add the loss operations to the graph.
@@ -326,8 +330,10 @@ class DepthNet(multiprocessing.Process):
                 while not coordinator.should_stop() and not stop_signal:
                     # Regular training step.
                     start_time = time.time()
-                    _, relative_difference_sum_value, summaries = session.run([train_op, average_relative_difference,
-                                                                               summaries_op])
+                    _, relative_difference_sum_value, summaries = session.run(
+                        [train_op, average_relative_difference, summaries_op],
+                        feed_dict={self.dropout_keep_probability: 0.5}
+                    )
                     duration = time.time() - start_time
 
                     # Information print and summary write step.
