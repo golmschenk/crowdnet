@@ -2,6 +2,7 @@
 examples/*
 logs/*
 models/*
+!*.gitkeep
 
 
 # Created by .ignore support plugin (hsz.mobi)
