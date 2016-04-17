@@ -9,6 +9,7 @@ import time
 import multiprocessing
 
 from data import Data
+from interface import Interface
 
 
 class DepthNet(multiprocessing.Process):
@@ -21,11 +22,14 @@ class DepthNet(multiprocessing.Process):
         self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
-        self.summary_step_period = 1
-        self.log_directory = "logs"
         self.data = Data(data_directory='examples', data_name='nyud_micro')
         self.queue = message_queue
         self.dropout_keep_probability = None
+
+        self.summary_step_period = 1
+        self.moving_average_loss = None
+        self.moving_average_decay = 0.1
+        self.log_directory = "logs"
 
     def inference(self, images):
         """
@@ -292,7 +296,6 @@ class DepthNet(multiprocessing.Process):
                 relative_differences = self.relative_differences(predicted_labels, labels)
                 relative_difference_sum = tf.reduce_sum(relative_differences)
                 average_relative_difference = tf.reduce_mean(relative_differences)
-                tf.scalar_summary("Loss", relative_difference_sum)
                 tf.scalar_summary("Loss per pixel", average_relative_difference)
 
             with tf.name_scope('comparison_summary'):
@@ -421,18 +424,5 @@ def conv2d(images, weights, strides=None):
 
 
 if __name__ == '__main__':
-    queue_ = multiprocessing.Queue()
-    depth_net = DepthNet(message_queue=queue_)
-    depth_net.start()
-    while True:
-        user_input = input()
-        if user_input == 's':
-            print('Save requested.')
-            queue_.put('save')
-            continue
-        elif user_input == 'q':
-            print('Exit requested. Quitting.')
-            queue_.put('quit')
-            print('Waiting for graph to quit.')
-            depth_net.join()
-            break
+    interface = Interface(network_class=DepthNet)
+    interface.train()
