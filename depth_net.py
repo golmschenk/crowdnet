@@ -9,7 +9,7 @@ import time
 
 import tensorflow as tf
 
-from convenience import weight_variable, bias_variable, conv2d, leaky_relu
+from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
 from data import Data
 from interface import Interface
 
@@ -123,7 +123,7 @@ class DepthNet(multiprocessing.Process):
             h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
-            fc0_size = self.size_from_stride_two(self.data.height, iterations=2) * self.size_from_stride_two(self.data.width, iterations=2) * 32
+            fc0_size = size_from_stride_two(self.data.height, iterations=2) * size_from_stride_two(self.data.width, iterations=2) * 32
             fc1_size = fc0_size // 2
             h_fc = tf.reshape(h_conv, [-1, fc0_size])
             w_fc = weight_variable([fc0_size, fc1_size])
@@ -147,22 +147,6 @@ class DepthNet(multiprocessing.Process):
             predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
-
-    def size_from_stride_two(self, size, iterations=1):
-        """
-        Provides the appropriate size that will be output with a stride two filter.
-
-        :param size: The original size.
-        :type size: int
-        :param iterations: The number of times the stride two iteration was preformed.
-        :type iterations: int
-        :return: The filter output size.
-        :rtype: int
-        """
-        if iterations == 1:
-            return math.ceil(size / 2)
-        else:
-            return math.ceil(self.size_from_stride_two(size, iterations=iterations-1) / 2)
 
     def linear_classifier_inference(self, images):
         """

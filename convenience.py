@@ -2,6 +2,7 @@
 Code for simplifying generically used functions.
 """
 import tensorflow as tf
+import math
 
 
 def weight_variable(shape, stddev=0.001):
@@ -62,3 +63,20 @@ def leaky_relu(x):
     :rtype: tf.Tensor
     """
     return tf.maximum(tf.mul(0.001, x), x)
+
+
+def size_from_stride_two(size, iterations=1):
+    """
+    Provides the appropriate size that will be output with a stride two filter.
+
+    :param size: The original size.
+    :type size: int
+    :param iterations: The number of times the stride two iteration was preformed.
+    :type iterations: int
+    :return: The filter output size.
+    :rtype: int
+    """
+    if iterations == 1:
+        return math.ceil(size / 2)
+    else:
+        return math.ceil(size_from_stride_two(size, iterations=iterations - 1) / 2)
