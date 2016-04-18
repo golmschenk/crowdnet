@@ -123,7 +123,7 @@ class DepthNet(multiprocessing.Process):
             h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
-            fc0_size = self.size_from_stride_four(self.data.height) * self.size_from_stride_four(self.data.width) * 32
+            fc0_size = self.size_from_stride_two(self.data.height, iterations=2) * self.size_from_stride_two(self.data.width, iterations=2) * 32
             fc1_size = fc0_size // 2
             h_fc = tf.reshape(h_conv, [-1, fc0_size])
             w_fc = weight_variable([fc0_size, fc1_size])
@@ -148,39 +148,21 @@ class DepthNet(multiprocessing.Process):
 
         return predicted_labels
 
-    @staticmethod
-    def size_from_stride_two(size):
+    def size_from_stride_two(self, size, iterations=1):
         """
         Provides the appropriate size that will be output with a stride two filter.
 
         :param size: The original size.
         :type size: int
+        :param iterations: The number of times the stride two iteration was preformed.
+        :type iterations: int
         :return: The filter output size.
         :rtype: int
         """
-        return math.ceil(size / 2)
-
-    def size_from_stride_four(self, size):
-        """
-        Provides the appropriate size that will be output with a stride four filter.
-
-        :param size: The original size.
-        :type size: int
-        :return: The filter output size.
-        :rtype: int
-        """
-        return self.size_from_stride_two(self.size_from_stride_two(size))
-
-    def size_from_stride_eight(self, size):
-        """
-        Provides the appropriate size that will be output with a stride eight filter.
-
-        :param size: The original size.
-        :type size: int
-        :return: The filter output size.
-        :rtype: int
-        """
-        return self.size_from_stride_four(self.size_from_stride_four(size))
+        if iterations == 1:
+            return math.ceil(size / 2)
+        else:
+            return math.ceil(self.size_from_stride_two(size, iterations=iterations-1) / 2)
 
     def linear_classifier_inference(self, images):
         """
