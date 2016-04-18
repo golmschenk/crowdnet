@@ -50,3 +50,15 @@ def conv2d(images, weights, strides=None):
     if strides is None:
         strides = [1, 1, 1, 1]
     return tf.nn.conv2d(images, weights, strides=strides, padding='SAME')
+
+
+def leaky_relu(x):
+    """
+    A basic implementation of a leaky ReLU.
+
+    :param x: The input of the ReLU activation.
+    :type x: tf.Tensor
+    :return: The tensor filtering on the leaky activation.
+    :rtype: tf.Tensor
+    """
+    return tf.maximum(tf.mul(0.001, x), x)

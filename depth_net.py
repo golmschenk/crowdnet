@@ -9,7 +9,7 @@ import time
 
 import tensorflow as tf
 
-from convenience import weight_variable, bias_variable, conv2d
+from convenience import weight_variable, bias_variable, conv2d, leaky_relu
 from data import Data
 from interface import Interface
 
@@ -46,26 +46,26 @@ class DepthNet(multiprocessing.Process):
             w_conv = weight_variable([5, 5, 3, 32])
             b_conv = bias_variable([32])
 
-            h_conv = self.leaky_relu(conv2d(images, w_conv) + b_conv)
+            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
 
         with tf.name_scope('conv2'):
             w_conv = weight_variable([5, 5, 32, 128])
             b_conv = bias_variable([128])
 
-            h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
         for index in range(9):
             with tf.name_scope('conv' + str(index + 3)):
                 w_conv = weight_variable([5, 5, 128, 128])
                 b_conv = bias_variable([128])
 
-                h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
         with tf.name_scope('conv12'):
             w_conv = weight_variable([5, 5, 128, 32])
             b_conv = bias_variable([32])
 
-            h_conv = self.leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
         with tf.name_scope('fc1'):
             fc0_size = self.data.height * self.data.width * 32
@@ -74,7 +74,7 @@ class DepthNet(multiprocessing.Process):
             w_fc = weight_variable([fc0_size, fc1_size])
             b_fc = bias_variable([fc1_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
             h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
 
         with tf.name_scope('fc2'):
@@ -82,7 +82,7 @@ class DepthNet(multiprocessing.Process):
             w_fc = weight_variable([fc1_size, fc2_size])
             b_fc = bias_variable([fc2_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
             h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
 
         with tf.name_scope('fc3'):
@@ -90,7 +90,7 @@ class DepthNet(multiprocessing.Process):
             w_fc = weight_variable([fc2_size, fc3_size])
             b_fc = bias_variable([fc3_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
             predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
@@ -108,19 +108,19 @@ class DepthNet(multiprocessing.Process):
             w_conv = weight_variable([7, 7, 3, 16])
             b_conv = bias_variable([16])
 
-            h_conv = self.leaky_relu(conv2d(images, w_conv) + b_conv)
+            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
 
         with tf.name_scope('conv2'):
             w_conv = weight_variable([7, 7, 16, 24])
             b_conv = bias_variable([24])
 
-            h_conv = self.leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('conv3'):
             w_conv = weight_variable([7, 7, 24, 32])
             b_conv = bias_variable([32])
 
-            h_conv = self.leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
+            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
             fc0_size = self.size_from_stride_four(self.data.height) * self.size_from_stride_four(self.data.width) * 32
@@ -129,21 +129,21 @@ class DepthNet(multiprocessing.Process):
             w_fc = weight_variable([fc0_size, fc1_size])
             b_fc = bias_variable([fc1_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
 
         with tf.name_scope('fc2'):
             fc2_size = fc1_size // 2
             w_fc = weight_variable([fc1_size, fc2_size])
             b_fc = bias_variable([fc2_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
 
         with tf.name_scope('fc3'):
             fc3_size = self.data.height * self.data.width
             w_fc = weight_variable([fc2_size, fc3_size])
             b_fc = bias_variable([fc3_size])
 
-            h_fc = self.leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
+            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
             predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
         return predicted_labels
@@ -200,18 +200,6 @@ class DepthNet(multiprocessing.Process):
         flat_predicted_labels = tf.matmul(flat_images, weights) + biases
         predicted_labels = tf.reshape(flat_predicted_labels, [-1, Data().height, Data().width, 1])
         return predicted_labels
-
-    @staticmethod
-    def leaky_relu(x):
-        """
-        A basic implementation of a leaky ReLU.
-
-        :param x: The input of the ReLU activation.
-        :type x: tf.Tensor
-        :return: The tensor filtering on the leaky activation.
-        :rtype: tf.Tensor
-        """
-        return tf.maximum(tf.mul(0.001, x), x)
 
     @staticmethod
     def relative_differences(predicted_labels, labels):
