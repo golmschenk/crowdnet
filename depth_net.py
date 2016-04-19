@@ -2,7 +2,6 @@
 Code related to the DepthNet.
 """
 import datetime
-import math
 import multiprocessing
 import os
 import time
@@ -157,14 +156,13 @@ class DepthNet(multiprocessing.Process):
         :return: The label maps tensor.
         :rtype: tf.Tensor
         """
-        self.initial_learning_rate = 0.00001
-        pixel_count = Data().height * Data().width
-        flat_images = tf.reshape(images, [-1, pixel_count * Data().channels])
-        weights = weight_variable([pixel_count * Data().channels, pixel_count], stddev=0.001)
+        pixel_count = self.data.height * self.data.width
+        flat_images = tf.reshape(images, [-1, pixel_count * self.data.channels])
+        weights = weight_variable([pixel_count * self.data.channels, pixel_count], stddev=0.001)
         biases = bias_variable([pixel_count], constant=0.001)
 
         flat_predicted_labels = tf.matmul(flat_images, weights) + biases
-        predicted_labels = tf.reshape(flat_predicted_labels, [-1, Data().height, Data().width, 1])
+        predicted_labels = tf.reshape(flat_predicted_labels, [-1, self.data.height, self.data.width, 1])
         return predicted_labels
 
     @staticmethod
@@ -236,93 +234,92 @@ class DepthNet(multiprocessing.Process):
         """
         Adds the training operations and runs the training loop.
         """
-        with tf.Graph().as_default():
-            print('Preparing data...')
-            # Setup the inputs.
-            images, labels = self.data.inputs(data_type='train', batch_size=self.batch_size,
-                                              num_epochs=self.number_of_epochs)
+        print('Preparing data...')
+        # Setup the inputs.
+        images, labels = self.data.inputs(data_type='train', batch_size=self.batch_size,
+                                          num_epochs=self.number_of_epochs)
 
-            print('Building graph...')
-            # Add the forward pass operations to the graph.
-            self.dropout_keep_probability = tf.placeholder(tf.float32)
-            predicted_labels = self.inference(images)
+        print('Building graph...')
+        # Add the forward pass operations to the graph.
+        self.dropout_keep_probability = tf.placeholder(tf.float32)
+        predicted_labels = self.linear_classifier_inference(images)
 
-            # Add the loss operations to the graph.
-            with tf.name_scope('loss'):
-                relative_differences = self.relative_differences(predicted_labels, labels)
-                relative_difference_sum = tf.reduce_sum(relative_differences)
-                average_relative_difference = tf.reduce_mean(relative_differences)
-                tf.scalar_summary("Loss per pixel", average_relative_difference)
+        # Add the loss operations to the graph.
+        with tf.name_scope('loss'):
+            relative_differences = self.relative_differences(predicted_labels, labels)
+            relative_difference_sum = tf.reduce_sum(relative_differences)
+            average_relative_difference = tf.reduce_mean(relative_differences)
+            tf.scalar_summary("Loss per pixel", average_relative_difference)
 
-            with tf.name_scope('comparison_summary'):
-                self.side_by_side_image_summary(images, labels, predicted_labels, relative_differences)
+        with tf.name_scope('comparison_summary'):
+            self.side_by_side_image_summary(images, labels, predicted_labels, relative_differences)
 
-            # Add the training operations to the graph.
-            train_op = self.training(relative_difference_sum)
+        # Add the training operations to the graph.
+        train_op = self.training(relative_difference_sum)
 
-            # The op for initializing the variables.
-            initialize_op = tf.initialize_all_variables()
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
 
-            # Prepare the saver.
-            saver = tf.train.Saver()
+        # Prepare the saver.
+        saver = tf.train.Saver()
 
-            # Create a session for running operations in the Graph.
-            session = tf.Session()
+        # Create a session for running operations in the Graph.
+        session = tf.Session()
 
-            # Prepare the summary operations.
-            summaries_op = tf.merge_all_summaries()
-            summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-            writer = tf.train.SummaryWriter(summary_path, session.graph_def)
+        # Prepare the summary operations.
+        summaries_op = tf.merge_all_summaries()
+        summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        writer = tf.train.SummaryWriter(summary_path, session.graph_def)
 
-            print('Starting training...')
-            # Initialize the variables.
-            session.run(initialize_op)
+        print('Starting training...')
+        # Initialize the variables.
+        session.run(initialize_op)
 
-            # Start input enqueue threads.
-            coordinator = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(sess=session, coord=coordinator)
+        # Start input enqueue threads.
+        coordinator = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=session, coord=coordinator)
 
-            # Preform the training loop.
-            step = 0
-            stop_signal = False
-            try:
-                while not coordinator.should_stop() and not stop_signal:
-                    # Regular training step.
-                    start_time = time.time()
-                    _, average_relative_difference_value, summaries = session.run(
-                        [train_op, average_relative_difference, summaries_op],
-                        feed_dict={self.dropout_keep_probability: 0.5}
-                    )
-                    duration = time.time() - start_time
+        # Preform the training loop.
+        step = 0
+        stop_signal = False
+        try:
+            while not coordinator.should_stop() and not stop_signal:
+                # Regular training step.
+                start_time = time.time()
+                _, average_relative_difference_value, summaries = session.run(
+                    [train_op, average_relative_difference, summaries_op],
+                    feed_dict={self.dropout_keep_probability: 0.5}
+                )
+                duration = time.time() - start_time
 
-                    # Information print and summary write step.
-                    if step % self.summary_step_period == 0:
-                        writer.add_summary(summaries, step)
-                        print('Step %d: Loss per pixel = %.5f (%.3f sec)' % (step,
-                                                                             average_relative_difference_value,
-                                                                             duration))
-                    step += 1
+                # Information print and summary write step.
+                if step % self.summary_step_period == 0:
+                    writer.add_summary(summaries, step)
+                    print('Step %d: Loss per pixel = %.5f (%.3f sec)' % (step,
+                                                                         average_relative_difference_value,
+                                                                         duration))
+                step += 1
 
-                    # If a stop has been called for clean up and save.
-                    if self.queue:
-                        if not self.queue.empty():
-                            message = self.queue.get(block=False)
-                            if message == 'save':
-                                save_path = saver.save(session, os.path.join('models', 'depthnet.ckpt'),
-                                                       global_step=step)
-                                tf.train.write_graph(session.graph_def, 'models', 'depthnet.pb')
-                                print("Model saved in file: %s" % save_path)
-                            if message == 'quit':
-                                stop_signal = True
-            except tf.errors.OutOfRangeError:
-                print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, step))
-            finally:
-                # When done, ask the threads to stop.
-                coordinator.request_stop()
+                # If a stop has been called for clean up and save.
+                if self.queue:
+                    if not self.queue.empty():
+                        message = self.queue.get(block=False)
+                        if message == 'save':
+                            save_path = saver.save(session, os.path.join('models', 'depthnet.ckpt'),
+                                                   global_step=step)
+                            tf.train.write_graph(session.graph_def, 'models', 'depthnet.pb')
+                            print("Model saved in file: %s" % save_path)
+                        if message == 'quit':
+                            stop_signal = True
+        except tf.errors.OutOfRangeError:
+            print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, step))
+        finally:
+            # When done, ask the threads to stop.
+            coordinator.request_stop()
 
-            # Wait for threads to finish.
-            coordinator.join(threads)
-            session.close()
+        # Wait for threads to finish.
+        coordinator.join(threads)
+        session.close()
 
     def run(self):
         """
