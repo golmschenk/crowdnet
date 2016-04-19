@@ -20,21 +20,39 @@ class DepthNet(multiprocessing.Process):
 
     def __init__(self, message_queue=None):
         super().__init__()
+
+        # Common manipulation variables.
         self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.data = Data(data_directory='examples', data_name='nyud_micro')
-        self.queue = message_queue
-        self.dropout_keep_probability = None
-
         self.summary_step_period = 1
-        self.moving_average_loss = None
-        self.moving_average_decay = 0.1
         self.log_directory = "logs"
 
-    def inference(self, images):
+        # Internal setup.
+        self.moving_average_loss = None
+        self.moving_average_decay = 0.1
+        self.stop_signal = False
+        self.step = 0
+        self.saver = None
+        self.session = None
+        self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
+        self.queue = message_queue
+
+    def create_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+        return self.linear_classifier_inference(images)
+
+    def deep_inference(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a deep convolution net.
 
         :param images: The RGB images tensor.
         :type images: tf.Tensor
@@ -74,7 +92,7 @@ class DepthNet(multiprocessing.Process):
             b_fc = bias_variable([fc1_size])
 
             h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
+            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability_tensor)
 
         with tf.name_scope('fc2'):
             fc2_size = fc1_size // 2
@@ -82,7 +100,7 @@ class DepthNet(multiprocessing.Process):
             b_fc = bias_variable([fc2_size])
 
             h_fc = leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
-            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability)
+            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability_tensor)
 
         with tf.name_scope('fc3'):
             fc3_size = self.data.height * self.data.width
@@ -244,6 +262,21 @@ class DepthNet(multiprocessing.Process):
         comparison_image = tf.concat(1, [images, label_heat_map, predicted_label_heat_map, label_difference_heat_map])
         tf.image_summary('comparison', comparison_image)
 
+    def interface_handler(self):
+        """
+        Handle input from the user using the interface.
+        """
+        if self.queue:
+            if not self.queue.empty():
+                message = self.queue.get(block=False)
+                if message == 'save':
+                    save_path = self.saver.save(self.session, os.path.join('models', 'depthnet.ckpt'),
+                                                global_step=self.step)
+                    tf.train.write_graph(self.session.graph_def, 'models', 'depthnet.pb')
+                    print("Model saved in file: %s" % save_path)
+                if message == 'quit':
+                    self.stop_signal = True
+
     def train(self):
         """
         Adds the training operations and runs the training loop.
@@ -255,8 +288,7 @@ class DepthNet(multiprocessing.Process):
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
-        self.dropout_keep_probability = tf.placeholder(tf.float32)
-        predicted_labels_tensor = self.linear_classifier_inference(images_tensor)
+        predicted_labels_tensor = self.create_inference_op(images_tensor)
 
         # Add the loss operations to the graph.
         with tf.name_scope('loss'):
@@ -273,64 +305,53 @@ class DepthNet(multiprocessing.Process):
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
 
-        # Prepare the saver.
-        saver = tf.train.Saver()
-
-        # Create a session for running operations in the Graph.
-        session = tf.Session()
+        # Prepare session.
+        self.session = tf.Session()
 
         # Prepare the summary operations.
         summaries_op = tf.merge_all_summaries()
         summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        writer = tf.train.SummaryWriter(summary_path, session.graph_def)
+        writer = tf.train.SummaryWriter(summary_path, self.session.graph_def)
+
+        # Prepare saver.
+        self.saver = tf.train.Saver()
 
         print('Starting training...')
         # Initialize the variables.
-        session.run(initialize_op)
+        self.session.run(initialize_op)
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=session, coord=coordinator)
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
 
         # Preform the training loop.
-        step = 0
-        stop_signal = False
         try:
-            while not coordinator.should_stop() and not stop_signal:
+            while not coordinator.should_stop() and not self.stop_signal:
                 # Regular training step.
                 start_time = time.time()
-                _, loss, summaries = session.run(
+                _, loss, summaries = self.session.run(
                     [training_op, loss_per_pixel_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability: 0.5}
+                    feed_dict={self.dropout_keep_probability_tensor: 0.5}
                 )
                 duration = time.time() - start_time
 
                 # Information print and summary write step.
-                if step % self.summary_step_period == 0:
-                    writer.add_summary(summaries, step)
-                    print('Step %d: Loss per pixel = %.5f (%.3f sec / step)' % (step, loss, duration))
-                step += 1
+                if self.step % self.summary_step_period == 0:
+                    writer.add_summary(summaries, self.step)
+                    print('Step %d: Loss per pixel = %.5f (%.3f sec / step)' % (self.step, loss, duration))
+                self.step += 1
 
-                # If a stop has been called for clean up and save.
-                if self.queue:
-                    if not self.queue.empty():
-                        message = self.queue.get(block=False)
-                        if message == 'save':
-                            save_path = saver.save(session, os.path.join('models', 'depthnet.ckpt'),
-                                                   global_step=step)
-                            tf.train.write_graph(session.graph_def, 'models', 'depthnet.pb')
-                            print("Model saved in file: %s" % save_path)
-                        if message == 'quit':
-                            stop_signal = True
+                # Handle interface messages from the user.
+                self.interface_handler()
         except tf.errors.OutOfRangeError:
-            print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, step))
+            print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, self.step))
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
 
         # Wait for threads to finish.
         coordinator.join(threads)
-        session.close()
+        self.session.close()
 
     def run(self):
         """
