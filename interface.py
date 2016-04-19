@@ -24,8 +24,8 @@ class Interface:
                 self.queue.put('save')
                 continue
             elif user_input == 'q':
-                print('Exit requested. Quitting.')
+                print('Quit requested.')
                 self.queue.put('quit')
-                print('Waiting for graph to quit.')
                 self.network.join()
                 break
+        print('Done.')

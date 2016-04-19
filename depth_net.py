@@ -244,7 +244,7 @@ class DepthNet(multiprocessing.Process):
         comparison_image = tf.concat(1, [images, label_heat_map, predicted_label_heat_map, label_difference_heat_map])
         tf.image_summary('comparison', comparison_image)
 
-    def train_network(self):
+    def train(self):
         """
         Adds the training operations and runs the training loop.
         """
@@ -336,7 +336,7 @@ class DepthNet(multiprocessing.Process):
         """
         Allow for training the network from a multiprocessing standpoint.
         """
-        self.train_network()
+        self.train()
 
 
 if __name__ == '__main__':
