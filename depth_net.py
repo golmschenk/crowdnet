@@ -122,7 +122,8 @@ class DepthNet(multiprocessing.Process):
             h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
-            fc0_size = size_from_stride_two(self.data.height, iterations=2) * size_from_stride_two(self.data.width, iterations=2) * 32
+            fc0_size = size_from_stride_two(self.data.height, iterations=2) * size_from_stride_two(self.data.width,
+                                                                                                   iterations=2) * 32
             fc1_size = fc0_size // 2
             h_fc = tf.reshape(h_conv, [-1, fc0_size])
             w_fc = weight_variable([fc0_size, fc1_size])
@@ -165,6 +166,19 @@ class DepthNet(multiprocessing.Process):
         predicted_labels = tf.reshape(flat_predicted_labels, [-1, self.data.height, self.data.width, 1])
         return predicted_labels
 
+    def create_loss_tensor(self, predicted_labels, labels):
+        """
+        Create the loss op and add it to the graph.
+
+        :param predicted_labels: The labels predicted by the graph.
+        :type predicted_labels: tf.Tensor
+        :param labels: The ground truth labels.
+        :type labels: tf.Tensor
+        :return: The loss tensor.
+        :rtype: tf.Tensor
+        """
+        return self.relative_differences(predicted_labels, labels)
+
     @staticmethod
     def relative_differences(predicted_labels, labels):
         """
@@ -180,7 +194,7 @@ class DepthNet(multiprocessing.Process):
         difference = tf.abs(predicted_labels - labels)
         return difference / labels
 
-    def training(self, value_to_minimize):
+    def create_training_op(self, value_to_minimize):
         """
         Create and add the training op to the graph.
 
@@ -209,7 +223,7 @@ class DepthNet(multiprocessing.Process):
         g = 1 - b - r
         return tf.concat(3, [r, g, b]) - 0.5
 
-    def side_by_side_image_summary(self, images, labels, predicted_labels, label_differences):
+    def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
         """
         Combines the image, label, and difference tensors together into a presentable image. Then adds the
         image summary op to the graph.
@@ -236,26 +250,25 @@ class DepthNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images, labels = self.data.inputs(data_type='train', batch_size=self.batch_size,
-                                          num_epochs=self.number_of_epochs)
+        images_tensor, labels_tensor = self.data.inputs(data_type='train', batch_size=self.batch_size,
+                                                        num_epochs=self.number_of_epochs)
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
         self.dropout_keep_probability = tf.placeholder(tf.float32)
-        predicted_labels = self.linear_classifier_inference(images)
+        predicted_labels_tensor = self.linear_classifier_inference(images_tensor)
 
         # Add the loss operations to the graph.
         with tf.name_scope('loss'):
-            relative_differences = self.relative_differences(predicted_labels, labels)
-            relative_difference_sum = tf.reduce_sum(relative_differences)
-            average_relative_difference = tf.reduce_mean(relative_differences)
-            tf.scalar_summary("Loss per pixel", average_relative_difference)
+            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
+            loss_per_pixel_tensor = tf.reduce_mean(loss_tensor)
+            tf.scalar_summary("Loss per pixel", loss_per_pixel_tensor)
 
         with tf.name_scope('comparison_summary'):
-            self.side_by_side_image_summary(images, labels, predicted_labels, relative_differences)
+            self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        train_op = self.training(relative_difference_sum)
+        training_op = self.create_training_op(value_to_minimize=loss_per_pixel_tensor)
 
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
@@ -286,8 +299,8 @@ class DepthNet(multiprocessing.Process):
             while not coordinator.should_stop() and not stop_signal:
                 # Regular training step.
                 start_time = time.time()
-                _, average_relative_difference_value, summaries = session.run(
-                    [train_op, average_relative_difference, summaries_op],
+                _, loss, summaries = session.run(
+                    [training_op, loss_per_pixel_tensor, summaries_op],
                     feed_dict={self.dropout_keep_probability: 0.5}
                 )
                 duration = time.time() - start_time
@@ -295,9 +308,7 @@ class DepthNet(multiprocessing.Process):
                 # Information print and summary write step.
                 if step % self.summary_step_period == 0:
                     writer.add_summary(summaries, step)
-                    print('Step %d: Loss per pixel = %.5f (%.3f sec)' % (step,
-                                                                         average_relative_difference_value,
-                                                                         duration))
+                    print('Step %d: Loss per pixel = %.5f (%.3f sec / step)' % (step, loss, duration))
                 step += 1
 
                 # If a stop has been called for clean up and save.
