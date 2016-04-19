@@ -13,9 +13,12 @@ class Data:
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='examples', data_name='nyud'):
+    def __init__(self, data_directory='examples', data_name='nyud', images_numpy_file_name='nyud_images',
+                 labels_numpy_file_name='nyud_labels'):
         self.data_directory = data_directory
         self.data_name = data_name
+        self.images_numpy_file_name = images_numpy_file_name
+        self.labels_numpy_file_name = labels_numpy_file_name
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
@@ -160,10 +163,18 @@ class Data:
         :param labels_numpy_file_path: The path to the labels NumPy file.
         :type labels_numpy_file_path: str
         """
-        self.images = np.load(images_numpy_file_path)
-        self.labels = np.load(labels_numpy_file_path)
+        self.load_numpy_files()
         self.rebin()
         self.convert_to_tfrecord()
+
+    def load_numpy_files(self):
+        """
+        Loads data from the numpy files into the object.
+        """
+        images_numpy_file_path = os.path.join(self.data_directory, self.images_numpy_file_name)
+        labels_numpy_file_path = os.path.join(self.data_directory, self.labels_numpy_file_name)
+        self.images = np.load(images_numpy_file_path)
+        self.labels = np.load(labels_numpy_file_path)
 
     def convert_to_tfrecord(self):
         """
@@ -257,7 +268,7 @@ class Data:
         augmented_images_list = [self.images]
         augmented_labels_list = [self.labels]
         for axis in [1, 2]:
-            for offset in range(-offset_limit, offset_limit+1):
+            for offset in range(-offset_limit, offset_limit + 1):
                 if offset == 0:
                     continue
                 augmented_images_list.append(self.offset_array(self.images, offset, axis))

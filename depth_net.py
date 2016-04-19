@@ -21,13 +21,14 @@ class DepthNet(multiprocessing.Process):
     def __init__(self, message_queue=None):
         super().__init__()
 
-        # Common manipulation variables.
+        # Common variables.
         self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.data = Data(data_directory='examples', data_name='nyud_micro')
         self.summary_step_period = 1
         self.log_directory = "logs"
+        self.dropout_keep_probability = 0.5
 
         # Internal setup.
         self.moving_average_loss = None
@@ -48,9 +49,9 @@ class DepthNet(multiprocessing.Process):
         :return: The label maps tensor.
         :rtype: tf.Tensor
         """
-        return self.linear_classifier_inference(images)
+        return self.create_linear_classifier_inference_op(images)
 
-    def deep_inference(self, images):
+    def create_deep_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a deep convolution net.
 
@@ -166,7 +167,7 @@ class DepthNet(multiprocessing.Process):
 
         return predicted_labels
 
-    def linear_classifier_inference(self, images):
+    def create_linear_classifier_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using only a linear classifier.
 
@@ -331,7 +332,7 @@ class DepthNet(multiprocessing.Process):
                 start_time = time.time()
                 _, loss, summaries = self.session.run(
                     [training_op, loss_per_pixel_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability_tensor: 0.5}
+                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability}
                 )
                 duration = time.time() - start_time
 
