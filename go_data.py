@@ -4,16 +4,15 @@ Code for managing the TFRecord data.
 import os
 import h5py
 import numpy as np
-import scipy.misc
 import tensorflow as tf
 
 
-class Data:
+class GoData:
     """
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='examples', data_name='nyud', images_numpy_file_name='nyud_images',
+    def __init__(self, data_directory='data', data_name='nyud', images_numpy_file_name='nyud_images',
                  labels_numpy_file_name='nyud_labels'):
         self.data_directory = data_directory
         self.data_name = data_name
@@ -71,7 +70,11 @@ class Data:
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        file_path = os.path.join(self.data_directory, self.data_name + '.' + data_type + '.tfrecords')
+        if data_type:
+            file_name = self.data_name + '.' + data_type + '.tfrecords'
+        else:
+            file_name = self.data_name + '.tfrecords'
+        file_path = os.path.join(self.data_directory, file_name)
 
         with tf.name_scope('Input'):
             filename_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
@@ -325,5 +328,5 @@ def _bytes_feature(value):
 if __name__ == '__main__':
     os.nice(10)
 
-    data = Data()
-    data.convert_mat_to_tfrecord('examples/nyud_micro.mat')
+    data = GoData()
+    data.convert_mat_to_tfrecord('data/nyud_micro.mat')

@@ -9,13 +9,13 @@ import time
 import tensorflow as tf
 
 from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
-from data import Data
+from go_data import GoData
 from interface import Interface
 
 
-class DepthNet(multiprocessing.Process):
+class GoNet(multiprocessing.Process):
     """
-    The class to build and interact with the DepthNet TensorFlow graph.
+    The class to build and interact with the GoNet TensorFlow graph.
     """
 
     def __init__(self, message_queue=None):
@@ -25,7 +25,7 @@ class DepthNet(multiprocessing.Process):
         self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
-        self.data = Data(data_directory='examples', data_name='nyud_micro')
+        self.data = GoData(data_name='nyud')
         self.summary_step_period = 1
         self.log_directory = "logs"
         self.dropout_keep_probability = 0.5
@@ -284,7 +284,7 @@ class DepthNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor = self.data.inputs(data_type='train', batch_size=self.batch_size,
+        images_tensor, labels_tensor = self.data.inputs(data_type='', batch_size=self.batch_size,
                                                         num_epochs=self.number_of_epochs)
 
         print('Building graph...')
@@ -362,5 +362,5 @@ class DepthNet(multiprocessing.Process):
 
 
 if __name__ == '__main__':
-    interface = Interface(network_class=DepthNet)
+    interface = Interface(network_class=GoNet)
     interface.train()
