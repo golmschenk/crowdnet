@@ -48,7 +48,7 @@ class TestFunctionalData:
         assert os.path.isfile(tfrecords_file_path)
 
         # Reload data.
-        images, depths = go_data.inputs(data_type='train', batch_size=10)
+        images, depths = go_data.inputs(data_type='', batch_size=10)
 
         # Check that magic values are correct when the data is reloaded.
         magic_image_numbers = [-0.17450979, -0.15882352, -0.15490195, -0.15098038, -0.14705881,
