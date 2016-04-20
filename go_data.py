@@ -157,14 +157,9 @@ class GoData:
         self.shrink()
         self.convert_to_tfrecord()
 
-    def numpy_files_to_tfrecords(self, images_numpy_file_path, labels_numpy_file_path):
+    def numpy_files_to_tfrecords(self):
         """
         Converts NumPy files to a TFRecords file.
-
-        :param images_numpy_file_path: The path to the images NumPy file.
-        :type images_numpy_file_path: str
-        :param labels_numpy_file_path: The path to the labels NumPy file.
-        :type labels_numpy_file_path: str
         """
         self.load_numpy_files()
         self.shrink()
@@ -218,10 +213,6 @@ class GoData:
         Rebins the NumPy array into a new size, averaging the bins between.
         :param array: The array to resize.
         :type array: np.ndarray
-        :param height: The height to rebin to.
-        :type height: int
-        :param width: The width to rebin to.
-        :type width: int
         :return: The resized array.
         :rtype: np.ndarray
         """
