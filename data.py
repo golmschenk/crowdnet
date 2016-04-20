@@ -151,7 +151,7 @@ class Data:
         self.images = self.crop_data(uncropped_images)
         uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
         self.labels = self.crop_data(uncropped_labels)
-        self.rebin()
+        self.shrink()
         self.convert_to_tfrecord()
 
     def numpy_files_to_tfrecords(self, images_numpy_file_path, labels_numpy_file_path):
@@ -164,7 +164,7 @@ class Data:
         :type labels_numpy_file_path: str
         """
         self.load_numpy_files()
-        self.rebin()
+        self.shrink()
         self.convert_to_tfrecord()
 
     def load_numpy_files(self):
@@ -203,17 +203,37 @@ class Data:
             }))
             writer.write(example.SerializeToString())
 
-    def rebin(self):
+    def shrink(self):
         """
         Rebins the data arrays into the specified data size.
         """
-        rebinned_images = np.zeros((self.images.shape[0], self.height, self.width, self.channels), dtype=np.uint8)
-        rebinned_labels = np.zeros((self.labels.shape[0], self.height, self.width), dtype=np.float32)
-        for index in range(self.images.shape[0]):
-            rebinned_images[index] = scipy.misc.imresize(self.images[index], (self.height, self.width, self.channels))
-            rebinned_labels[index] = scipy.misc.imresize(self.labels[index], (self.height, self.width))
-        self.images = rebinned_images
-        self.labels = rebinned_labels
+        self.images = self.shrink_array_with_rebinning(self.images)
+        self.labels = self.shrink_array_with_rebinning(self.labels)
+
+    def shrink_array_with_rebinning(self, array):
+        """
+        Rebins the NumPy array into a new size, averaging the bins between.
+        :param array: The array to resize.
+        :type array: np.ndarray
+        :param height: The height to rebin to.
+        :type height: int
+        :param width: The width to rebin to.
+        :type width: int
+        :return: The resized array.
+        :rtype: np.ndarray
+        """
+        compression_shape = [
+            array.shape[0],
+            self.height,
+            array.shape[1] // self.height,
+            self.width,
+            array.shape[2] // self.width,
+        ]
+        if len(array.shape) == 4:
+            compression_shape.append(self.channels)
+            return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
+        else:
+            return array.reshape(compression_shape).mean(4).mean(2)
 
     def gaussian_noise_augmentation(self, standard_deviation, number_of_variations):
         """

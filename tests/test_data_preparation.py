@@ -97,8 +97,8 @@ class TestData:
         data.height = 1
         data.channels = 1
 
-        rebinned_four_dimensions = data.rebin(four_dimensions, 1, 1)
-        rebinned_three_dimensions = data.rebin(three_dimensions, 1, 1)
+        rebinned_four_dimensions = data.shrink_array_with_rebinning(four_dimensions)
+        rebinned_three_dimensions = data.shrink_array_with_rebinning(three_dimensions)
 
         assert rebinned_four_dimensions.dtype == np.uint8
         assert rebinned_three_dimensions.dtype == np.float64
