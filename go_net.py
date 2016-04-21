@@ -17,7 +17,6 @@ class GoNet(multiprocessing.Process):
     """
     The class to build and interact with the GoNet TensorFlow graph.
     """
-
     def __init__(self, message_queue=None):
         super().__init__()
 
