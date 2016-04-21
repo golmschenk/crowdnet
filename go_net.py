@@ -345,7 +345,10 @@ class GoNet(multiprocessing.Process):
                 # Handle interface messages from the user.
                 self.interface_handler()
         except tf.errors.OutOfRangeError:
-            print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, self.step))
+            if self.step == 0:
+                print('Training data not found.')
+            else:
+                print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, self.step))
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
