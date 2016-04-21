@@ -312,7 +312,7 @@ class GoNet(multiprocessing.Process):
         # Prepare the summary operations.
         summaries_op = tf.merge_all_summaries()
         summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        writer = tf.train.SummaryWriter(summary_path, self.session.graph_def)
+        writer = tf.train.SummaryWriter(summary_path, self.session.graph)
 
         # Prepare saver.
         self.saver = tf.train.Saver()
