@@ -157,12 +157,14 @@ class GoData:
         self.shrink()
         self.convert_to_tfrecord()
 
-    def numpy_files_to_tfrecords(self):
+    def numpy_files_to_tfrecords(self, augment=False):
         """
         Converts NumPy files to a TFRecords file.
         """
         self.load_numpy_files()
         self.shrink()
+        if augment:
+            self.augment_data_set()
         self.convert_to_tfrecord()
 
     def load_numpy_files(self):
@@ -290,7 +292,7 @@ class GoData:
         self.images = np.concatenate(augmented_images_list)
         self.labels = np.concatenate(augmented_labels_list)
 
-    def augment_data_set(self, images, labels):
+    def augment_data_set(self):
         """
         Augments the data set with some basic approaches
 
@@ -301,11 +303,8 @@ class GoData:
         :return: The images and the labels
         :rtype: (np.ndarray, np.ndarray)
         """
-        self.images = images
-        self.labels = labels
         self.offset_augmentation(1)
         self.gaussian_noise_augmentation(10, 4)
-        return self.images, self.labels
 
 
 def _int64_feature(value):
