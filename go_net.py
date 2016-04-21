@@ -50,69 +50,7 @@ class GoNet(multiprocessing.Process):
         """
         return self.create_linear_classifier_inference_op(images)
 
-    def create_deep_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a deep convolution net.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        with tf.name_scope('conv1'):
-            w_conv = weight_variable([5, 5, 3, 32])
-            b_conv = bias_variable([32])
-
-            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
-
-        with tf.name_scope('conv2'):
-            w_conv = weight_variable([5, 5, 32, 128])
-            b_conv = bias_variable([128])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-        for index in range(9):
-            with tf.name_scope('conv' + str(index + 3)):
-                w_conv = weight_variable([5, 5, 128, 128])
-                b_conv = bias_variable([128])
-
-                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-        with tf.name_scope('conv12'):
-            w_conv = weight_variable([5, 5, 128, 32])
-            b_conv = bias_variable([32])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-        with tf.name_scope('fc1'):
-            fc0_size = self.data.height * self.data.width * 32
-            fc1_size = fc0_size // 4096
-            h_fc = tf.reshape(h_conv, [-1, fc0_size])
-            w_fc = weight_variable([fc0_size, fc1_size])
-            b_fc = bias_variable([fc1_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability_tensor)
-
-        with tf.name_scope('fc2'):
-            fc2_size = fc1_size // 2
-            w_fc = weight_variable([fc1_size, fc2_size])
-            b_fc = bias_variable([fc2_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
-            h_fc_drop = tf.nn.dropout(h_fc, self.dropout_keep_probability_tensor)
-
-        with tf.name_scope('fc3'):
-            fc3_size = self.data.height * self.data.width
-            w_fc = weight_variable([fc2_size, fc3_size])
-            b_fc = bias_variable([fc3_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc_drop, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
-
-        return predicted_labels
-
-    def standard_net_inference(self, images):
+    def create_standard_net_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a AlexNet-like graph setup.
 
