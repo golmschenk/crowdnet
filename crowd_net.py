@@ -1,5 +1,5 @@
 """
-Code related to the DepthNet.
+Code related to the CrowdNet.
 """
 import tensorflow as tf
 
@@ -11,7 +11,7 @@ from convenience import weight_variable, bias_variable, leaky_relu, conv2d, size
 
 class CrowdNet(GoNet):
     """
-    A neural network class to estimate 3D depths from single 2D images.
+    A neural network class to estimate crowd density from single 2D images.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

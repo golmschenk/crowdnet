@@ -1,12 +1,12 @@
 """
-Code for managing the depth data.
+Code for managing the crowd data.
 """
 from go_data import GoData
 
 
 class CrowdData(GoData):
     """
-    A class for managing the depth data.
+    A class for managing the crowd data.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
