@@ -16,6 +16,13 @@ class CrowdData(GoData):
         self.original_height = 158  # The height of the original data.
         self.original_width = 238  # The width of the original data.
 
+    def augment_data_set(self):
+        """
+        Augments the data set with some basic approaches.
+        """
+        self.offset_augmentation(1)
+        self.gaussian_noise_augmentation(12, 8)
+
 
 if __name__ == '__main__':
     data = CrowdData(data_directory='data', data_name='crowd',
