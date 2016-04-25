@@ -56,7 +56,7 @@ class CrowdNet(GoNet):
         :return: The label maps tensor.
         :rtype: tf.Tensor
         """
-        return self.create_standard_net_inference_op(images)
+        return self.create_patchwise_inference_op(images)
 
     def create_standard_net_inference_op(self, images):
         """
@@ -110,6 +110,54 @@ class CrowdNet(GoNet):
             h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
             predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
 
+        return predicted_labels
+
+    def create_patchwise_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+        with tf.name_scope('conv1'):
+            w_conv = weight_variable([3, 3, 3, 64])
+            b_conv = bias_variable([64])
+
+            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
+
+        with tf.name_scope('conv2'):
+            w_conv = weight_variable([3, 3, 64, 256])
+            b_conv = bias_variable([256])
+
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+
+        res_h_conv = h_conv
+
+        for index in range(0, 14, 2):
+            with tf.name_scope('conv' + str(index + 3)):
+                w_conv = weight_variable([3, 3, 256, 256])
+                b_conv = bias_variable([256])
+
+                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+
+            with tf.name_scope('conv' + str(index + 4)):
+                w_conv = weight_variable([3, 3, 256, 256])
+                b_conv = bias_variable([256])
+
+                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+
+            h_conv = leaky_relu(h_conv + res_h_conv)
+            res_h_conv = h_conv
+
+        with tf.name_scope('conv17'):
+            w_conv = weight_variable([3, 3, 256, 1])
+            b_conv = bias_variable([1])
+
+            h_conv = conv2d(h_conv, w_conv) + b_conv
+
+        predicted_labels = h_conv
         return predicted_labels
 
 
