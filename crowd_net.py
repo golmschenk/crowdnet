@@ -149,6 +149,7 @@ class CrowdNet(GoNet):
                 h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
             h_conv = leaky_relu(h_conv + res_h_conv)
+            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
             res_h_conv = h_conv
 
         with tf.name_scope('conv17'):
