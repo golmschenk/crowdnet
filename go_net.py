@@ -5,8 +5,8 @@ import datetime
 import multiprocessing
 import os
 import time
-
 import tensorflow as tf
+import numpy as np
 
 from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
 from go_data import GoData
@@ -17,6 +17,7 @@ class GoNet(multiprocessing.Process):
     """
     The class to build and interact with the GoNet TensorFlow graph.
     """
+
     def __init__(self, message_queue=None):
         super().__init__()
 
@@ -26,8 +27,9 @@ class GoNet(multiprocessing.Process):
         self.initial_learning_rate = 0.00001
         self.data = GoData(data_name='nyud')
         self.summary_step_period = 1
-        self.log_directory = "logs"
+        self.log_directory = 'logs'
         self.dropout_keep_probability = 0.5
+        self.network_name = 'go_net'
 
         # Internal setup.
         self.moving_average_loss = None
@@ -49,60 +51,6 @@ class GoNet(multiprocessing.Process):
         :rtype: tf.Tensor
         """
         return self.create_linear_classifier_inference_op(images)
-
-    def create_standard_net_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a AlexNet-like graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        with tf.name_scope('conv1'):
-            w_conv = weight_variable([7, 7, 3, 16])
-            b_conv = bias_variable([16])
-
-            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
-
-        with tf.name_scope('conv2'):
-            w_conv = weight_variable([7, 7, 16, 24])
-            b_conv = bias_variable([24])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
-
-        with tf.name_scope('conv3'):
-            w_conv = weight_variable([7, 7, 24, 32])
-            b_conv = bias_variable([32])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
-
-        with tf.name_scope('fc1'):
-            fc0_size = size_from_stride_two(self.data.height, iterations=2) * size_from_stride_two(self.data.width,
-                                                                                                   iterations=2) * 32
-            fc1_size = fc0_size // 2
-            h_fc = tf.reshape(h_conv, [-1, fc0_size])
-            w_fc = weight_variable([fc0_size, fc1_size])
-            b_fc = bias_variable([fc1_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-
-        with tf.name_scope('fc2'):
-            fc2_size = fc1_size // 2
-            w_fc = weight_variable([fc1_size, fc2_size])
-            b_fc = bias_variable([fc2_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-
-        with tf.name_scope('fc3'):
-            fc3_size = self.data.height * self.data.width
-            w_fc = weight_variable([fc2_size, fc3_size])
-            b_fc = bias_variable([fc3_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc, [-1, self.data.height, self.data.width, 1])
-
-        return predicted_labels
 
     def create_linear_classifier_inference_op(self, images):
         """
@@ -138,7 +86,7 @@ class GoNet(multiprocessing.Process):
     @staticmethod
     def relative_differences(predicted_labels, labels):
         """
-        Determines the absolute L1 relative differences between two label maps.
+        Determines the L1 relative differences between two label maps.
 
         :param predicted_labels: The first label map tensor (usually the predicted labels).
         :type predicted_labels: tf.Tensor
@@ -208,9 +156,9 @@ class GoNet(multiprocessing.Process):
             if not self.queue.empty():
                 message = self.queue.get(block=False)
                 if message == 'save':
-                    save_path = self.saver.save(self.session, os.path.join('models', 'depthnet.ckpt'),
+                    save_path = self.saver.save(self.session, os.path.join('models', self.network_name + '.ckpt'),
                                                 global_step=self.step)
-                    tf.train.write_graph(self.session.graph_def, 'models', 'depthnet.pb')
+                    tf.train.write_graph(self.session.graph_def, 'models', self.network_name + '.pb')
                     print("Model saved in file: %s" % save_path)
                 if message == 'quit':
                     self.stop_signal = True
@@ -233,6 +181,16 @@ class GoNet(multiprocessing.Process):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             loss_per_pixel_tensor = tf.reduce_mean(loss_tensor)
             tf.scalar_summary("Loss per pixel", loss_per_pixel_tensor)
+            running_average_loss_per_pixel_tensor = tf.Variable(initial_value=-1.0)
+            running_average_loss_per_pixel_op = tf.cond(
+                tf.equal(running_average_loss_per_pixel_tensor, -1.0),
+                lambda: tf.assign(running_average_loss_per_pixel_tensor, loss_per_pixel_tensor),
+                lambda: tf.assign(running_average_loss_per_pixel_tensor,
+                                  tf.mul(loss_per_pixel_tensor, self.moving_average_decay) +
+                                  tf.mul(running_average_loss_per_pixel_tensor, 1 - self.moving_average_decay))
+            )
+            with tf.control_dependencies([running_average_loss_per_pixel_op]):
+                tf.scalar_summary('Running average loss per pixel', running_average_loss_per_pixel_tensor)
 
         with tf.name_scope('comparison_summary'):
             self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
@@ -299,6 +257,46 @@ class GoNet(multiprocessing.Process):
         Allow for training the network from a multiprocessing standpoint.
         """
         self.train()
+
+    def predict(self, model_file_name='crowd_net'):
+        """
+        Use a trained model to predict labels for a new set of images.
+
+        :param model_file_name: The trained model's file name.
+        :type model_file_name: str
+        """
+        print('Preparing data...')
+        # Setup the inputs.
+        images_tensor = tf.placeholder(tf.float32, [None, self.data.height, self.data.width, 3])
+
+        print('Building graph...')
+        # Add the forward pass operations to the graph.
+        predicted_labels_tensor = self.create_inference_op(images_tensor)
+
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
+
+        # Prepare the saver.
+        saver = tf.train.Saver()
+
+        # Create a session for running operations in the Graph.
+        session = tf.Session()
+
+        print('Starting training...')
+        # Initialize the variables.
+        session.run(initialize_op)
+
+        saver.restore(session, os.path.join('models', model_file_name))
+
+        # Preform the training loop.
+        images = np.load('test_images.npy')
+        images = self.data.shrink_array_with_rebinning(images)
+        labels = session.run([predicted_labels_tensor], feed_dict={images_tensor: images.astype(np.float32),
+                                                                   self.dropout_keep_probability_tensor: 1.0})
+        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), labels)
+
+        session.close()
+        print('Done.')
 
 
 if __name__ == '__main__':
