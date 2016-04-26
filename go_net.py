@@ -5,8 +5,8 @@ import datetime
 import multiprocessing
 import os
 import time
-
 import tensorflow as tf
+import numpy as np
 
 from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
 from go_data import GoData
@@ -26,8 +26,9 @@ class GoNet(multiprocessing.Process):
         self.initial_learning_rate = 0.00001
         self.data = GoData(data_name='nyud')
         self.summary_step_period = 1
-        self.log_directory = "logs"
+        self.log_directory = 'logs'
         self.dropout_keep_probability = 0.5
+        self.network_name = 'go_net'
 
         # Internal setup.
         self.moving_average_loss = None
@@ -154,9 +155,9 @@ class GoNet(multiprocessing.Process):
             if not self.queue.empty():
                 message = self.queue.get(block=False)
                 if message == 'save':
-                    save_path = self.saver.save(self.session, os.path.join('models', 'depthnet.ckpt'),
+                    save_path = self.saver.save(self.session, os.path.join('models', self.network_name + '.ckpt'),
                                                 global_step=self.step)
-                    tf.train.write_graph(self.session.graph_def, 'models', 'depthnet.pb')
+                    tf.train.write_graph(self.session.graph_def, 'models', self.network_name + '.pb')
                     print("Model saved in file: %s" % save_path)
                 if message == 'quit':
                     self.stop_signal = True
@@ -245,6 +246,46 @@ class GoNet(multiprocessing.Process):
         Allow for training the network from a multiprocessing standpoint.
         """
         self.train()
+
+    def predict(self, model_file_name='crowd_net'):
+        """
+        Use a trained model to predict labels for a new set of images.
+
+        :param model_file_name: The trained model's file name.
+        :type model_file_name: str
+        """
+        print('Preparing data...')
+        # Setup the inputs.
+        images_tensor = tf.placeholder(tf.float32, [None, self.data.height, self.data.width, 3])
+
+        print('Building graph...')
+        # Add the forward pass operations to the graph.
+        predicted_labels_tensor = self.create_inference_op(images_tensor)
+
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
+
+        # Prepare the saver.
+        saver = tf.train.Saver()
+
+        # Create a session for running operations in the Graph.
+        session = tf.Session()
+
+        print('Starting training...')
+        # Initialize the variables.
+        session.run(initialize_op)
+
+        saver.restore(session, os.path.join('models', model_file_name))
+
+        # Preform the training loop.
+        images = np.load('test_images.npy')
+        images = self.data.shrink_array_with_rebinning(images)
+        labels = session.run([predicted_labels_tensor], feed_dict={images_tensor: images.astype(np.float32),
+                                                                   self.dropout_keep_probability_tensor: 1.0})
+        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), labels)
+
+        session.close()
+        print('Done.')
 
 
 if __name__ == '__main__':
