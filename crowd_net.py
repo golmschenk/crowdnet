@@ -122,38 +122,46 @@ class CrowdNet(GoNet):
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
-            w_conv = weight_variable([3, 3, 3, 64])
-            b_conv = bias_variable([64])
+            w_conv = weight_variable([3, 3, 3, 32])
+            b_conv = bias_variable([32])
 
             h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
 
         with tf.name_scope('conv2'):
-            w_conv = weight_variable([3, 3, 64, 256])
-            b_conv = bias_variable([256])
+            w_conv = weight_variable([3, 3, 32, 64])
+            b_conv = bias_variable([64])
 
             h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
-        res_h_conv = h_conv
+        with tf.name_scope('conv3'):
+            w_conv = weight_variable([3, 3, 64, 64])
+            b_conv = bias_variable([64])
 
-        for index in range(0, 14, 2):
-            with tf.name_scope('conv' + str(index + 3)):
-                w_conv = weight_variable([3, 3, 256, 256])
-                b_conv = bias_variable([256])
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
 
-                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+        with tf.name_scope('conv4'):
+            w_conv = weight_variable([3, 3, 64, 128])
+            b_conv = bias_variable([128])
 
-            with tf.name_scope('conv' + str(index + 4)):
-                w_conv = weight_variable([3, 3, 256, 256])
-                b_conv = bias_variable([256])
-
-                h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-            h_conv = leaky_relu(h_conv + res_h_conv)
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
             h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
-            res_h_conv = h_conv
 
-        with tf.name_scope('conv17'):
-            w_conv = weight_variable([3, 3, 256, 1])
+        with tf.name_scope('conv5'):
+            w_conv = weight_variable([3, 3, 128, 128])
+            b_conv = bias_variable([128])
+
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
+
+        with tf.name_scope('conv6'):
+            w_conv = weight_variable([3, 3, 128, 256])
+            b_conv = bias_variable([256])
+
+            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
+            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
+
+        with tf.name_scope('conv7'):
+            w_conv = weight_variable([7, 7, 256, 1])
             b_conv = bias_variable([1])
 
             h_conv = conv2d(h_conv, w_conv) + b_conv
