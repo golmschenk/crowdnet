@@ -303,7 +303,9 @@ class GoData:
         :return: The images and the labels
         :rtype: (np.ndarray, np.ndarray)
         """
+        print('Augmenting with spatial jittering...')
         self.offset_augmentation(1)
+        print('Augmenting with gaussian noise...')
         self.gaussian_noise_augmentation(10, 4)
 
 
