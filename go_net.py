@@ -17,6 +17,7 @@ class GoNet(multiprocessing.Process):
     """
     The class to build and interact with the GoNet TensorFlow graph.
     """
+
     def __init__(self, message_queue=None):
         super().__init__()
 
@@ -180,6 +181,16 @@ class GoNet(multiprocessing.Process):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             loss_per_pixel_tensor = tf.reduce_mean(loss_tensor)
             tf.scalar_summary("Loss per pixel", loss_per_pixel_tensor)
+            running_average_loss_per_pixel_tensor = tf.Variable(initial_value=-1.0)
+            running_average_loss_per_pixel_op = tf.cond(
+                tf.equal(running_average_loss_per_pixel_tensor, -1.0),
+                lambda: tf.assign(running_average_loss_per_pixel_tensor, loss_per_pixel_tensor),
+                lambda: tf.assign(running_average_loss_per_pixel_tensor,
+                                  tf.mul(loss_per_pixel_tensor, self.moving_average_decay) +
+                                  tf.mul(running_average_loss_per_pixel_tensor, 1 - self.moving_average_decay))
+            )
+            with tf.control_dependencies([running_average_loss_per_pixel_op]):
+                tf.scalar_summary('Running average loss per pixel', running_average_loss_per_pixel_tensor)
 
         with tf.name_scope('comparison_summary'):
             self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
