@@ -282,7 +282,7 @@ class GoNet(multiprocessing.Process):
         # Create a session for running operations in the Graph.
         session = tf.Session()
 
-        print('Starting training...')
+        print('Running prediction...')
         # Initialize the variables.
         session.run(initialize_op)
 
