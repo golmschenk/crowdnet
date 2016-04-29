@@ -308,6 +308,14 @@ class GoData:
         print('Augmenting with gaussian noise...')
         self.gaussian_noise_augmentation(10, 4)
 
+    def shuffle(self):
+        """
+        Shuffles the images and labels together.
+        """
+        permuted_indexes = np.random.permutation(len(self.images))
+        self.images = self.images[permuted_indexes]
+        self.labels = self.labels[permuted_indexes]
+
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
