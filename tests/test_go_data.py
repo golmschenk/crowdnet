@@ -41,3 +41,12 @@ class TestGoData:
         array = GoData().convert_mat_data_to_numpy_array(mock_mat_data, 'images')
 
         assert array.shape == (300, 10, 20)
+
+    def test_mat_data_to_numpy_for_accelerometer_gives_correct_shape(self):
+        mock_mat_data = Mock()
+        mock_get_array = np.empty((300, 4))
+        mock_mat_data.get.return_value = mock_get_array.transpose()  # Matlab's hdf5 gives a reverse order.
+
+        array = GoData().convert_mat_data_to_numpy_array(mock_mat_data, 'accelData')
+
+        assert array.shape == (300, 4)
