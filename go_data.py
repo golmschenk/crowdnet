@@ -329,4 +329,4 @@ if __name__ == '__main__':
     os.nice(10)
 
     data = GoData()
-    data.convert_mat_to_tfrecord('data/nyud_micro.mat')
+    data.convert_mat_to_tfrecord('data/nyu_depth_v2_labeled.mat')
