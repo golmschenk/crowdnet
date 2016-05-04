@@ -122,13 +122,14 @@ class GoData:
         :rtype: np.ndarray
         """
         mat_variable = mat_data.get(variable_name_in_mat_data)
-        untransposed_array = np.array(mat_variable)
+        reversed_array = np.array(mat_variable)
+        array = reversed_array.transpose()
+        if variable_name_in_mat_data in ('images', 'depths'):
+            array = np.rollaxis(array, -1)
         if number_of_samples:
-            untransposed_array = untransposed_array[:number_of_samples]
-        if untransposed_array.ndim == 3:  # For depth images.
-            return untransposed_array.transpose((0, 2, 1))
-        else:  # For RGB images.
-            return untransposed_array.transpose((0, 3, 2, 1))
+            return array[:number_of_samples]
+        else:
+            return array
 
     @staticmethod
     def crop_data(array):
