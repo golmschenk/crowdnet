@@ -40,9 +40,9 @@ class TestData:
         mock_mat_data = Mock()
         mock_mat_data.get.return_value = np.array([[[[1, 2, 3]]]])
 
-        transposed_array = go_data.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable')
+        transposed_array = go_data.convert_mat_data_to_numpy_array(mock_mat_data, 'images')
 
-        assert mock_mat_data.get.call_args == (('fake variable',),)
+        assert mock_mat_data.get.call_args == (('images',),)
         assert np.array_equal(transposed_array, np.array([[[[1]], [[2]], [[3]]]]))
 
     @patch('h5py.File')
@@ -62,7 +62,7 @@ class TestData:
         mock_mat_data = Mock()
         mock_mat_data.get.return_value = np.array([[[[1]]], [[[2]]], [[[3]]]])
 
-        transposed_array = go_data.convert_mat_data_to_numpy_array(mock_mat_data, 'fake variable',
+        transposed_array = go_data.convert_mat_data_to_numpy_array(mock_mat_data, 'images',
                                                                             number_of_samples=2)
 
         assert np.array_equal(transposed_array, np.array([[[[1]]], [[[2]]]]))

@@ -34,7 +34,7 @@ class GoData:
 
         :param filename_queue: The file name queue to be read.
         :type filename_queue: tf.QueueBase
-        :return: The read file data including the image data and depth data.
+        :return: The read file data including the image data and label data.
         :rtype: (tf.Tensor, tf.Tensor)
         """
         reader = tf.TFRecordReader()
@@ -43,17 +43,28 @@ class GoData:
             serialized_example,
             features={
                 'image_raw': tf.FixedLenFeature([], tf.string),
-                'depth_raw': tf.FixedLenFeature([], tf.string),
+                'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
-        image = tf.decode_raw(features['image_raw'], tf.uint8)
-        image = tf.reshape(image, [self.height, self.width, self.channels])
-        image = tf.cast(image, tf.float32) * (1. / 255) - 0.5
+        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
+        unnormalized_image = tf.reshape(flat_image, [self.height, self.width, self.channels])
+        image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
 
-        depth = tf.decode_raw(features['depth_raw'], tf.float32)
-        depth = tf.reshape(depth, [self.height, self.width, 1])
+        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
+        label = self.reshape_decoded_label(flat_label)
 
-        return image, depth
+        return image, label
+
+    def reshape_decoded_label(self, flat_label):
+        """
+        Reshapes the label decoded from the TF record. Allows easy overriding by sub classes.
+
+        :param flat_label: The flat label from the decoded TF record.
+        :type flat_label: tf.Tensor
+        :return: The reshaped label.
+        :rtype: tf.Tensor
+        """
+        return tf.reshape(flat_label, [self.height, self.width, 1])
 
     def inputs(self, data_type, batch_size, num_epochs=None):
         """
@@ -79,14 +90,14 @@ class GoData:
         with tf.name_scope('Input'):
             filename_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
 
-            image, depth = self.read_and_decode(filename_queue)
+            image, label = self.read_and_decode(filename_queue)
 
-            images, depths = tf.train.shuffle_batch(
-                [image, depth], batch_size=batch_size, num_threads=2,
+            images, labels = tf.train.shuffle_batch(
+                [image, label], batch_size=batch_size, num_threads=2,
                 capacity=500 + 3 * batch_size, min_after_dequeue=500
             )
 
-            return images, depths
+            return images, labels
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
         """
@@ -122,13 +133,14 @@ class GoData:
         :rtype: np.ndarray
         """
         mat_variable = mat_data.get(variable_name_in_mat_data)
-        untransposed_array = np.array(mat_variable)
+        reversed_array = np.array(mat_variable)
+        array = reversed_array.transpose()
+        if variable_name_in_mat_data in ('images', 'depths'):
+            array = np.rollaxis(array, -1)
         if number_of_samples:
-            untransposed_array = untransposed_array[:number_of_samples]
-        if untransposed_array.ndim == 3:  # For depth images.
-            return untransposed_array.transpose((0, 2, 1))
-        else:  # For RGB images.
-            return untransposed_array.transpose((0, 3, 2, 1))
+            return array[:number_of_samples]
+        else:
+            return array
 
     @staticmethod
     def crop_data(array):
@@ -182,7 +194,7 @@ class GoData:
         """
         number_of_examples = self.labels.shape[0]
         if self.images.shape[0] != number_of_examples:
-            raise ValueError("Images size %d does not match label size %d." %
+            raise ValueError("Images count %d does not match label count %d." %
                              (self.images.shape[0], number_of_examples))
         rows = self.images.shape[1]
         cols = self.images.shape[2]
@@ -193,13 +205,13 @@ class GoData:
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
             image_raw = self.images[index].tostring()
-            depth_raw = self.labels[index].tostring()
+            label_raw = self.labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'height': _int64_feature(rows),
                 'width': _int64_feature(cols),
                 'channels': _int64_feature(depth),
                 'image_raw': _bytes_feature(image_raw),
-                'depth_raw': _bytes_feature(depth_raw),
+                'label_raw': _bytes_feature(label_raw),
             }))
             writer.write(example.SerializeToString())
 
@@ -308,6 +320,14 @@ class GoData:
         print('Augmenting with gaussian noise...')
         self.gaussian_noise_augmentation(10, 4)
 
+    def shuffle(self):
+        """
+        Shuffles the images and labels together.
+        """
+        permuted_indexes = np.random.permutation(len(self.images))
+        self.images = self.images[permuted_indexes]
+        self.labels = self.labels[permuted_indexes]
+
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -321,4 +341,4 @@ if __name__ == '__main__':
     os.nice(10)
 
     data = GoData()
-    data.convert_mat_to_tfrecord('data/nyud_micro.mat')
+    data.convert_mat_to_tfrecord('data/nyu_depth_v2_labeled.mat')

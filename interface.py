@@ -14,7 +14,7 @@ class Interface:
 
     def train(self):
         """
-        Runs the main interactions
+        Runs the main interactions between the user and the network.
         """
         self.network.start()
         while True:
@@ -29,3 +29,9 @@ class Interface:
                 self.network.join()
                 break
         print('Done.')
+
+    def predict(self):
+        """
+        Runs the network prediction.
+        """
+        self.network.predict()

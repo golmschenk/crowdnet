@@ -34,44 +34,6 @@ class TestFunctionalData:
         remove_file_if_exists(images_numpy_file_path)
         remove_file_if_exists(depths_numpy_file_path)
 
-    def test_can_convert_from_mat_to_tfrecord_and_read_tfrecord(self):
-        # Prepare paths.
-        data_directory = os.path.join('functional_tests', 'test_data')
-        mat_file_path = os.path.join(data_directory, 'nyud_micro.mat')
-        tfrecords_file_path = os.path.join(data_directory, 'nyud_micro.tfrecords')
-
-        # Run the conversion script.
-        go_data = GoData(data_directory=data_directory, data_name='nyud_micro')
-        go_data.convert_mat_to_tfrecord(mat_file_path)
-
-        # Check that the file is created.
-        assert os.path.isfile(tfrecords_file_path)
-
-        # Reload data.
-        images, depths = go_data.inputs(data_type='', batch_size=10)
-
-        # Check that magic values are correct when the data is reloaded.
-        magic_image_numbers = [-0.17450979, -0.15882352, -0.15490195, -0.15098038, -0.14705881,
-                               -0.14313725, -0.11960781, -0.056862712, 0.0058823824]
-        magic_depth_numbers = [1.1285654, 1.8865139, 2.104018, 2.1341071, 2.6960645,
-                               3.318316, 3.4000545, 3.4783292, 3.7568643, 3.9500945]
-        session = tf.Session()
-        coordinator = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=session, coord=coordinator)
-        try:
-            with session.as_default():
-                assert np.isclose(magic_image_numbers, images.eval()[5, 10, 10, 1], atol=0.00001).any()
-                assert np.isclose(magic_depth_numbers, depths.eval()[5, 10, 10], atol=0.00001).any()
-        except tf.errors.OutOfRangeError:
-            fail('Should not hit this.')
-        finally:
-            coordinator.request_stop()
-        coordinator.join(threads)
-        session.close()
-
-        # Clean up.
-        remove_file_if_exists(tfrecords_file_path)
-
 
 def remove_file_if_exists(file_path):
     try:
