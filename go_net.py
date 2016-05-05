@@ -26,10 +26,14 @@ class GoNet(multiprocessing.Process):
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.data = GoData(data_name='nyud')
-        self.summary_step_period = 1
-        self.log_directory = 'logs'
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
+
+        # Logging.
+        self.log_directory = 'logs'
+        self.summary_step_period = 1
+        self.step_summary_name = "Loss per pixel"
+        self.image_summary_on = True
 
         # Internal setup.
         self.moving_average_loss = None
@@ -193,24 +197,26 @@ class GoNet(multiprocessing.Process):
         # Add the loss operations to the graph.
         with tf.name_scope('loss'):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            loss_per_pixel_tensor = tf.reduce_mean(loss_tensor)
-            tf.scalar_summary("Loss per pixel", loss_per_pixel_tensor)
-            running_average_loss_per_pixel_tensor = tf.Variable(initial_value=-1.0)
-            running_average_loss_per_pixel_op = tf.cond(
-                tf.equal(running_average_loss_per_pixel_tensor, -1.0),
-                lambda: tf.assign(running_average_loss_per_pixel_tensor, loss_per_pixel_tensor),
-                lambda: tf.assign(running_average_loss_per_pixel_tensor,
-                                  tf.mul(loss_per_pixel_tensor, self.moving_average_decay) +
-                                  tf.mul(running_average_loss_per_pixel_tensor, 1 - self.moving_average_decay))
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            tf.scalar_summary(self.step_summary_name, reduce_mean_loss_tensor)
+            running_average_reduce_mean_loss_tensor = tf.Variable(initial_value=-1.0)
+            running_average_reduce_mean_loss_op = tf.cond(
+                tf.equal(running_average_reduce_mean_loss_tensor, -1.0),
+                lambda: tf.assign(running_average_reduce_mean_loss_tensor, reduce_mean_loss_tensor),
+                lambda: tf.assign(running_average_reduce_mean_loss_tensor,
+                                  tf.mul(reduce_mean_loss_tensor, self.moving_average_decay) +
+                                  tf.mul(running_average_reduce_mean_loss_tensor, 1 - self.moving_average_decay))
             )
-            with tf.control_dependencies([running_average_loss_per_pixel_op]):
-                tf.scalar_summary('Running average loss per pixel', running_average_loss_per_pixel_tensor)
+            with tf.control_dependencies([running_average_reduce_mean_loss_op]):
+                tf.scalar_summary('Running average %s' % self.step_summary_name.lower,
+                                  running_average_reduce_mean_loss_tensor)
 
-        with tf.name_scope('comparison_summary'):
-            self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
+        if self.image_summary_on:
+            with tf.name_scope('comparison_summary'):
+                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=loss_per_pixel_tensor)
+        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
@@ -240,7 +246,7 @@ class GoNet(multiprocessing.Process):
                 # Regular training step.
                 start_time = time.time()
                 _, loss, summaries = self.session.run(
-                    [training_op, loss_per_pixel_tensor, summaries_op],
+                    [training_op, reduce_mean_loss_tensor, summaries_op],
                     feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability}
                 )
                 duration = time.time() - start_time
@@ -248,7 +254,7 @@ class GoNet(multiprocessing.Process):
                 # Information print and summary write step.
                 if self.step % self.summary_step_period == 0:
                     writer.add_summary(summaries, self.step)
-                    print('Step %d: Loss per pixel = %.5f (%.3f sec / step)' % (self.step, loss, duration))
+                    print('Step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name, loss, duration))
                 self.step += 1
 
                 # Handle interface messages from the user.
