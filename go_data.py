@@ -46,14 +46,25 @@ class GoData:
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
-        image = tf.decode_raw(features['image_raw'], tf.uint8)
-        image = tf.reshape(image, [self.height, self.width, self.channels])
-        image = tf.cast(image, tf.float32) * (1. / 255) - 0.5
+        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
+        unnormalized_image = tf.reshape(flat_image, [self.height, self.width, self.channels])
+        image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
 
-        label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(label, [self.height, self.width, 1])
+        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
+        label = self.reshape_decoded_label(flat_label)
 
         return image, label
+
+    def reshape_decoded_label(self, flat_label):
+        """
+        Reshapes the label decoded from the TF record. Allows easy overriding by sub classes.
+
+        :param flat_label: The flat label from the decoded TF record.
+        :type flat_label: tf.Tensor
+        :return: The reshaped label.
+        :rtype: tf.Tensor
+        """
+        return tf.reshape(flat_label, [self.height, self.width, 1])
 
     def inputs(self, data_type, batch_size, num_epochs=None):
         """
