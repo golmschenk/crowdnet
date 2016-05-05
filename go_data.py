@@ -205,13 +205,13 @@ class GoData:
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
             image_raw = self.images[index].tostring()
-            depth_raw = self.labels[index].tostring()
+            label_raw = self.labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'height': _int64_feature(rows),
                 'width': _int64_feature(cols),
                 'channels': _int64_feature(depth),
                 'image_raw': _bytes_feature(image_raw),
-                'depth_raw': _bytes_feature(depth_raw),
+                'label_raw': _bytes_feature(label_raw),
             }))
             writer.write(example.SerializeToString())
 
