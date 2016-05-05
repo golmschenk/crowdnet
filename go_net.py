@@ -81,10 +81,10 @@ class GoNet(multiprocessing.Process):
         :return: The loss tensor.
         :rtype: tf.Tensor
         """
-        return self.relative_differences(predicted_labels, labels)
+        return self.create_relative_differences_tensor(predicted_labels, labels)
 
     @staticmethod
-    def relative_differences(predicted_labels, labels):
+    def create_relative_differences_tensor(predicted_labels, labels):
         """
         Determines the L1 relative differences between two label maps.
 
@@ -97,6 +97,20 @@ class GoNet(multiprocessing.Process):
         """
         difference = tf.abs(predicted_labels - labels)
         return difference / labels
+
+    @staticmethod
+    def create_absolute_differences_tensor(predicted_labels, labels):
+        """
+        Determines the L1 relative differences between two label maps.
+
+        :param predicted_labels: The first label map tensor (usually the predicted labels).
+        :type predicted_labels: tf.Tensor
+        :param labels: The second label map tensor (usually the actual labels).
+        :type labels: tf.Tensor
+        :return: The difference tensor.
+        :rtype: tf.Tensor
+        """
+        return tf.abs(predicted_labels - labels)
 
     def create_training_op(self, value_to_minimize):
         """
