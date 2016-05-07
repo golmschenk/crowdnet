@@ -105,7 +105,7 @@ class GoNet(multiprocessing.Process):
     @staticmethod
     def create_absolute_differences_tensor(predicted_labels, labels):
         """
-        Determines the L1 relative differences between two label maps.
+        Determines the L1 absolute differences between two label maps.
 
         :param predicted_labels: The first label map tensor (usually the predicted labels).
         :type predicted_labels: tf.Tensor

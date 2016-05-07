@@ -137,10 +137,7 @@ class GoData:
         array = reversed_array.transpose()
         if variable_name_in_mat_data in ('images', 'depths'):
             array = np.rollaxis(array, -1)
-        if number_of_samples:
-            return array[:number_of_samples]
-        else:
-            return array
+        return array[:number_of_samples]
 
     @staticmethod
     def crop_data(array):
@@ -167,7 +164,7 @@ class GoData:
         uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
         self.labels = self.crop_data(uncropped_labels)
         self.shrink()
-        self.convert_to_tfrecord()
+        self.convert_to_tfrecords()
 
     def numpy_files_to_tfrecords(self, augment=False):
         """
@@ -177,7 +174,7 @@ class GoData:
         self.shrink()
         if augment:
             self.augment_data_set()
-        self.convert_to_tfrecord()
+        self.convert_to_tfrecords()
 
     def load_numpy_files(self):
         """
@@ -188,24 +185,50 @@ class GoData:
         self.images = np.load(images_numpy_file_path)
         self.labels = np.load(labels_numpy_file_path)
 
-    def convert_to_tfrecord(self):
+    def convert_to_tfrecords(self, train_size=None, validation_size=None, test_size=None):
         """
-        Converts the data to a TFRecord.
-        """
-        number_of_examples = self.labels.shape[0]
-        if self.images.shape[0] != number_of_examples:
-            raise ValueError("Images count %d does not match label count %d." %
-                             (self.images.shape[0], number_of_examples))
-        rows = self.images.shape[1]
-        cols = self.images.shape[2]
-        depth = self.images.shape[3]
+        Converts the data to train, validation, and test TFRecords. If the size of any dataset is not specified, the
+        remaining data is placed into that dataset. For example, if there are 300 samples, and train_size is 200 with
+        neither of the other sizes yet, then the training dataset will contain 200 samples, the validation dataset
+        will contain 100 samples, and no test set will be created.
 
-        filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
+        :param train_size: The size of the training dataset. None for the rest.
+        :type train_size: int or None
+        :param validation_size: The size of the validation dataset. None for the rest.
+        :type validation_size: int or None
+        :param test_size: The size of the test dataset. None for the rest.
+        :type test_size: int or None
+        """
+        self.convert_numpy_to_tfrecords(self.images[:train_size], self.labels[:train_size], data_set='train')
+        if train_size is None:
+            return
+        self.convert_numpy_to_tfrecords(self.images[train_size:validation_size],
+                                        self.labels[train_size:validation_size],
+                                        data_set='validation')
+        if validation_size is None:
+            return
+        self.convert_numpy_to_tfrecords(self.images[train_size+validation_size:test_size],
+                                        self.labels[train_size+validation_size:test_size],
+                                        data_set='test')
+
+    def convert_numpy_to_tfrecords(self, images, labels, data_set='train'):
+        """
+        Converts numpy arrays to a TFRecords.
+        """
+        number_of_examples = labels.shape[0]
+        if images.shape[0] != number_of_examples:
+            raise ValueError("Images count %d does not match label count %d." %
+                             (images.shape[0], number_of_examples))
+        rows = images.shape[1]
+        cols = images.shape[2]
+        depth = images.shape[3]
+
+        filename = os.path.join(self.data_directory, self.data_name + '.' + data_set + '.tfrecords')
         print('Writing', filename)
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
-            image_raw = self.images[index].tostring()
-            label_raw = self.labels[index].tostring()
+            image_raw = images[index].tostring()
+            label_raw = labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'height': _int64_feature(rows),
                 'width': _int64_feature(cols),
@@ -327,6 +350,14 @@ class GoData:
         permuted_indexes = np.random.permutation(len(self.images))
         self.images = self.images[permuted_indexes]
         self.labels = self.labels[permuted_indexes]
+
+    def generate_tfrecords(self):
+        """
+        Creates the TFRecords for the data.
+        """
+        self.import_data()
+        self.preprocess()
+        self.convert_to_tfrecords()
 
 
 def _int64_feature(value):
