@@ -12,7 +12,7 @@ class GoData:
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='data', data_name='nyud', images_numpy_file_name='nyud_images',
+    def __init__(self, data_directory='data', data_name='nyud_micro', images_numpy_file_name='nyud_images',
                  labels_numpy_file_name='nyud_labels'):
         self.data_directory = data_directory
         self.data_name = data_name
@@ -155,21 +155,6 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def convert_mat_to_tfrecord(self, mat_file_path):
-        """
-        Converts the mat file data into a TFRecords file.
-
-        :param mat_file_path: The path to mat file to convert.
-        :type mat_file_path: str
-        """
-        mat_data = h5py.File(mat_file_path, 'r')
-        uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
-        self.images = self.crop_data(uncropped_images)
-        uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
-        self.labels = self.crop_data(uncropped_labels)
-        self.shrink()
-        self.convert_to_tfrecords()
-
     def numpy_files_to_tfrecords(self, augment=False):
         """
         Converts NumPy files to a TFRecords file.
@@ -188,32 +173,6 @@ class GoData:
         labels_numpy_file_path = os.path.join(self.data_directory, self.labels_numpy_file_name)
         self.images = np.load(images_numpy_file_path)
         self.labels = np.load(labels_numpy_file_path)
-
-    def convert_to_tfrecords(self, train_size=None, validation_size=None, test_size=None):
-        """
-        Converts the data to train, validation, and test TFRecords. If the size of any dataset is not specified, the
-        remaining data is placed into that dataset. For example, if there are 300 samples, and train_size is 200 with
-        neither of the other sizes yet, then the training dataset will contain 200 samples, the validation dataset
-        will contain 100 samples, and no test set will be created.
-
-        :param train_size: The size of the training dataset. None for the rest.
-        :type train_size: int or None
-        :param validation_size: The size of the validation dataset. None for the rest.
-        :type validation_size: int or None
-        :param test_size: The size of the test dataset. None for the rest.
-        :type test_size: int or None
-        """
-        self.convert_numpy_to_tfrecords(self.images[:train_size], self.labels[:train_size], data_set='train')
-        if train_size is None:
-            return
-        self.convert_numpy_to_tfrecords(self.images[train_size:validation_size],
-                                        self.labels[train_size:validation_size],
-                                        data_set='validation')
-        if validation_size is None:
-            return
-        self.convert_numpy_to_tfrecords(self.images[train_size+validation_size:test_size],
-                                        self.labels[train_size+validation_size:test_size],
-                                        data_set='test')
 
     def convert_numpy_to_tfrecords(self, images, labels, data_set='train'):
         """
@@ -348,13 +307,59 @@ class GoData:
         self.images = self.images[permuted_indexes]
         self.labels = self.labels[permuted_indexes]
 
+    def import_data(self):
+        """
+        Import the data.
+        Should be overwritten by subclasses.
+        """
+        mat_data = h5py.File(self.data_path + '.mat', 'r')
+        uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
+        self.images = self.crop_data(uncropped_images)
+        uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
+        self.labels = self.crop_data(uncropped_labels)
+
+    def preprocess(self):
+        self.shrink()
+        self.augment_data_set()
+        self.shuffle()
+
+    def convert_to_tfrecords(self, train_size=None, validation_size=None, test_size=None):
+        """
+        Converts the data to train, validation, and test TFRecords. If the size of any dataset is not specified, the
+        remaining data is placed into that dataset. For example, if there are 300 samples, and train_size is 200 with
+        neither of the other sizes yet, then the training dataset will contain 200 samples, the validation dataset
+        will contain 100 samples, and no test set will be created.
+
+        :param train_size: The size of the training dataset. None for the rest.
+        :type train_size: int or None
+        :param validation_size: The size of the validation dataset. None for the rest.
+        :type validation_size: int or None
+        :param test_size: The size of the test dataset. None for the rest.
+        :type test_size: int or None
+        """
+        self.convert_numpy_to_tfrecords(self.images[:train_size], self.labels[:train_size], data_set='train')
+        if train_size is None:
+            return
+        self.convert_numpy_to_tfrecords(self.images[train_size:validation_size],
+                                        self.labels[train_size:validation_size],
+                                        data_set='validation')
+        if validation_size is None:
+            return
+        self.convert_numpy_to_tfrecords(self.images[train_size + validation_size:test_size],
+                                        self.labels[train_size + validation_size:test_size],
+                                        data_set='test')
+
     def generate_tfrecords(self):
         """
         Creates the TFRecords for the data.
         """
+        print('Importing the data...')
         self.import_data()
+        print('Preprocessing the data...')
         self.preprocess()
+        print('Generating the TF records...')
         self.convert_to_tfrecords()
+        print('Done.')
 
 
 def _int64_feature(value):
@@ -369,4 +374,4 @@ if __name__ == '__main__':
     os.nice(10)
 
     data = GoData()
-    data.convert_mat_to_tfrecord('data/nyu_depth_v2_labeled.mat')
+    data.generate_tfrecords()
