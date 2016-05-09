@@ -26,8 +26,18 @@ class GoData:
         self.images = None
         self.labels = None
 
+        self.train_size = 'all'
+        self.validation_size = 0
+        self.test_size = 0
+
     @property
     def data_path(self):
+        """
+        Gives the path to the data file.
+
+        :return: The path to the data file.
+        :rtype: str
+        """
         return os.path.join(self.data_directory, self.data_name)
 
     def read_and_decode(self, filename_queue):
@@ -319,35 +329,31 @@ class GoData:
         self.labels = self.crop_data(uncropped_labels)
 
     def preprocess(self):
+        """
+        Preprocesses the data.
+        Should be overwritten by subclasses.
+        """
         self.shrink()
         self.augment_data_set()
         self.shuffle()
 
-    def convert_to_tfrecords(self, train_size=None, validation_size=None, test_size=None):
+    def convert_to_tfrecords(self):
         """
         Converts the data to train, validation, and test TFRecords. If the size of any dataset is not specified, the
         remaining data is placed into that dataset. For example, if there are 300 samples, and train_size is 200 with
         neither of the other sizes yet, then the training dataset will contain 200 samples, the validation dataset
         will contain 100 samples, and no test set will be created.
-
-        :param train_size: The size of the training dataset. None for the rest.
-        :type train_size: int or None
-        :param validation_size: The size of the validation dataset. None for the rest.
-        :type validation_size: int or None
-        :param test_size: The size of the test dataset. None for the rest.
-        :type test_size: int or None
         """
-        self.convert_numpy_to_tfrecords(self.images[:train_size], self.labels[:train_size], data_set='train')
-        if train_size is None:
-            return
-        self.convert_numpy_to_tfrecords(self.images[train_size:validation_size],
-                                        self.labels[train_size:validation_size],
-                                        data_set='validation')
-        if validation_size is None:
-            return
-        self.convert_numpy_to_tfrecords(self.images[train_size + validation_size:test_size],
-                                        self.labels[train_size + validation_size:test_size],
-                                        data_set='test')
+        used = 0
+        for name, size in [('train', self.train_size), ('validation', self.validation_size), ('test', self.test_size)]:
+            if size in ('all', 'remaining', 'rest'):
+                self.convert_numpy_to_tfrecords(self.images[used:], self.labels[used:], data_set=name)
+                return
+            elif size:
+                self.convert_numpy_to_tfrecords(self.images[used:used+size], self.labels[used:used+size], data_set=name)
+                used += size
+                if used >= len(self.labels):
+                    return
 
     def generate_tfrecords(self):
         """
