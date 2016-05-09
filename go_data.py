@@ -26,6 +26,10 @@ class GoData:
         self.images = None
         self.labels = None
 
+    @property
+    def data_path(self):
+        return os.path.join(self.data_directory, self.data_name)
+
     def read_and_decode(self, filename_queue):
         """
         A definition of how TF should read the file record.
@@ -330,13 +334,6 @@ class GoData:
     def augment_data_set(self):
         """
         Augments the data set with some basic approaches
-
-        :param images: The images array.
-        :type images: np.ndarray
-        :param labels: The labels array.
-        :type labels: np.ndarray
-        :return: The images and the labels
-        :rtype: (np.ndarray, np.ndarray)
         """
         print('Augmenting with spatial jittering...')
         self.offset_augmentation(1)
