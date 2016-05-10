@@ -23,11 +23,11 @@ class GoNet(multiprocessing.Process):
 
         # Common variables.
         self.batch_size = 8
-        self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
         self.data = GoData()
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
+        self.epoch_limit = None
 
         # Logging.
         self.log_directory = 'logs'
@@ -188,7 +188,7 @@ class GoNet(multiprocessing.Process):
         print('Preparing data...')
         # Setup the inputs.
         images_tensor, labels_tensor = self.data.inputs(data_type='train', batch_size=self.batch_size,
-                                                        num_epochs=self.number_of_epochs)
+                                                        num_epochs=self.epoch_limit)
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -253,7 +253,7 @@ class GoNet(multiprocessing.Process):
             if self.step == 0:
                 print('Training data not found.')
             else:
-                print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, self.step))
+                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
