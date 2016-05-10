@@ -25,7 +25,7 @@ class GoNet(multiprocessing.Process):
         self.batch_size = 8
         self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
-        self.data = GoData(data_name='nyud')
+        self.data = GoData()
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
 
@@ -187,7 +187,7 @@ class GoNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor = self.data.inputs(data_type='', batch_size=self.batch_size,
+        images_tensor, labels_tensor = self.data.inputs(data_type='train', batch_size=self.batch_size,
                                                         num_epochs=self.number_of_epochs)
 
         print('Building graph...')
@@ -199,17 +199,7 @@ class GoNet(multiprocessing.Process):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
             tf.scalar_summary(self.step_summary_name, reduce_mean_loss_tensor)
-            running_average_reduce_mean_loss_tensor = tf.Variable(initial_value=-1.0)
-            running_average_reduce_mean_loss_op = tf.cond(
-                tf.equal(running_average_reduce_mean_loss_tensor, -1.0),
-                lambda: tf.assign(running_average_reduce_mean_loss_tensor, reduce_mean_loss_tensor),
-                lambda: tf.assign(running_average_reduce_mean_loss_tensor,
-                                  tf.mul(reduce_mean_loss_tensor, self.moving_average_decay) +
-                                  tf.mul(running_average_reduce_mean_loss_tensor, 1 - self.moving_average_decay))
-            )
-            with tf.control_dependencies([running_average_reduce_mean_loss_op]):
-                tf.scalar_summary('Running average %s' % self.step_summary_name.lower,
-                                  running_average_reduce_mean_loss_tensor)
+            self.create_running_average_summary(reduce_mean_loss_tensor, summary_name=self.step_summary_name)
 
         if self.image_summary_on:
             with tf.name_scope('comparison_summary'):
@@ -271,6 +261,30 @@ class GoNet(multiprocessing.Process):
         # Wait for threads to finish.
         coordinator.join(threads)
         self.session.close()
+
+    def create_running_average_summary(self, tensor, summary_name=None):
+        """
+        Create a running average summary of a scalar tensor.
+
+        :param tensor: The scalar tensor to create the running average summary for.
+        :type tensor: tf.Tensor
+        :param summary_name: The name to display for the summary in TensorBoard prepended by "Running average".
+                             Defaults to the tensor name.
+        :type summary_name: str
+        """
+        if not summary_name:
+            summary_name = tensor.name
+        running_average_tensor = tf.Variable(initial_value=-1.0)
+        running_average_op = tf.cond(
+            tf.equal(running_average_tensor, -1.0),
+            lambda: tf.assign(running_average_tensor, tensor),
+            lambda: tf.assign(running_average_tensor,
+                              tf.mul(tensor, self.moving_average_decay) +
+                              tf.mul(running_average_tensor, 1 - self.moving_average_decay))
+        )
+        with tf.control_dependencies([running_average_op]):
+            tf.scalar_summary('Running average %s' % summary_name.lower,
+                              running_average_tensor)
 
     def run(self):
         """
