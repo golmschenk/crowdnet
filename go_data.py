@@ -12,12 +12,9 @@ class GoData:
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='data', data_name='nyud_micro', images_numpy_file_name='nyud_images',
-                 labels_numpy_file_name='nyud_labels'):
-        self.data_directory = data_directory
-        self.data_name = data_name
-        self.images_numpy_file_name = images_numpy_file_name
-        self.labels_numpy_file_name = labels_numpy_file_name
+    def __init__(self):
+        self.data_directory = 'data'
+        self.data_name = 'nyud_micro'
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
@@ -179,8 +176,8 @@ class GoData:
         """
         Loads data from the numpy files into the object.
         """
-        images_numpy_file_path = os.path.join(self.data_directory, self.images_numpy_file_name)
-        labels_numpy_file_path = os.path.join(self.data_directory, self.labels_numpy_file_name)
+        images_numpy_file_path = os.path.join(self.data_path + '_images.npy')
+        labels_numpy_file_path = os.path.join(self.data_path + '_labels.npy')
         self.images = np.load(images_numpy_file_path)
         self.labels = np.load(labels_numpy_file_path)
 
