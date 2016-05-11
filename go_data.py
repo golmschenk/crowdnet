@@ -26,7 +26,7 @@ class GoData:
         self.labels = None
 
         self.train_size = 'all'
-        self.validation_size = 0
+        self.validation_size = 1
         self.test_size = 0
 
     @property
@@ -58,42 +58,13 @@ class GoData:
             })
 
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, [self.height, self.width, self.channels])
+        unnormalized_image = tf.reshape(flat_image, self.image_shape)
         image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
         label = tf.reshape(flat_label, self.label_shape)
 
         return image, label
-
-    def read_and_decode_all(self, filename_queue):
-        """
-        A definition of how TF should read all example protos from the file record.
-
-        :param filename_queue: The file name queue to be read.
-        :type filename_queue: tf.QueueBase
-        :return: The read file data including the image data and label data.
-        :rtype: (tf.Tensor, tf.Tensor)
-        """
-        reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(filename_queue)
-        features = tf.parse_example(
-            serialized_example,
-            features={
-                'image_raw': tf.FixedLenFeature([], tf.string),
-                'label_raw': tf.FixedLenFeature([], tf.string),
-            })
-
-        flat_images = tf.decode_raw(features['image_raw'], tf.uint8)
-        # noinspection PyTypeChecker
-        unnormalized_images = tf.reshape(flat_images, [None]+self.image_shape)
-        images = tf.cast(unnormalized_images, tf.float32) * (1. / 255) - 0.5
-
-        flat_labels = tf.decode_raw(features['label_raw'], tf.float32)
-        # noinspection PyTypeChecker
-        labels = tf.reshape(flat_labels, [None]+self.label_shape)
-
-        return images, labels
 
     def inputs(self, data_type, batch_size, num_epochs=None):
         """
@@ -117,9 +88,9 @@ class GoData:
         file_path = os.path.join(self.data_directory, file_name)
 
         with tf.name_scope('Input'):
-            filename_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
+            file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
 
-            image, label = self.read_and_decode(filename_queue)
+            image, label = self.read_and_decode(file_name_queue)
 
             images, labels = tf.train.shuffle_batch(
                 [image, label], batch_size=batch_size, num_threads=2,

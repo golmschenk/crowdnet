@@ -181,14 +181,42 @@ class GoNet(multiprocessing.Process):
                 if message == 'quit':
                     self.stop_signal = True
 
+    @staticmethod
+    def create_feed_selectable_input_tensors(dataset_dictionary):
+        """
+        Creates images and label tensors which are placed within a case statement to allow switching between datasets.
+        A feed input into the network execution is added to allow for passing the name of the dataset to be used in a
+        particular step.
+
+        :param dataset_dictionary: A dictionary containing as keys the names of the datasets and as values a pair with
+                                   containing the images and labels of that dataset.
+        :type dataset_dictionary: dict[str, (tf.Tensor, tf.Tensor)]
+        :return: The general images and labels tensor produced by the case statement, as well as the selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
+        """
+        dataset_select_tensor = tf.placeholder(dtype=tf.string)
+        case_pairs = [(tf.equal(name, dataset_select_tensor), lambda: inputs) for name, inputs in dataset_dictionary.items()]
+        images_tensor, labels_tensor = tf.case(case_pairs, default=case_pairs[0][1])
+        return images_tensor, labels_tensor, dataset_select_tensor
+
     def train(self):
         """
         Adds the training operations and runs the training loop.
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor = self.data.inputs(data_type='train', batch_size=self.batch_size,
-                                                        num_epochs=self.epoch_limit)
+        training_images_tensor, training_labels_tensor = self.data.inputs(data_type='train',
+                                                                          batch_size=self.batch_size,
+                                                                          num_epochs=self.epoch_limit)
+        validation_images_tensor, validation_labels_tensor = self.data.inputs(data_type='validation',
+                                                                              batch_size=self.data.validation_size,
+                                                                              num_epochs=self.epoch_limit)
+        images_tensor, labels_tensor, dataset_selector = self.create_feed_selectable_input_tensors(
+            {
+                'train': (training_images_tensor, training_labels_tensor),
+                'validation': (validation_images_tensor, validation_labels_tensor)
+            }
+        )
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -237,7 +265,8 @@ class GoNet(multiprocessing.Process):
                 start_time = time.time()
                 _, loss, summaries = self.session.run(
                     [training_op, reduce_mean_loss_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability}
+                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability,
+                               dataset_selector: 'train'}
                 )
                 duration = time.time() - start_time
 
