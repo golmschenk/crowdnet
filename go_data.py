@@ -20,6 +20,8 @@ class GoData:
         self.channels = 3
         self.original_height = 464
         self.original_width = 624
+        self.image_shape = [self.height, self.width, self.channels]
+        self.label_shape = [self.height, self.width, 1]
         self.images = None
         self.labels = None
 
@@ -39,9 +41,7 @@ class GoData:
 
     def read_and_decode(self, filename_queue):
         """
-        A definition of how TF should read the file record.
-        Slightly altered version from https://github.com/tensorflow/tensorflow/blob/r0.7/tensorflow/examples/how_tos/ \
-                                      reading_data/fully_connected_reader.py
+        A definition of how TF should read a single example proto from the file record.
 
         :param filename_queue: The file name queue to be read.
         :type filename_queue: tf.QueueBase
@@ -62,20 +62,38 @@ class GoData:
         image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = self.reshape_decoded_label(flat_label)
+        label = tf.reshape(flat_label, self.label_shape)
 
         return image, label
 
-    def reshape_decoded_label(self, flat_label):
+    def read_and_decode_all(self, filename_queue):
         """
-        Reshapes the label decoded from the TF record. Allows easy overriding by sub classes.
+        A definition of how TF should read all example protos from the file record.
 
-        :param flat_label: The flat label from the decoded TF record.
-        :type flat_label: tf.Tensor
-        :return: The reshaped label.
-        :rtype: tf.Tensor
+        :param filename_queue: The file name queue to be read.
+        :type filename_queue: tf.QueueBase
+        :return: The read file data including the image data and label data.
+        :rtype: (tf.Tensor, tf.Tensor)
         """
-        return tf.reshape(flat_label, [self.height, self.width, 1])
+        reader = tf.TFRecordReader()
+        _, serialized_example = reader.read(filename_queue)
+        features = tf.parse_example(
+            serialized_example,
+            features={
+                'image_raw': tf.FixedLenFeature([], tf.string),
+                'label_raw': tf.FixedLenFeature([], tf.string),
+            })
+
+        flat_images = tf.decode_raw(features['image_raw'], tf.uint8)
+        # noinspection PyTypeChecker
+        unnormalized_images = tf.reshape(flat_images, [None]+self.image_shape)
+        images = tf.cast(unnormalized_images, tf.float32) * (1. / 255) - 0.5
+
+        flat_labels = tf.decode_raw(features['label_raw'], tf.float32)
+        # noinspection PyTypeChecker
+        labels = tf.reshape(flat_labels, [None]+self.label_shape)
+
+        return images, labels
 
     def inputs(self, data_type, batch_size, num_epochs=None):
         """
@@ -88,7 +106,7 @@ class GoData:
         :param batch_size: The size of the batches
         :type batch_size: int
         :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int | None
+        :type num_epochs: int or None
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
