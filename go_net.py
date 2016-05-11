@@ -195,7 +195,8 @@ class GoNet(multiprocessing.Process):
         :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
         """
         dataset_select_tensor = tf.placeholder(dtype=tf.string)
-        case_pairs = [(tf.equal(name, dataset_select_tensor), lambda: inputs) for name, inputs in dataset_dictionary.items()]
+        case_pairs = [(tf.equal(name, dataset_select_tensor), lambda: inputs) for name, inputs in
+                      dataset_dictionary.items()]
         images_tensor, labels_tensor = tf.case(case_pairs, default=case_pairs[0][1])
         return images_tensor, labels_tensor, dataset_select_tensor
 
@@ -205,18 +206,7 @@ class GoNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        training_images_tensor, training_labels_tensor = self.data.inputs(data_type='train',
-                                                                          batch_size=self.batch_size,
-                                                                          num_epochs=self.epoch_limit)
-        validation_images_tensor, validation_labels_tensor = self.data.inputs(data_type='validation',
-                                                                              batch_size=self.data.validation_size,
-                                                                              num_epochs=self.epoch_limit)
-        images_tensor, labels_tensor, dataset_selector = self.create_feed_selectable_input_tensors(
-            {
-                'train': (training_images_tensor, training_labels_tensor),
-                'validation': (validation_images_tensor, validation_labels_tensor)
-            }
-        )
+        images_tensor, labels_tensor, dataset_selector = self.create_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -290,6 +280,32 @@ class GoNet(multiprocessing.Process):
         # Wait for threads to finish.
         coordinator.join(threads)
         self.session.close()
+
+    def create_input_tensors(self):
+        """
+        Create the image and label tensors for each dataset and produces a selector tensor to choose between datasets
+        during runtime.
+
+        :return: The general images and labels tensors, as well as the selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
+        """
+        training_images_tensor, training_labels_tensor = self.data.create_input_tensors_for_dataset(
+            data_type='train',
+            batch_size=self.batch_size,
+            num_epochs=self.epoch_limit
+        )
+        validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
+            data_type='validation',
+            batch_size=self.data.validation_size,
+            num_epochs=self.epoch_limit
+        )
+        images_tensor, labels_tensor, dataset_selector = self.create_feed_selectable_input_tensors(
+            {
+                'train': (training_images_tensor, training_labels_tensor),
+                'validation': (validation_images_tensor, validation_labels_tensor)
+            }
+        )
+        return images_tensor, labels_tensor, dataset_selector
 
     def create_running_average_summary(self, tensor, summary_name=None):
         """

@@ -66,11 +66,9 @@ class GoData:
 
         return image, label
 
-    def inputs(self, data_type, batch_size, num_epochs=None):
+    def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
         """
         Prepares the data inputs.
-        Slightly altered version from https://github.com/tensorflow/tensorflow/blob/r0.7/tensorflow/examples/how_tos/ \
-                                      reading_data/fully_connected_reader.py
 
         :param data_type: The type of data file (usually train, validation, or test).
         :type data_type: str
