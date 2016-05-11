@@ -25,7 +25,7 @@ class GoData:
         self.images = None
         self.labels = None
 
-        self.train_size = 'all'
+        self.train_size = 9
         self.validation_size = 1
         self.test_size = 0
 
@@ -318,8 +318,8 @@ class GoData:
         Should be overwritten by subclasses.
         """
         self.shrink()
-        self.augment_data_set()
-        self.shuffle()
+        #self.augment_data_set()
+        #self.shuffle()
 
     def convert_to_tfrecords(self):
         """

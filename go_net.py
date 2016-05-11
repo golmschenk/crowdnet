@@ -32,6 +32,7 @@ class GoNet(multiprocessing.Process):
         # Logging.
         self.log_directory = 'logs'
         self.summary_step_period = 1
+        self.validation_step_period = 10
         self.step_summary_name = "Loss per pixel"
         self.image_summary_on = True
 
@@ -42,6 +43,7 @@ class GoNet(multiprocessing.Process):
         self.step = 0
         self.saver = None
         self.session = None
+        self.dataset_selector_tensor = tf.placeholder(dtype=tf.string)
         self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
         self.queue = message_queue
 
@@ -181,8 +183,7 @@ class GoNet(multiprocessing.Process):
                 if message == 'quit':
                     self.stop_signal = True
 
-    @staticmethod
-    def create_feed_selectable_input_tensors(dataset_dictionary):
+    def create_feed_selectable_input_tensors(self, dataset_dictionary):
         """
         Creates images and label tensors which are placed within a case statement to allow switching between datasets.
         A feed input into the network execution is added to allow for passing the name of the dataset to be used in a
@@ -192,13 +193,12 @@ class GoNet(multiprocessing.Process):
                                    containing the images and labels of that dataset.
         :type dataset_dictionary: dict[str, (tf.Tensor, tf.Tensor)]
         :return: The general images and labels tensor produced by the case statement, as well as the selector tensor.
-        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
+        :rtype: (tf.Tensor, tf.Tensor)
         """
-        dataset_select_tensor = tf.placeholder(dtype=tf.string)
-        case_pairs = [(tf.equal(name, dataset_select_tensor), lambda: inputs) for name, inputs in
+        case_pairs = [(tf.equal(name, self.dataset_selector_tensor), lambda: inputs) for name, inputs in
                       dataset_dictionary.items()]
         images_tensor, labels_tensor = tf.case(case_pairs, default=case_pairs[0][1])
-        return images_tensor, labels_tensor, dataset_select_tensor
+        return images_tensor, labels_tensor
 
     def train(self):
         """
@@ -206,7 +206,7 @@ class GoNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor, dataset_selector = self.create_input_tensors()
+        images_tensor, labels_tensor = self.create_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -235,7 +235,8 @@ class GoNet(multiprocessing.Process):
         # Prepare the summary operations.
         summaries_op = tf.merge_all_summaries()
         summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        writer = tf.train.SummaryWriter(summary_path, self.session.graph)
+        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
 
         # Prepare saver.
         self.saver = tf.train.Saver()
@@ -256,14 +257,28 @@ class GoNet(multiprocessing.Process):
                 _, loss, summaries = self.session.run(
                     [training_op, reduce_mean_loss_tensor, summaries_op],
                     feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability,
-                               dataset_selector: 'train'}
+                               self.dataset_selector_tensor: 'train'}
                 )
                 duration = time.time() - start_time
 
                 # Information print and summary write step.
                 if self.step % self.summary_step_period == 0:
-                    writer.add_summary(summaries, self.step)
+                    train_writer.add_summary(summaries, self.step)
                     print('Step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name, loss, duration))
+
+                # Validation step.
+                if self.step % self.validation_step_period == 0:
+                    start_time = time.time()
+                    loss, summaries = self.session.run(
+                        [reduce_mean_loss_tensor, summaries_op],
+                        feed_dict={self.dropout_keep_probability_tensor: 1.0,
+                                   self.dataset_selector_tensor: 'validation'}
+                    )
+                    duration = time.time() - start_time
+                    validation_writer.add_summary(summaries, self.step)
+                    print('Validation step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name,
+                                                                               loss, duration))
+
                 self.step += 1
 
                 # Handle interface messages from the user.
@@ -286,8 +301,8 @@ class GoNet(multiprocessing.Process):
         Create the image and label tensors for each dataset and produces a selector tensor to choose between datasets
         during runtime.
 
-        :return: The general images and labels tensors, as well as the selector tensor.
-        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
+        :return: The general images and labels tensors which are conditional on a selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor)
         """
         training_images_tensor, training_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='train',
@@ -296,16 +311,16 @@ class GoNet(multiprocessing.Process):
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
-            batch_size=self.data.validation_size,
+            batch_size=300,#self.data.validation_size,
             num_epochs=self.epoch_limit
         )
-        images_tensor, labels_tensor, dataset_selector = self.create_feed_selectable_input_tensors(
+        images_tensor, labels_tensor = self.create_feed_selectable_input_tensors(
             {
                 'train': (training_images_tensor, training_labels_tensor),
                 'validation': (validation_images_tensor, validation_labels_tensor)
             }
         )
-        return images_tensor, labels_tensor, dataset_selector
+        return images_tensor, labels_tensor
 
     def create_running_average_summary(self, tensor, summary_name=None):
         """
@@ -319,16 +334,32 @@ class GoNet(multiprocessing.Process):
         """
         if not summary_name:
             summary_name = tensor.name
-        running_average_tensor = tf.Variable(initial_value=-1.0)
-        running_average_op = tf.cond(
-            tf.equal(running_average_tensor, -1.0),
-            lambda: tf.assign(running_average_tensor, tensor),
-            lambda: tf.assign(running_average_tensor,
-                              tf.mul(tensor, self.moving_average_decay) +
-                              tf.mul(running_average_tensor, 1 - self.moving_average_decay))
-        )
+        train_running_average_tensor = tf.Variable(initial_value=-1.0)
+        validation_running_average_tensor = tf.Variable(initial_value=-1.0)
+
+        def train_update():
+            """The inner averaging for the training steps."""
+            inner_running_average_op = tf.cond(
+                tf.equal(train_running_average_tensor, -1.0),
+                lambda: tf.assign(train_running_average_tensor, tensor),
+                lambda: tf.assign(train_running_average_tensor,
+                                  tf.mul(tensor, self.moving_average_decay) +
+                                  tf.mul(train_running_average_tensor, 1.0 - self.moving_average_decay))
+            )
+            return inner_running_average_op
+
+        def validation_update():
+            """The inner averaging for the validation steps."""
+            return tf.assign(validation_running_average_tensor, tensor)
+
+        running_average_op = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                     validation_update,
+                                     train_update)
+        running_average_tensor = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                         lambda: validation_running_average_tensor,
+                                         lambda: train_running_average_tensor)
         with tf.control_dependencies([running_average_op]):
-            tf.scalar_summary('Running average %s' % summary_name.lower,
+            tf.scalar_summary('Running average %s' % summary_name.lower(),
                               running_average_tensor)
 
     def run(self):
