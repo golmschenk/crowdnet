@@ -318,8 +318,8 @@ class GoData:
         Should be overwritten by subclasses.
         """
         self.shrink()
-        #self.augment_data_set()
-        #self.shuffle()
+        self.augment_data_set()
+        self.shuffle()
 
     def convert_to_tfrecords(self):
         """

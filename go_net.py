@@ -185,7 +185,7 @@ class GoNet(multiprocessing.Process):
 
     def create_feed_selectable_input_tensors(self, dataset_dictionary):
         """
-        Creates images and label tensors which are placed within a case statement to allow switching between datasets.
+        Creates images and label tensors which are placed within a cond statement to allow switching between datasets.
         A feed input into the network execution is added to allow for passing the name of the dataset to be used in a
         particular step.
 
@@ -195,9 +195,9 @@ class GoNet(multiprocessing.Process):
         :return: The general images and labels tensor produced by the case statement, as well as the selector tensor.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        case_pairs = [(tf.equal(name, self.dataset_selector_tensor), lambda: inputs) for name, inputs in
-                      dataset_dictionary.items()]
-        images_tensor, labels_tensor = tf.case(case_pairs, default=case_pairs[0][1])
+        images_tensor, labels_tensor = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                               lambda: dataset_dictionary['validation'],
+                                               lambda: dataset_dictionary['train'])
         return images_tensor, labels_tensor
 
     def train(self):
@@ -311,7 +311,7 @@ class GoNet(multiprocessing.Process):
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
-            batch_size=300,#self.data.validation_size,
+            batch_size=self.data.validation_size,
             num_epochs=self.epoch_limit
         )
         images_tensor, labels_tensor = self.create_feed_selectable_input_tensors(
