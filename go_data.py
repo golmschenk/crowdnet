@@ -15,6 +15,7 @@ class GoData:
     def __init__(self):
         self.data_directory = 'data'
         self.data_name = 'nyud_micro'
+        self.import_directory = 'data/import'
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
@@ -301,16 +302,40 @@ class GoData:
         self.images = self.images[permuted_indexes]
         self.labels = self.labels[permuted_indexes]
 
+    def import_recursive_mat_directory(self):
+        """
+        Imports the import directory of Matlab mat files recursively into the data images and labels.
+        """
+        for file_directory, _, file_names in os.walk(self.import_directory):
+            mat_names = [file_name for file_name in file_names if file_name.endswith('.mat')]
+            for mat_name in mat_names:
+                self.import_mat_file(os.path.join(file_directory, mat_name))
+
+    def import_mat_file(self, mat_path):
+        """
+        Imports a Matlab mat file into the data images and labels (concatenating the arrays if they already exists).
+
+        :param mat_path: The path to the mat file to import.
+        :type mat_path: str
+        """
+        with h5py.File(mat_path, 'r') as mat_data:
+            uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
+            images = self.crop_data(uncropped_images)
+            uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
+            labels = self.crop_data(uncropped_labels)
+            if self.images is None:
+                self.images = images
+                self.labels = labels
+            else:
+                self.images = np.concatenate((self.images, images))
+                self.labels = np.concatenate((self.labels, labels))
+
     def import_data(self):
         """
         Import the data.
         Should be overwritten by subclasses.
         """
-        mat_data = h5py.File(self.data_path + '.mat', 'r')
-        uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
-        self.images = self.crop_data(uncropped_images)
-        uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
-        self.labels = self.crop_data(uncropped_labels)
+        self.import_recursive_mat_directory()
 
     def preprocess(self):
         """
