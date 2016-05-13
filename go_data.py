@@ -344,8 +344,11 @@ class GoData:
         Preprocesses the data.
         Should be overwritten by subclasses.
         """
+        print('Shrinking the data...')
         self.shrink()
+        print('Augmenting the data...')
         self.augment_data_set()
+        print('Shuffling the data...')
         self.shuffle()
 
     def convert_to_tfrecords(self):
