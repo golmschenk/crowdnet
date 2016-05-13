@@ -211,7 +211,7 @@ class GoData:
         :return: The resized array.
         :rtype: np.ndarray
         """
-        if array.shape[0] == self.height and array.shape[1] == self.width:
+        if array.shape[1] == self.height and array.shape[2] == self.width:
             return array  # The shape is already right, so don't needlessly process.
         compression_shape = [
             array.shape[0],
