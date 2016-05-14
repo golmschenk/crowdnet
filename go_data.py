@@ -30,6 +30,8 @@ class GoData:
         self.validation_size = 1
         self.test_size = 0
 
+        os.nice(10)
+
     @property
     def data_path(self):
         """
@@ -239,8 +241,8 @@ class GoData:
         augmented_labels_list = [self.labels]
         for _ in range(number_of_variations):
             # noinspection PyTypeChecker
-            augmented_images_list.append(np.random.normal(self.images.astype(np.int16),
-                                                          standard_deviation).clip(0, 255).astype(np.uint8))
+            noise = np.random.normal(np.zeros(shape=self.image_shape, dtype=np.int16), standard_deviation)
+            augmented_images_list.append((self.images.astype(np.int16) + noise).clip(0, 255).astype(np.uint8))
             augmented_labels_list.append(self.labels)
         self.images = np.concatenate(augmented_images_list)
         self.labels = np.concatenate(augmented_labels_list)
@@ -391,7 +393,5 @@ def _bytes_feature(value):
 
 
 if __name__ == '__main__':
-    os.nice(10)
-
     data = GoData()
     data.generate_tfrecords()
