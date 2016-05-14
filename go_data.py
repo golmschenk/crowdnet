@@ -314,6 +314,7 @@ class GoData:
             mat_names = [file_name for file_name in file_names if file_name.endswith('.mat')]
             for mat_name in mat_names:
                 self.import_mat_file(os.path.join(file_directory, mat_name))
+                assert self.images.shape[0] == self.labels.shape[0]
 
     def import_mat_file(self, mat_path):
         """
