@@ -311,8 +311,7 @@ class GoNet(multiprocessing.Process):
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
-            batch_size=self.data.validation_size,
-            num_epochs=self.epoch_limit
+            batch_size=self.data.validation_size
         )
         images_tensor, labels_tensor = self.create_feed_selectable_input_tensors(
             {

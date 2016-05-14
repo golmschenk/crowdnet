@@ -313,7 +313,7 @@ class GoData:
         for file_directory, _, file_names in os.walk(self.import_directory):
             mat_names = [file_name for file_name in file_names if file_name.endswith('.mat')]
             for mat_name in mat_names:
-                print('Importing %s' % mat_name)
+                print('Importing %s...' % mat_name)
                 self.import_mat_file(os.path.join(file_directory, mat_name))
                 assert self.images.shape[0] == self.labels.shape[0]
 
