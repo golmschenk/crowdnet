@@ -1,5 +1,5 @@
 """
-Code related to the DepthNet.
+Code related to the GoNet.
 """
 import datetime
 import multiprocessing
@@ -285,7 +285,7 @@ class GoNet(multiprocessing.Process):
                 self.interface_handler()
         except tf.errors.OutOfRangeError:
             if self.step == 0:
-                print('Training data not found.')
+                print('Data not found.')
             else:
                 print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
         finally:
