@@ -88,17 +88,16 @@ class GoData:
             file_name = self.data_name + '.tfrecords'
         file_path = os.path.join(self.data_directory, file_name)
 
-        with tf.name_scope('Input'):
-            file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
+        file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
 
-            image, label = self.read_and_decode(file_name_queue)
+        image, label = self.read_and_decode(file_name_queue)
 
-            images, labels = tf.train.shuffle_batch(
-                [image, label], batch_size=batch_size, num_threads=2,
-                capacity=500 + 3 * batch_size, min_after_dequeue=500
-            )
+        images, labels = tf.train.shuffle_batch(
+            [image, label], batch_size=batch_size, num_threads=2,
+            capacity=500 + 3 * batch_size, min_after_dequeue=500
+        )
 
-            return images, labels
+        return images, labels
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
         """

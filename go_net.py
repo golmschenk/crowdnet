@@ -206,7 +206,8 @@ class GoNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor = self.create_input_tensors()
+        with tf.name_scope('Input'):
+            images_tensor, labels_tensor = self.create_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
