@@ -2,6 +2,7 @@
 Tests for code related to GoData.
 """
 from unittest.mock import patch, Mock
+import os
 import numpy as np
 
 from go_data import GoData
@@ -50,3 +51,11 @@ class TestGoData:
         array = GoData().convert_mat_data_to_numpy_array(mock_mat_data, 'accelData')
 
         assert array.shape == (300, 4)
+
+    def test_data_path_property(self):
+        go_data = GoData()
+        go_data.data_directory = 'directory'
+        go_data.data_name = 'file_name'
+
+        assert go_data.data_path == os.path.join('directory', 'file_name')
+

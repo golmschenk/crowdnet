@@ -12,25 +12,39 @@ class GoData:
     A class for managing the TFRecord data.
     """
 
-    def __init__(self, data_directory='data', data_name='nyud', images_numpy_file_name='nyud_images',
-                 labels_numpy_file_name='nyud_labels'):
-        self.data_directory = data_directory
-        self.data_name = data_name
-        self.images_numpy_file_name = images_numpy_file_name
-        self.labels_numpy_file_name = labels_numpy_file_name
+    def __init__(self):
+        self.data_directory = 'data'
+        self.data_name = 'nyud_micro'
+        self.import_directory = 'data/import'
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
         self.original_height = 464
         self.original_width = 624
+        self.image_shape = [self.height, self.width, self.channels]
+        self.label_shape = [self.height, self.width, 1]
         self.images = None
         self.labels = None
 
+        self.train_size = 9
+        self.validation_size = 1
+        self.test_size = 0
+
+        os.nice(10)
+
+    @property
+    def data_path(self):
+        """
+        Gives the path to the data file.
+
+        :return: The path to the data file.
+        :rtype: str
+        """
+        return os.path.join(self.data_directory, self.data_name)
+
     def read_and_decode(self, filename_queue):
         """
-        A definition of how TF should read the file record.
-        Slightly altered version from https://github.com/tensorflow/tensorflow/blob/r0.7/tensorflow/examples/how_tos/ \
-                                      reading_data/fully_connected_reader.py
+        A definition of how TF should read a single example proto from the file record.
 
         :param filename_queue: The file name queue to be read.
         :type filename_queue: tf.QueueBase
@@ -47,37 +61,24 @@ class GoData:
             })
 
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, [self.height, self.width, self.channels])
+        unnormalized_image = tf.reshape(flat_image, self.image_shape)
         image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = self.reshape_decoded_label(flat_label)
+        label = tf.reshape(flat_label, self.label_shape)
 
         return image, label
 
-    def reshape_decoded_label(self, flat_label):
-        """
-        Reshapes the label decoded from the TF record. Allows easy overriding by sub classes.
-
-        :param flat_label: The flat label from the decoded TF record.
-        :type flat_label: tf.Tensor
-        :return: The reshaped label.
-        :rtype: tf.Tensor
-        """
-        return tf.reshape(flat_label, [self.height, self.width, 1])
-
-    def inputs(self, data_type, batch_size, num_epochs=None):
+    def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
         """
         Prepares the data inputs.
-        Slightly altered version from https://github.com/tensorflow/tensorflow/blob/r0.7/tensorflow/examples/how_tos/ \
-                                      reading_data/fully_connected_reader.py
 
         :param data_type: The type of data file (usually train, validation, or test).
         :type data_type: str
         :param batch_size: The size of the batches
         :type batch_size: int
         :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int | None
+        :type num_epochs: int or None
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
@@ -87,17 +88,16 @@ class GoData:
             file_name = self.data_name + '.tfrecords'
         file_path = os.path.join(self.data_directory, file_name)
 
-        with tf.name_scope('Input'):
-            filename_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
+        file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
 
-            image, label = self.read_and_decode(filename_queue)
+        image, label = self.read_and_decode(file_name_queue)
 
-            images, labels = tf.train.shuffle_batch(
-                [image, label], batch_size=batch_size, num_threads=2,
-                capacity=500 + 3 * batch_size, min_after_dequeue=500
-            )
+        images, labels = tf.train.shuffle_batch(
+            [image, label], batch_size=batch_size, num_threads=2,
+            capacity=500 + 3 * batch_size, min_after_dequeue=500
+        )
 
-            return images, labels
+        return images, labels
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
         """
@@ -137,10 +137,7 @@ class GoData:
         array = reversed_array.transpose()
         if variable_name_in_mat_data in ('images', 'depths'):
             array = np.rollaxis(array, -1)
-        if number_of_samples:
-            return array[:number_of_samples]
-        else:
-            return array
+        return array[:number_of_samples]
 
     @staticmethod
     def crop_data(array):
@@ -154,21 +151,6 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def convert_mat_to_tfrecord(self, mat_file_path):
-        """
-        Converts the mat file data into a TFRecords file.
-
-        :param mat_file_path: The path to mat file to convert.
-        :type mat_file_path: str
-        """
-        mat_data = h5py.File(mat_file_path, 'r')
-        uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
-        self.images = self.crop_data(uncropped_images)
-        uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
-        self.labels = self.crop_data(uncropped_labels)
-        self.shrink()
-        self.convert_to_tfrecord()
-
     def numpy_files_to_tfrecords(self, augment=False):
         """
         Converts NumPy files to a TFRecords file.
@@ -177,35 +159,35 @@ class GoData:
         self.shrink()
         if augment:
             self.augment_data_set()
-        self.convert_to_tfrecord()
+        self.convert_to_tfrecords()
 
     def load_numpy_files(self):
         """
         Loads data from the numpy files into the object.
         """
-        images_numpy_file_path = os.path.join(self.data_directory, self.images_numpy_file_name)
-        labels_numpy_file_path = os.path.join(self.data_directory, self.labels_numpy_file_name)
+        images_numpy_file_path = os.path.join(self.data_path + '_images.npy')
+        labels_numpy_file_path = os.path.join(self.data_path + '_labels.npy')
         self.images = np.load(images_numpy_file_path)
         self.labels = np.load(labels_numpy_file_path)
 
-    def convert_to_tfrecord(self):
+    def convert_numpy_to_tfrecords(self, images, labels, data_set='train'):
         """
-        Converts the data to a TFRecord.
+        Converts numpy arrays to a TFRecords.
         """
-        number_of_examples = self.labels.shape[0]
-        if self.images.shape[0] != number_of_examples:
+        number_of_examples = labels.shape[0]
+        if images.shape[0] != number_of_examples:
             raise ValueError("Images count %d does not match label count %d." %
-                             (self.images.shape[0], number_of_examples))
-        rows = self.images.shape[1]
-        cols = self.images.shape[2]
-        depth = self.images.shape[3]
+                             (images.shape[0], number_of_examples))
+        rows = images.shape[1]
+        cols = images.shape[2]
+        depth = images.shape[3]
 
-        filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
+        filename = os.path.join(self.data_directory, self.data_name + '.' + data_set + '.tfrecords')
         print('Writing', filename)
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
-            image_raw = self.images[index].tostring()
-            label_raw = self.labels[index].tostring()
+            image_raw = images[index].tostring()
+            label_raw = labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'height': _int64_feature(rows),
                 'width': _int64_feature(cols),
@@ -230,6 +212,8 @@ class GoData:
         :return: The resized array.
         :rtype: np.ndarray
         """
+        if array.shape[1] == self.height and array.shape[2] == self.width:
+            return array  # The shape is already right, so don't needlessly process.
         compression_shape = [
             array.shape[0],
             self.height,
@@ -256,8 +240,8 @@ class GoData:
         augmented_labels_list = [self.labels]
         for _ in range(number_of_variations):
             # noinspection PyTypeChecker
-            augmented_images_list.append(np.random.normal(self.images.astype(np.int16),
-                                                          standard_deviation).clip(0, 255).astype(np.uint8))
+            noise = np.random.normal(np.zeros(shape=self.image_shape, dtype=np.int16), standard_deviation)
+            augmented_images_list.append((self.images.astype(np.int16) + noise).clip(0, 255).astype(np.uint8))
             augmented_labels_list.append(self.labels)
         self.images = np.concatenate(augmented_images_list)
         self.labels = np.concatenate(augmented_labels_list)
@@ -307,13 +291,6 @@ class GoData:
     def augment_data_set(self):
         """
         Augments the data set with some basic approaches
-
-        :param images: The images array.
-        :type images: np.ndarray
-        :param labels: The labels array.
-        :type labels: np.ndarray
-        :return: The images and the labels
-        :rtype: (np.ndarray, np.ndarray)
         """
         print('Augmenting with spatial jittering...')
         self.offset_augmentation(1)
@@ -328,6 +305,85 @@ class GoData:
         self.images = self.images[permuted_indexes]
         self.labels = self.labels[permuted_indexes]
 
+    def import_recursive_mat_directory(self):
+        """
+        Imports the import directory of Matlab mat files recursively into the data images and labels.
+        """
+        for file_directory, _, file_names in os.walk(self.import_directory):
+            mat_names = [file_name for file_name in file_names if file_name.endswith('.mat')]
+            for mat_name in mat_names:
+                print('Importing %s...' % mat_name)
+                self.import_mat_file(os.path.join(file_directory, mat_name))
+                assert self.images.shape[0] == self.labels.shape[0]
+
+    def import_mat_file(self, mat_path):
+        """
+        Imports a Matlab mat file into the data images and labels (concatenating the arrays if they already exists).
+
+        :param mat_path: The path to the mat file to import.
+        :type mat_path: str
+        """
+        with h5py.File(mat_path, 'r') as mat_data:
+            uncropped_images = self.convert_mat_data_to_numpy_array(mat_data, 'images')
+            images = self.crop_data(uncropped_images)
+            uncropped_labels = self.convert_mat_data_to_numpy_array(mat_data, 'depths')
+            labels = self.crop_data(uncropped_labels)
+            if self.images is None:
+                self.images = images
+                self.labels = labels
+            else:
+                self.images = np.concatenate((self.images, images))
+                self.labels = np.concatenate((self.labels, labels))
+
+    def import_data(self):
+        """
+        Import the data.
+        Should be overwritten by subclasses.
+        """
+        self.import_recursive_mat_directory()
+
+    def preprocess(self):
+        """
+        Preprocesses the data.
+        Should be overwritten by subclasses.
+        """
+        print('Shrinking the data...')
+        self.shrink()
+        print('Augmenting the data...')
+        self.augment_data_set()
+        print('Shuffling the data...')
+        self.shuffle()
+
+    def convert_to_tfrecords(self):
+        """
+        Converts the data to train, validation, and test TFRecords. If the size of any dataset is not specified, the
+        remaining data is placed into that dataset. For example, if there are 300 samples, and train_size is 200 with
+        neither of the other sizes yet, then the training dataset will contain 200 samples, the validation dataset
+        will contain 100 samples, and no test set will be created.
+        """
+        used = 0
+        for name, size in [('train', self.train_size), ('validation', self.validation_size), ('test', self.test_size)]:
+            if size in ('all', 'remaining', 'rest'):
+                self.convert_numpy_to_tfrecords(self.images[used:], self.labels[used:], data_set=name)
+                return
+            elif size:
+                self.convert_numpy_to_tfrecords(self.images[used:used+size], self.labels[used:used+size], data_set=name)
+                used += size
+                if used >= len(self.labels):
+                    return
+
+    def generate_tfrecords(self):
+        """
+        Creates the TFRecords for the data.
+        """
+        print('Importing the data...')
+        self.import_data()
+        print('Preprocessing the data...')
+        self.preprocess()
+        print('Generating the TF records...')
+        self.convert_to_tfrecords()
+        print('Done.')
+
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -338,7 +394,5 @@ def _bytes_feature(value):
 
 
 if __name__ == '__main__':
-    os.nice(10)
-
     data = GoData()
-    data.convert_mat_to_tfrecord('data/nyu_depth_v2_labeled.mat')
+    data.generate_tfrecords()

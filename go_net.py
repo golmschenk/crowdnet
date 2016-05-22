@@ -1,5 +1,5 @@
 """
-Code related to the DepthNet.
+Code related to the GoNet.
 """
 import datetime
 import multiprocessing
@@ -23,13 +23,18 @@ class GoNet(multiprocessing.Process):
 
         # Common variables.
         self.batch_size = 8
-        self.number_of_epochs = 50000
         self.initial_learning_rate = 0.00001
-        self.data = GoData(data_name='nyud')
-        self.summary_step_period = 1
-        self.log_directory = 'logs'
+        self.data = GoData()
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
+        self.epoch_limit = None
+
+        # Logging.
+        self.log_directory = 'logs'
+        self.summary_step_period = 1
+        self.validation_step_period = 10
+        self.step_summary_name = "Loss per pixel"
+        self.image_summary_on = True
 
         # Internal setup.
         self.moving_average_loss = None
@@ -38,6 +43,7 @@ class GoNet(multiprocessing.Process):
         self.step = 0
         self.saver = None
         self.session = None
+        self.dataset_selector_tensor = tf.placeholder(dtype=tf.string)
         self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
         self.queue = message_queue
 
@@ -101,7 +107,7 @@ class GoNet(multiprocessing.Process):
     @staticmethod
     def create_absolute_differences_tensor(predicted_labels, labels):
         """
-        Determines the L1 relative differences between two label maps.
+        Determines the L1 absolute differences between two label maps.
 
         :param predicted_labels: The first label map tensor (usually the predicted labels).
         :type predicted_labels: tf.Tensor
@@ -177,14 +183,31 @@ class GoNet(multiprocessing.Process):
                 if message == 'quit':
                     self.stop_signal = True
 
+    def create_feed_selectable_input_tensors(self, dataset_dictionary):
+        """
+        Creates images and label tensors which are placed within a cond statement to allow switching between datasets.
+        A feed input into the network execution is added to allow for passing the name of the dataset to be used in a
+        particular step.
+
+        :param dataset_dictionary: A dictionary containing as keys the names of the datasets and as values a pair with
+                                   containing the images and labels of that dataset.
+        :type dataset_dictionary: dict[str, (tf.Tensor, tf.Tensor)]
+        :return: The general images and labels tensor produced by the case statement, as well as the selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        images_tensor, labels_tensor = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                               lambda: dataset_dictionary['validation'],
+                                               lambda: dataset_dictionary['train'])
+        return images_tensor, labels_tensor
+
     def train(self):
         """
         Adds the training operations and runs the training loop.
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor, labels_tensor = self.data.inputs(data_type='', batch_size=self.batch_size,
-                                                        num_epochs=self.number_of_epochs)
+        with tf.name_scope('Input'):
+            images_tensor, labels_tensor = self.create_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -193,24 +216,16 @@ class GoNet(multiprocessing.Process):
         # Add the loss operations to the graph.
         with tf.name_scope('loss'):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            loss_per_pixel_tensor = tf.reduce_mean(loss_tensor)
-            tf.scalar_summary("Loss per pixel", loss_per_pixel_tensor)
-            running_average_loss_per_pixel_tensor = tf.Variable(initial_value=-1.0)
-            running_average_loss_per_pixel_op = tf.cond(
-                tf.equal(running_average_loss_per_pixel_tensor, -1.0),
-                lambda: tf.assign(running_average_loss_per_pixel_tensor, loss_per_pixel_tensor),
-                lambda: tf.assign(running_average_loss_per_pixel_tensor,
-                                  tf.mul(loss_per_pixel_tensor, self.moving_average_decay) +
-                                  tf.mul(running_average_loss_per_pixel_tensor, 1 - self.moving_average_decay))
-            )
-            with tf.control_dependencies([running_average_loss_per_pixel_op]):
-                tf.scalar_summary('Running average loss per pixel', running_average_loss_per_pixel_tensor)
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            tf.scalar_summary(self.step_summary_name, reduce_mean_loss_tensor)
+            self.create_running_average_summary(reduce_mean_loss_tensor, summary_name=self.step_summary_name)
 
-        with tf.name_scope('comparison_summary'):
-            self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
+        if self.image_summary_on:
+            with tf.name_scope('comparison_summary'):
+                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=loss_per_pixel_tensor)
+        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
@@ -221,7 +236,8 @@ class GoNet(multiprocessing.Process):
         # Prepare the summary operations.
         summaries_op = tf.merge_all_summaries()
         summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        writer = tf.train.SummaryWriter(summary_path, self.session.graph)
+        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
 
         # Prepare saver.
         self.saver = tf.train.Saver()
@@ -240,24 +256,39 @@ class GoNet(multiprocessing.Process):
                 # Regular training step.
                 start_time = time.time()
                 _, loss, summaries = self.session.run(
-                    [training_op, loss_per_pixel_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability}
+                    [training_op, reduce_mean_loss_tensor, summaries_op],
+                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability,
+                               self.dataset_selector_tensor: 'train'}
                 )
                 duration = time.time() - start_time
 
                 # Information print and summary write step.
                 if self.step % self.summary_step_period == 0:
-                    writer.add_summary(summaries, self.step)
-                    print('Step %d: Loss per pixel = %.5f (%.3f sec / step)' % (self.step, loss, duration))
+                    train_writer.add_summary(summaries, self.step)
+                    print('Step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name, loss, duration))
+
+                # Validation step.
+                if self.step % self.validation_step_period == 0:
+                    start_time = time.time()
+                    loss, summaries = self.session.run(
+                        [reduce_mean_loss_tensor, summaries_op],
+                        feed_dict={self.dropout_keep_probability_tensor: 1.0,
+                                   self.dataset_selector_tensor: 'validation'}
+                    )
+                    duration = time.time() - start_time
+                    validation_writer.add_summary(summaries, self.step)
+                    print('Validation step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name,
+                                                                               loss, duration))
+
                 self.step += 1
 
                 # Handle interface messages from the user.
                 self.interface_handler()
         except tf.errors.OutOfRangeError:
             if self.step == 0:
-                print('Training data not found.')
+                print('Data not found.')
             else:
-                print('Done training for %d epochs, %d steps.' % (self.number_of_epochs, self.step))
+                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
@@ -265,6 +296,71 @@ class GoNet(multiprocessing.Process):
         # Wait for threads to finish.
         coordinator.join(threads)
         self.session.close()
+
+    def create_input_tensors(self):
+        """
+        Create the image and label tensors for each dataset and produces a selector tensor to choose between datasets
+        during runtime.
+
+        :return: The general images and labels tensors which are conditional on a selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        training_images_tensor, training_labels_tensor = self.data.create_input_tensors_for_dataset(
+            data_type='train',
+            batch_size=self.batch_size,
+            num_epochs=self.epoch_limit
+        )
+        validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
+            data_type='validation',
+            batch_size=self.data.validation_size
+        )
+        images_tensor, labels_tensor = self.create_feed_selectable_input_tensors(
+            {
+                'train': (training_images_tensor, training_labels_tensor),
+                'validation': (validation_images_tensor, validation_labels_tensor)
+            }
+        )
+        return images_tensor, labels_tensor
+
+    def create_running_average_summary(self, tensor, summary_name=None):
+        """
+        Create a running average summary of a scalar tensor.
+
+        :param tensor: The scalar tensor to create the running average summary for.
+        :type tensor: tf.Tensor
+        :param summary_name: The name to display for the summary in TensorBoard prepended by "Running average".
+                             Defaults to the tensor name.
+        :type summary_name: str
+        """
+        if not summary_name:
+            summary_name = tensor.name
+        train_running_average_tensor = tf.Variable(initial_value=-1.0)
+        validation_running_average_tensor = tf.Variable(initial_value=-1.0)
+
+        def train_update():
+            """The inner averaging for the training steps."""
+            inner_running_average_op = tf.cond(
+                tf.equal(train_running_average_tensor, -1.0),
+                lambda: tf.assign(train_running_average_tensor, tensor),
+                lambda: tf.assign(train_running_average_tensor,
+                                  tf.mul(tensor, self.moving_average_decay) +
+                                  tf.mul(train_running_average_tensor, 1.0 - self.moving_average_decay))
+            )
+            return inner_running_average_op
+
+        def validation_update():
+            """The inner averaging for the validation steps."""
+            return tf.assign(validation_running_average_tensor, tensor)
+
+        running_average_op = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                     validation_update,
+                                     train_update)
+        running_average_tensor = tf.cond(tf.equal(self.dataset_selector_tensor, 'validation'),
+                                         lambda: validation_running_average_tensor,
+                                         lambda: train_running_average_tensor)
+        with tf.control_dependencies([running_average_op]):
+            tf.scalar_summary('Running average %s' % summary_name.lower(),
+                              running_average_tensor)
 
     def run(self):
         """
