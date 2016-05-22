@@ -16,7 +16,7 @@ class CrowdNet(GoNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.data = CrowdData(data_directory='data', data_name='crowd')
+        self.data = CrowdData()
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
