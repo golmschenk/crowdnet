@@ -169,6 +169,8 @@ class GoData:
         labels_numpy_file_path = os.path.join(self.data_path + '_labels.npy')
         self.images = np.load(images_numpy_file_path)
         self.labels = np.load(labels_numpy_file_path)
+        if self.labels.dtype == np.float64:
+            self.labels = self.labels.astype(np.float32)
 
     def convert_numpy_to_tfrecords(self, images, labels, data_set='train'):
         """
