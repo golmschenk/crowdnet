@@ -1,6 +1,7 @@
 """
 Code for managing the TFRecord data.
 """
+import glob
 import os
 import h5py
 import numpy as np
@@ -89,6 +90,34 @@ class GoData:
         file_path = os.path.join(self.data_directory, file_name)
 
         file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
+
+        image, label = self.read_and_decode(file_name_queue)
+
+        images, labels = tf.train.shuffle_batch(
+            [image, label], batch_size=batch_size, num_threads=2,
+            capacity=500 + 3 * batch_size, min_after_dequeue=500
+        )
+
+        return images, labels
+
+    def create_input_tensors_for_dataset_directory(self, data_type, batch_size, num_epochs=None):
+        """
+        Prepares the data inputs.
+
+        :param data_type: The type of data file (usually train, validation, or test).
+        :type data_type: str
+        :param batch_size: The size of the batches
+        :type batch_size: int
+        :param num_epochs: Number of epochs to run for. Infinite if None.
+        :type num_epochs: int or None
+        :return: The images and depths inputs.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        file_paths = []
+        for file_path in glob.glob(os.path.join(self.data_directory, data_type, '*.tfrecords')):
+            file_paths.append(file_path)
+
+        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs)
 
         image, label = self.read_and_decode(file_name_queue)
 
