@@ -17,6 +17,7 @@ class GoData:
         self.data_directory = 'data'
         self.data_name = 'nyud_micro'
         self.import_directory = 'data/import'
+        self.dataset_container = 'directory'
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
@@ -83,50 +84,55 @@ class GoData:
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
+        if self.dataset_container == 'file':
+            file_name_queue = self.file_name_queue_for_dataset_file(data_type, num_epochs)
+        else:
+            file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
+
+        image, label = self.read_and_decode(file_name_queue)
+
+        images, labels = tf.train.shuffle_batch(
+            [image, label], batch_size=batch_size, num_threads=2,
+            capacity=500 + 3 * batch_size, min_after_dequeue=500
+        )
+
+        return images, labels
+
+    def file_name_queue_for_dataset_file(self, data_type=None, num_epochs=None):
+        """
+        Creates the files name queue for a single TFRecords file.
+
+        :param data_type: The type of dataset being created.
+        :type data_type: str
+        :param num_epochs: Number of epochs to run for. Infinite if None.
+        :type num_epochs: int or None
+        :return: The file name queue.
+        :rtype: tf.QueueBase
+        """
         if data_type:
             file_name = self.data_name + '.' + data_type + '.tfrecords'
         else:
             file_name = self.data_name + '.tfrecords'
         file_path = os.path.join(self.data_directory, file_name)
-
         file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
+        return file_name_queue
 
-        image, label = self.read_and_decode(file_name_queue)
-
-        images, labels = tf.train.shuffle_batch(
-            [image, label], batch_size=batch_size, num_threads=2,
-            capacity=500 + 3 * batch_size, min_after_dequeue=500
-        )
-
-        return images, labels
-
-    def create_input_tensors_for_dataset_directory(self, data_type, batch_size, num_epochs=None):
+    def file_name_queue_for_dataset_directory(self, data_type, num_epochs=None):
         """
-        Prepares the data inputs.
+        Creates the files name queue for a single TFRecords file.
 
-        :param data_type: The type of data file (usually train, validation, or test).
+        :param data_type: The type of dataset being created.
         :type data_type: str
-        :param batch_size: The size of the batches
-        :type batch_size: int
         :param num_epochs: Number of epochs to run for. Infinite if None.
         :type num_epochs: int or None
-        :return: The images and depths inputs.
-        :rtype: (tf.Tensor, tf.Tensor)
+        :return: The file name queue.
+        :rtype: tf.QueueBase
         """
         file_paths = []
         for file_path in glob.glob(os.path.join(self.data_directory, data_type, '*.tfrecords')):
             file_paths.append(file_path)
-
         file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs)
-
-        image, label = self.read_and_decode(file_name_queue)
-
-        images, labels = tf.train.shuffle_batch(
-            [image, label], batch_size=batch_size, num_threads=2,
-            capacity=500 + 3 * batch_size, min_after_dequeue=500
-        )
-
-        return images, labels
+        return file_name_queue
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
         """
