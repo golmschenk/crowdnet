@@ -12,9 +12,10 @@ class CrowdData(GoData):
         super().__init__()
 
         self.data_directory = 'data'
-        self.data_name = 'crowd'
+        self.data_name = 'human'
         self.images_numpy_file_name = 'images.npy'
         self.labels_numpy_file_name = 'densities.npy'
+        self.dataset_container = 'file'
         self.height = 158 // 2  # The height we'll be training on (data will be shrunk if needed).
         self.width = 238 // 2  # The width we'll be training on (data will be shrunk if needed).
         self.original_height = 158  # The height of the original data.
