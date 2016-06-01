@@ -44,7 +44,7 @@ class CrowdNet(GoNet):
         :return: The difference tensor.
         :rtype: tf.Tensor
         """
-        return tf.abs(tf.minimum(2.0 * (predicted_labels - labels), predicted_labels - labels))
+        return tf.abs(predicted_labels - labels)
 
     def create_inference_op(self, images):
         """
