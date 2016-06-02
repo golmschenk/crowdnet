@@ -7,6 +7,8 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
+from convenience import random_boolean_tensor
+
 
 class GoData:
     """
@@ -86,6 +88,62 @@ class GoData:
         image = tf.image.per_image_whitening(image)
         return image, label
 
+    @staticmethod
+    def horizontally_flip_label(label):
+        """
+        Changes the label in such a way that it matches its corresponding image if it's been horizontally flipped.
+        Should be overridden depending on the type of label data.
+
+        :param label: The label to be "flipped".
+        :type label: tf.Tensor
+        :return: The "flipped" label.
+        :rtype: tf.Tensor
+        """
+        return tf.image.flip_left_right(label)
+
+    def randomly_flip_horizontally(self, image, label):
+        """
+        Simultaneously and randomly flips the image and label horizontally, such that they still match after flipping.
+
+        :param image: The image to be flipped (maybe).
+        :type image: tf.Tensor
+        :param label: The label to be flipped (maybe).
+        :type label: tf.Tensor
+        :return: The image and label which may be flipped.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        should_flip = random_boolean_tensor()
+        image = tf.cond(
+            should_flip,
+            lambda: tf.image.flip_left_right(image),
+            lambda: image
+        )
+        label = tf.cond(
+            should_flip,
+            lambda: self.horizontally_flip_label(label),
+            lambda: label
+        )
+        return image, label
+
+    def augment(self, image, label):
+        """
+        Augments the data in various ways.
+
+        :param image: The image to be augmented.
+        :type image: tf.Tensor
+        :param label: The label to be augmented
+        :type label: tf.Tensor
+        :return: The augmented image and label
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = image + tf.random_normal(self.image_shape, mean=0, stddev=8)
+        image = tf.image.random_brightness(image, max_delta=64)
+        image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+
+        image, label = self.randomly_flip_horizontally(image, label)
+
+        return image, label
+
     def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
         """
         Prepares the data inputs.
@@ -105,6 +163,7 @@ class GoData:
             file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
 
         image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
+        image, label = self.augment(image, label)
         image, label = self.preprocess(image, label)
 
         images, labels = tf.train.shuffle_batch(
