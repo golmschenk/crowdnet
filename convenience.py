@@ -83,3 +83,14 @@ def size_from_stride_two(size, iterations=1):
         return math.ceil(size / 2)
     else:
         return math.ceil(size_from_stride_two(size, iterations=iterations - 1) / 2)
+
+
+def random_boolean_tensor():
+    """
+    Generates a single element boolean tensor with a random value.
+
+    :return:  The random boolean tensor.
+    :rtype: tf.Tensor
+    """
+    uniform_random = tf.random_uniform([], 0, 1.0)
+    return tf.less(uniform_random, 0.5)
