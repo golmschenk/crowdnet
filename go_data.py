@@ -44,7 +44,7 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    def read_and_decode(self, filename_queue):
+    def read_and_decode_single_example_from_tfrecords(self, filename_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
@@ -64,11 +64,26 @@ class GoData:
 
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
         unnormalized_image = tf.reshape(flat_image, self.image_shape)
-        image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
+        image = tf.cast(unnormalized_image, tf.float32)
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
         label = tf.reshape(flat_label, self.label_shape)
 
+        return image, label
+
+    @staticmethod
+    def preprocess(image, label):
+        """
+        Preprocesses the image and label to be in the correct format for training.
+
+        :param image: The image to be processed.
+        :type image: tf.Tensor
+        :param label: The label to be processed.
+        :type label: tf.Tensor
+        :return: The processed image and label.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = tf.image.per_image_whitening(image)
         return image, label
 
     def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
@@ -89,7 +104,8 @@ class GoData:
         else:
             file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
 
-        image, label = self.read_and_decode(file_name_queue)
+        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
+        image, label = self.preprocess(image, label)
 
         images, labels = tf.train.shuffle_batch(
             [image, label], batch_size=batch_size, num_threads=2,
@@ -367,7 +383,7 @@ class GoData:
         """
         self.import_mat_file(file_path)
 
-    def preprocess(self):
+    def pretfrecords_preprocess(self):
         """
         Preprocesses the data.
         Should be overwritten by subclasses.
@@ -393,7 +409,7 @@ class GoData:
         for import_file_path in import_file_paths:
             print('Converting %s...' % import_file_path)
             self.import_file(import_file_path)
-            self.preprocess()
+            self.pretfrecords_preprocess()
             self.data_name = os.path.splitext(os.path.basename(import_file_path))[0]
             self.convert_to_tfrecords()
 
