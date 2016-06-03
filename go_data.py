@@ -468,7 +468,6 @@ class GoData:
         for import_file_path in import_file_paths:
             print('Converting %s...' % import_file_path)
             self.import_file(import_file_path)
-            self.pretfrecords_preprocess()
             self.data_name = os.path.splitext(os.path.basename(import_file_path))[0]
             self.convert_to_tfrecords()
 
