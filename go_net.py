@@ -47,6 +47,8 @@ class GoNet(multiprocessing.Process):
         self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
         self.queue = message_queue
 
+        os.nice(10)
+
     def create_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images.

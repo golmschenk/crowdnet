@@ -4,8 +4,11 @@ Code for simplifying generically used functions.
 import tensorflow as tf
 import math
 
+initial_weight_deviation = 0.01
+leaky_relu_leakiness = 0.001
 
-def weight_variable(shape, stddev=0.001):
+
+def weight_variable(shape, stddev=initial_weight_deviation):
     """
     Create a generic weight variable.
 
@@ -20,7 +23,7 @@ def weight_variable(shape, stddev=0.001):
     return tf.Variable(initial)
 
 
-def bias_variable(shape, constant=0.001):
+def bias_variable(shape, constant=initial_weight_deviation):
     """
     Create a generic bias variable.
 
@@ -62,7 +65,7 @@ def leaky_relu(x):
     :return: The tensor filtering on the leaky activation.
     :rtype: tf.Tensor
     """
-    return tf.maximum(tf.mul(0.001, x), x)
+    return tf.maximum(tf.mul(leaky_relu_leakiness, x), x)
 
 
 def size_from_stride_two(size, iterations=1):
@@ -80,3 +83,14 @@ def size_from_stride_two(size, iterations=1):
         return math.ceil(size / 2)
     else:
         return math.ceil(size_from_stride_two(size, iterations=iterations - 1) / 2)
+
+
+def random_boolean_tensor():
+    """
+    Generates a single element boolean tensor with a random value.
+
+    :return:  The random boolean tensor.
+    :rtype: tf.Tensor
+    """
+    uniform_random = tf.random_uniform([], 0, 1.0)
+    return tf.less(uniform_random, 0.5)

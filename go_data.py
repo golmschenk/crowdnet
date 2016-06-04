@@ -7,6 +7,8 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
+from convenience import random_boolean_tensor
+
 
 class GoData:
     """
@@ -44,7 +46,7 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    def read_and_decode(self, filename_queue):
+    def read_and_decode_single_example_from_tfrecords(self, filename_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
@@ -64,10 +66,81 @@ class GoData:
 
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
         unnormalized_image = tf.reshape(flat_image, self.image_shape)
-        image = tf.cast(unnormalized_image, tf.float32) * (1. / 255) - 0.5
+        image = tf.cast(unnormalized_image, tf.float32)
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
         label = tf.reshape(flat_label, self.label_shape)
+
+        return image, label
+
+    @staticmethod
+    def preprocess(image, label):
+        """
+        Preprocesses the image and label to be in the correct format for training.
+
+        :param image: The image to be processed.
+        :type image: tf.Tensor
+        :param label: The label to be processed.
+        :type label: tf.Tensor
+        :return: The processed image and label.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = tf.image.per_image_whitening(image)
+        return image, label
+
+    @staticmethod
+    def horizontally_flip_label(label):
+        """
+        Changes the label in such a way that it matches its corresponding image if it's been horizontally flipped.
+        Should be overridden depending on the type of label data.
+
+        :param label: The label to be "flipped".
+        :type label: tf.Tensor
+        :return: The "flipped" label.
+        :rtype: tf.Tensor
+        """
+        return tf.image.flip_left_right(label)
+
+    def randomly_flip_horizontally(self, image, label):
+        """
+        Simultaneously and randomly flips the image and label horizontally, such that they still match after flipping.
+
+        :param image: The image to be flipped (maybe).
+        :type image: tf.Tensor
+        :param label: The label to be flipped (maybe).
+        :type label: tf.Tensor
+        :return: The image and label which may be flipped.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        should_flip = random_boolean_tensor()
+        image = tf.cond(
+            should_flip,
+            lambda: tf.image.flip_left_right(image),
+            lambda: image
+        )
+        label = tf.cond(
+            should_flip,
+            lambda: self.horizontally_flip_label(label),
+            lambda: label
+        )
+        return image, label
+
+    def augment(self, image, label):
+        """
+        Augments the data in various ways.
+
+        :param image: The image to be augmented.
+        :type image: tf.Tensor
+        :param label: The label to be augmented
+        :type label: tf.Tensor
+        :return: The augmented image and label
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = image + tf.random_normal(self.image_shape, mean=0, stddev=8)
+        image = tf.image.random_brightness(image, max_delta=64)
+        image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+
+        image, label = self.randomly_flip_horizontally(image, label)
 
         return image, label
 
@@ -89,7 +162,9 @@ class GoData:
         else:
             file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
 
-        image, label = self.read_and_decode(file_name_queue)
+        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
+        image, label = self.augment(image, label)
+        image, label = self.preprocess(image, label)
 
         images, labels = tf.train.shuffle_batch(
             [image, label], batch_size=batch_size, num_threads=2,
@@ -367,7 +442,7 @@ class GoData:
         """
         self.import_mat_file(file_path)
 
-    def preprocess(self):
+    def pretfrecords_preprocess(self):
         """
         Preprocesses the data.
         Should be overwritten by subclasses.
@@ -393,7 +468,6 @@ class GoData:
         for import_file_path in import_file_paths:
             print('Converting %s...' % import_file_path)
             self.import_file(import_file_path)
-            self.preprocess()
             self.data_name = os.path.splitext(os.path.basename(import_file_path))[0]
             self.convert_to_tfrecords()
 
