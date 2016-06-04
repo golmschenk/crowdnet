@@ -136,9 +136,8 @@ class GoData:
         :return: The augmented image and label
         :rtype: (tf.Tensor, tf.Tensor)
         """
+        # Add Gaussian noise.
         image = image + tf.random_normal(self.image_shape, mean=0, stddev=8)
-        image = tf.image.random_brightness(image, max_delta=64)
-        image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
 
         image, label = self.randomly_flip_horizontally(image, label)
 
