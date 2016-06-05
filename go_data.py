@@ -25,8 +25,8 @@ class GoData:
         self.channels = 3
         self.original_height = 464
         self.original_width = 624
-        self.image_shape = [self.height, self.width, self.channels]
-        self.label_shape = [self.height, self.width, 1]
+        self.image_shape = [self.original_height, self.original_width, self.channels]
+        self.label_shape = [self.original_height, self.original_width, 1]
         self.images = None
         self.labels = None
 
@@ -73,8 +73,23 @@ class GoData:
 
         return image, label
 
+    def preaugmentation_preprocess(self, image, label):
+        """
+        Preprocesses the image and label to be in the correct format for training.
+
+        :param image: The image to be processed.
+        :type image: tf.Tensor
+        :param label: The label to be processed.
+        :type label: tf.Tensor
+        :return: The processed image and label.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = tf.image.resize_images(image, self.height, self.width)
+        label = tf.image.resize_images(label, self.height, self.width)
+        return image, label
+
     @staticmethod
-    def preprocess(image, label):
+    def postaugmentation_preprocess(image, label):
         """
         Preprocesses the image and label to be in the correct format for training.
 
@@ -137,7 +152,7 @@ class GoData:
         :rtype: (tf.Tensor, tf.Tensor)
         """
         # Add Gaussian noise.
-        image = image + tf.random_normal(self.image_shape, mean=0, stddev=8)
+        image = image + tf.random_normal(image.get_shape(), mean=0, stddev=8)
 
         image, label = self.randomly_flip_horizontally(image, label)
 
@@ -162,8 +177,9 @@ class GoData:
             file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
 
         image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
+        image, label = self.preaugmentation_preprocess(image, label)
         image, label = self.augment(image, label)
-        image, label = self.preprocess(image, label)
+        image, label = self.postaugmentation_preprocess(image, label)
 
         images, labels = tf.train.shuffle_batch(
             [image, label], batch_size=batch_size, num_threads=2,
