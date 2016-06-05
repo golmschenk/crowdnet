@@ -22,7 +22,7 @@ class GoNet(multiprocessing.Process):
         super().__init__()
 
         # Common variables.
-        self.batch_size = 8
+        self.batch_size = 3
         self.initial_learning_rate = 0.00001
         self.data = GoData()
         self.dropout_keep_probability = 0.5
@@ -314,7 +314,7 @@ class GoNet(multiprocessing.Process):
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
-            batch_size=self.data.validation_size
+            batch_size=self.batch_size
         )
         images_tensor, labels_tensor = self.create_feed_selectable_input_tensors(
             {
