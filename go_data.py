@@ -23,10 +23,6 @@ class GoData:
         self.height = 464 // 8
         self.width = 624 // 8
         self.channels = 3
-        self.original_height = 464
-        self.original_width = 624
-        self.image_shape = [self.original_height, self.original_width, self.channels]
-        self.label_shape = [self.original_height, self.original_width, 1]
         self.images = None
         self.labels = None
 
