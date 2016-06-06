@@ -281,9 +281,6 @@ class GoData:
         Converts NumPy files to a TFRecords file.
         """
         self.load_numpy_files()
-        self.shrink()
-        if augment:
-            self.augment_data_set()
         self.convert_to_tfrecords()
 
     def load_numpy_files(self):
