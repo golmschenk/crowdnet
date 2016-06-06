@@ -147,7 +147,7 @@ class GoNet(multiprocessing.Process):
         b = tf.maximum(0.0, (1 - ratio))
         r = tf.maximum(0.0, (ratio - 1))
         g = 1 - b - r
-        return tf.concat(3, [r, g, b]) - 0.5
+        return tf.concat(3, [r, g, b]) * 2 - 1
 
     def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
         """
@@ -279,7 +279,7 @@ class GoNet(multiprocessing.Process):
                     )
                     duration = time.time() - start_time
                     validation_writer.add_summary(summaries, self.step)
-                    print('Validation step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name,
+                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (self.step, self.step_summary_name,
                                                                                loss, duration))
 
                 self.step += 1
