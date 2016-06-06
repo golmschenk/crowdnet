@@ -22,15 +22,9 @@ class CrowdData(GoData):
         self.original_width = 238  # The width of the original data.
         self.image_shape = [self.height, self.width, self.channels]
         self.label_shape = [self.height, self.width, 1]
-
-    def augment_data_set(self):
-        """
-        Augments the data set with some basic approaches.
-        """
-        self.offset_augmentation(1)
-        self.gaussian_noise_augmentation(12, 8)
+        self.train_size = 'all'
 
 
 if __name__ == '__main__':
     data = CrowdData()
-    data.numpy_files_to_tfrecords(augment=True)
+    data.numpy_files_to_tfrecords(augment=False)
