@@ -20,9 +20,12 @@ class GoData:
         self.data_name = 'nyud_micro'
         self.import_directory = 'data/import'
         self.dataset_container = 'directory'
-        self.height = 464 // 8
-        self.width = 624 // 8
-        self.channels = 3
+
+        # Note, these are *training* sizes. Data will be resized to this size.
+        self.image_height = 464 // 8
+        self.image_width = 624 // 8
+        self.image_depth = 3
+
         self.images = None
         self.labels = None
 
@@ -57,31 +60,32 @@ class GoData:
         features = tf.parse_single_example(
             serialized_example,
             features={
-                'height': tf.FixedLenFeature([], tf.int64),
-                'width': tf.FixedLenFeature([], tf.int64),
-                'channels': tf.FixedLenFeature([], tf.int64),
+                'image_height': tf.FixedLenFeature([], tf.int64),
+                'image_width': tf.FixedLenFeature([], tf.int64),
+                'image_depth': tf.FixedLenFeature([], tf.int64),
                 'image_raw': tf.FixedLenFeature([], tf.string),
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
-        height_tensor = tf.cast(features['height'], tf.int64)
-        width_tensor = tf.cast(features['width'], tf.int64)
-        channels_tensor = tf.cast(features['channels'], tf.int64)
+        image_height_tensor = tf.cast(features['image_height'], tf.int64)
+        image_width_tensor = tf.cast(features['image_width'], tf.int64)
+        image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
 
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
             coordinator = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coordinator)
-            height, width, channels = session.run([height_tensor, width_tensor, channels_tensor])
+            image_height, image_width, image_depth = session.run([image_height_tensor, image_width_tensor,
+                                                                  image_depth_tensor])
             coordinator.request_stop()
             coordinator.join(threads)
 
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, [height, width, channels])
+        unnormalized_image = tf.reshape(flat_image, [image_height, image_width, image_depth])
         image = tf.cast(unnormalized_image, tf.float32)
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, [height, width, 1])
+        label = tf.reshape(flat_label, [image_height, image_width, 1])
 
         return image, label
 
@@ -96,8 +100,8 @@ class GoData:
         :return: The processed image and label.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        image = tf.image.resize_images(image, self.height, self.width)
-        label = tf.image.resize_images(label, self.height, self.width)
+        image = tf.image.resize_images(image, self.image_height, self.image_width)
+        label = tf.image.resize_images(label, self.image_height, self.image_width)
         return image, label
 
     @staticmethod
@@ -326,9 +330,9 @@ class GoData:
             image_raw = images[index].tostring()
             label_raw = labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
-                'height': _int64_feature(rows),
-                'width': _int64_feature(cols),
-                'channels': _int64_feature(depth),
+                'image_height': _int64_feature(rows),
+                'image_width': _int64_feature(cols),
+                'image_depth': _int64_feature(depth),
                 'image_raw': _bytes_feature(image_raw),
                 'label_raw': _bytes_feature(label_raw),
             }))
@@ -349,17 +353,17 @@ class GoData:
         :return: The resized array.
         :rtype: np.ndarray
         """
-        if array.shape[1] == self.height and array.shape[2] == self.width:
+        if array.shape[1] == self.image_height and array.shape[2] == self.image_width:
             return array  # The shape is already right, so don't needlessly process.
         compression_shape = [
             array.shape[0],
-            self.height,
-            array.shape[1] // self.height,
-            self.width,
-            array.shape[2] // self.width,
+            self.image_height,
+            array.shape[1] // self.image_height,
+            self.image_width,
+            array.shape[2] // self.image_width,
         ]
         if len(array.shape) == 4:
-            compression_shape.append(self.channels)
+            compression_shape.append(self.image_depth)
             return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
         else:
             return array.reshape(compression_shape).mean(4).mean(2)
