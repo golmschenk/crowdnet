@@ -46,30 +46,44 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    def read_and_decode_single_example_from_tfrecords(self, filename_queue):
+    def read_and_decode_single_example_from_tfrecords(self, file_name_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
-        :param filename_queue: The file name queue to be read.
-        :type filename_queue: tf.QueueBase
+        :param file_name_queue: The file name queue to be read.
+        :type file_name_queue: tf.QueueBase
         :return: The read file data including the image data and label data.
         :rtype: (tf.Tensor, tf.Tensor)
         """
         reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(filename_queue)
+        _, serialized_example = reader.read(file_name_queue)
         features = tf.parse_single_example(
             serialized_example,
             features={
+                'height': tf.FixedLenFeature([], tf.int64),
+                'width': tf.FixedLenFeature([], tf.int64),
+                'channels': tf.FixedLenFeature([], tf.int64),
                 'image_raw': tf.FixedLenFeature([], tf.string),
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
+        height_tensor = tf.cast(features['height'], tf.int64)
+        width_tensor = tf.cast(features['width'], tf.int64)
+        channels_tensor = tf.cast(features['channels'], tf.int64)
+        # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
+        with tf.Session() as session:
+            coordinator = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(coord=coordinator)
+            height, width, channels = session.run([height_tensor, width_tensor, channels_tensor])
+            coordinator.request_stop()
+            coordinator.join(threads)
+
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, self.image_shape)
+        unnormalized_image = tf.reshape(flat_image, [height, width, channels])
         image = tf.cast(unnormalized_image, tf.float32)
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, self.label_shape)
+        label = tf.reshape(flat_label, [height, width, 1])
 
         return image, label
 
