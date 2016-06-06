@@ -46,7 +46,8 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    def read_and_decode_single_example_from_tfrecords(self, file_name_queue):
+    @staticmethod
+    def read_and_decode_single_example_from_tfrecords(file_name_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
@@ -70,6 +71,7 @@ class GoData:
         height_tensor = tf.cast(features['height'], tf.int64)
         width_tensor = tf.cast(features['width'], tf.int64)
         channels_tensor = tf.cast(features['channels'], tf.int64)
+
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
             coordinator = tf.train.Coordinator()
@@ -192,7 +194,8 @@ class GoData:
 
         image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
         image, label = self.preaugmentation_preprocess(image, label)
-        image, label = self.augment(image, label)
+        if data_type == 'train':
+            image, label = self.augment(image, label)
         image, label = self.postaugmentation_preprocess(image, label)
 
         images, labels = tf.train.shuffle_batch(
