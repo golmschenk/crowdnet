@@ -69,13 +69,13 @@ class GoNet(multiprocessing.Process):
         :return: The label maps tensor.
         :rtype: tf.Tensor
         """
-        pixel_count = self.data.height * self.data.width
-        flat_images = tf.reshape(images, [-1, pixel_count * self.data.channels])
-        weights = weight_variable([pixel_count * self.data.channels, pixel_count], stddev=0.001)
+        pixel_count = self.data.image_height * self.data.image_width
+        flat_images = tf.reshape(images, [-1, pixel_count * self.data.image_depth])
+        weights = weight_variable([pixel_count * self.data.image_depth, pixel_count], stddev=0.001)
         biases = bias_variable([pixel_count], constant=0.001)
 
         flat_predicted_labels = tf.matmul(flat_images, weights) + biases
-        predicted_labels = tf.reshape(flat_predicted_labels, [-1, self.data.height, self.data.width, 1])
+        predicted_labels = tf.reshape(flat_predicted_labels, [-1, self.data.image_height, self.data.image_width, 1])
         return predicted_labels
 
     def create_loss_tensor(self, predicted_labels, labels):
@@ -147,7 +147,7 @@ class GoNet(multiprocessing.Process):
         b = tf.maximum(0.0, (1 - ratio))
         r = tf.maximum(0.0, (ratio - 1))
         g = 1 - b - r
-        return tf.concat(3, [r, g, b]) - 0.5
+        return tf.concat(3, [r, g, b]) * 2 - 1
 
     def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
         """
@@ -279,7 +279,7 @@ class GoNet(multiprocessing.Process):
                     )
                     duration = time.time() - start_time
                     validation_writer.add_summary(summaries, self.step)
-                    print('Validation step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name,
+                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (self.step, self.step_summary_name,
                                                                                loss, duration))
 
                 self.step += 1
@@ -379,7 +379,7 @@ class GoNet(multiprocessing.Process):
         """
         print('Preparing data...')
         # Setup the inputs.
-        images_tensor = tf.placeholder(tf.float32, [None, self.data.height, self.data.width, 3])
+        images_tensor = tf.placeholder(tf.float32, [None, self.data.image_height, self.data.image_width, 3])
 
         print('Building graph...')
         # Add the forward pass operations to the graph.

@@ -93,9 +93,9 @@ class TestData:
         four_dimensions = np.array([[[[1]]]])  # Collection of images.
         three_dimensions = np.array([[[1]]])  # Collection of depths.
         go_data = GoData()
-        go_data.width = 1
-        go_data.height = 1
-        go_data.channels = 1
+        go_data.image_width = 1
+        go_data.image_height = 1
+        go_data.image_depth = 1
 
         rebinned_four_dimensions = go_data.shrink_array_with_rebinning(four_dimensions)
         rebinned_three_dimensions = go_data.shrink_array_with_rebinning(three_dimensions)
