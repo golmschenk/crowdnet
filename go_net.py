@@ -147,7 +147,7 @@ class GoNet(multiprocessing.Process):
         b = tf.maximum(0.0, (1 - ratio))
         r = tf.maximum(0.0, (ratio - 1))
         g = 1 - b - r
-        return tf.concat(3, [r, g, b]) * 2 - 1
+        return (tf.concat(3, [r, g, b]) * 2) - 1
 
     def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
         """
@@ -166,8 +166,10 @@ class GoNet(multiprocessing.Process):
         label_heat_map = self.convert_to_heat_map_rgb(labels)
         predicted_label_heat_map = self.convert_to_heat_map_rgb(predicted_labels)
         label_difference_heat_map = self.convert_to_heat_map_rgb(label_differences)
+        display_images = tf.div(images, tf.reduce_max(tf.abs(images)))
 
-        comparison_image = tf.concat(1, [images, label_heat_map, predicted_label_heat_map, label_difference_heat_map])
+        comparison_image = tf.concat(1, [display_images, label_heat_map, predicted_label_heat_map,
+                                         label_difference_heat_map])
         tf.image_summary('comparison', comparison_image)
 
     def interface_handler(self):
