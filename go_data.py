@@ -126,8 +126,7 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    @staticmethod
-    def read_and_decode_single_example_from_tfrecords(file_name_queue):
+    def read_and_decode_single_example_from_tfrecords(self, file_name_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
@@ -151,13 +150,33 @@ class GoData:
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
+        image_shape, label_shape = self.extract_shapes_from_tfrecords_features(features)
+
+        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
+        unnormalized_image = tf.reshape(flat_image, image_shape)
+        image = tf.cast(unnormalized_image, tf.float32)
+
+        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
+        label = tf.reshape(flat_label, label_shape)
+
+        return image, label
+
+    @staticmethod
+    def extract_shapes_from_tfrecords_features(features):
+        """
+        Extracts the image and label shapes from the TFRecords' features. Uses a short TF session to do so.
+
+        :param features: The recovered TFRecords' protobuf features.
+        :type features: dict[str, tf.Tensor]
+        :return: The image and label shape tuples.
+        :rtype: (int, int, int), (int, int, int)
+        """
         image_height_tensor = tf.cast(features['image_height'], tf.int64)
         image_width_tensor = tf.cast(features['image_width'], tf.int64)
         image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
         label_height_tensor = tf.cast(features['label_height'], tf.int64)
         label_width_tensor = tf.cast(features['label_width'], tf.int64)
         label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
-
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
             coordinator = tf.train.Coordinator()
@@ -167,15 +186,9 @@ class GoData:
                  label_depth_tensor])
             coordinator.request_stop()
             coordinator.join(threads)
-
-        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, [image_height, image_width, image_depth])
-        image = tf.cast(unnormalized_image, tf.float32)
-
-        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, [label_height, label_width, label_depth])
-
-        return image, label
+        image_shape = (image_height, image_width, image_depth)
+        label_shape = (label_height, label_width, label_depth)
+        return image_shape, label_shape
 
     def preaugmentation_preprocess(self, image, label):
         """
@@ -381,7 +394,7 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def numpy_files_to_tfrecords(self, augment=False):
+    def numpy_files_to_tfrecords(self):
         """
         Converts NumPy files to a TFRecords file.
         """
