@@ -424,8 +424,11 @@ class GoData:
         image_width = images.shape[2]
         image_depth = images.shape[3]
         label_height = labels.shape[1]
-        label_width = labels.shape[2]
-        if len(labels.shape) == 4:
+        if len(labels.shape) > 2:
+            label_width = labels.shape[2]
+        else:
+            label_width = 1
+        if len(labels.shape) > 3:
             label_depth = labels.shape[3]
         else:
             label_depth = 1
