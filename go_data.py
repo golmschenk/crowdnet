@@ -145,19 +145,26 @@ class GoData:
                 'image_width': tf.FixedLenFeature([], tf.int64),
                 'image_depth': tf.FixedLenFeature([], tf.int64),
                 'image_raw': tf.FixedLenFeature([], tf.string),
+                'label_height': tf.FixedLenFeature([], tf.int64),
+                'label_width': tf.FixedLenFeature([], tf.int64),
+                'label_depth': tf.FixedLenFeature([], tf.int64),
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
         image_height_tensor = tf.cast(features['image_height'], tf.int64)
         image_width_tensor = tf.cast(features['image_width'], tf.int64)
         image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
+        label_height_tensor = tf.cast(features['label_height'], tf.int64)
+        label_width_tensor = tf.cast(features['label_width'], tf.int64)
+        label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
 
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
             coordinator = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coordinator)
-            image_height, image_width, image_depth = session.run([image_height_tensor, image_width_tensor,
-                                                                  image_depth_tensor])
+            image_height, image_width, image_depth, label_height, label_width, label_depth = session.run(
+                [image_height_tensor, image_width_tensor, image_depth_tensor, label_height_tensor, label_width_tensor,
+                 label_depth_tensor])
             coordinator.request_stop()
             coordinator.join(threads)
 
@@ -166,7 +173,7 @@ class GoData:
         image = tf.cast(unnormalized_image, tf.float32)
 
         flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, [image_height, image_width, 1])
+        label = tf.reshape(flat_label, [label_height, label_width, label_depth])
 
         return image, label
 
@@ -400,9 +407,15 @@ class GoData:
         if images.shape[0] != number_of_examples:
             raise ValueError("Images count %d does not match label count %d." %
                              (images.shape[0], number_of_examples))
-        rows = images.shape[1]
-        cols = images.shape[2]
-        depth = images.shape[3]
+        image_height = images.shape[1]
+        image_width = images.shape[2]
+        image_depth = images.shape[3]
+        label_height = labels.shape[1]
+        label_width = labels.shape[2]
+        if len(labels.shape) == 4:
+            label_depth = labels.shape[3]
+        else:
+            label_depth = 1
 
         filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
         print('Writing', filename)
@@ -411,10 +424,13 @@ class GoData:
             image_raw = images[index].tostring()
             label_raw = labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
-                'image_height': _int64_feature(rows),
-                'image_width': _int64_feature(cols),
-                'image_depth': _int64_feature(depth),
+                'image_height': _int64_feature(image_height),
+                'image_width': _int64_feature(image_width),
+                'image_depth': _int64_feature(image_depth),
                 'image_raw': _bytes_feature(image_raw),
+                'label_height': _int64_feature(label_height),
+                'label_width': _int64_feature(label_width),
+                'label_depth': _int64_feature(label_depth),
                 'label_raw': _bytes_feature(label_raw),
             }))
             writer.write(example.SerializeToString())
