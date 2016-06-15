@@ -30,21 +30,14 @@ class CrowdNet(GoNet):
         :return: The loss tensor.
         :rtype: tf.Tensor
         """
-        return self.create_relative_differences_tensor(predicted_labels, labels)
-
-    @staticmethod
-    def create_relative_differences_tensor(predicted_labels, labels):
-        """
-        Creates and adds to the graph a tensor which determines the L1 absolute differences between two label tensors.
-
-        :param predicted_labels: The predicted densities.
-        :type predicted_labels: tf.Tensor
-        :param labels: The ground truth densities.
-        :type labels: tf.Tensor
-        :return: The difference tensor.
-        :rtype: tf.Tensor
-        """
-        return tf.abs(predicted_labels - labels)
+        absolute_differences_tensor = self.create_absolute_differences_tensor(predicted_labels, labels)
+        miscount_tensor = tf.reduce_sum(absolute_differences_tensor)
+        person_count_tensor = tf.reduce_sum(labels)
+        relative_miscount_tensor = miscount_tensor / person_count_tensor
+        tf.scalar_summary('Person count', person_count_tensor)
+        tf.scalar_summary('Person miscount', miscount_tensor)
+        tf.scalar_summary('Relative person miscount', relative_miscount_tensor)
+        return absolute_differences_tensor
 
     def create_inference_op(self, images):
         """
