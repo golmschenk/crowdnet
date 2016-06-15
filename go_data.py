@@ -33,7 +33,88 @@ class GoData:
         self.validation_size = 1
         self.test_size = 0
 
+        # Internal attributes.
+        self._label_height = None
+        self._label_width = None
+        self._label_depth = None
+
         os.nice(10)
+
+    @property
+    def label_height(self):
+        """
+        The height of the label data. Defaults to the height of the image.
+
+        :return: Label height.
+        :rtype: int
+        """
+        if self._label_height is None:
+            return self.image_height
+        return self._label_height
+
+    @label_height.setter
+    def label_height(self, value):
+        self._label_height = value
+
+    @property
+    def label_width(self):
+        """
+        The width of the label data. Defaults to the width of the image.
+
+        :return: Label width.
+        :rtype: int
+        """
+        if self._label_width is None:
+            return self.image_width
+        return self._label_width
+
+    @label_width.setter
+    def label_width(self, value):
+        self._label_width = value
+
+    @property
+    def label_depth(self):
+        """
+        The depth of the label data. Defaults to 1.
+
+        :return: Label depth.
+        :rtype: int
+        """
+        if self._label_depth is None:
+            return 1
+        return self._label_depth
+
+    @label_depth.setter
+    def label_depth(self, value):
+        self._label_depth = value
+
+    @property
+    def image_shape(self):
+        """
+        The tuple shape of the image.
+
+        :return: Image shape.
+        :rtype: (int, int, int)
+        """
+        return self.image_height, self.image_width, self.image_depth
+
+    @image_shape.setter
+    def image_shape(self, shape):
+        self.image_height, self.image_width, self.image_depth = shape
+
+    @property
+    def label_shape(self):
+        """
+        The tuple shape of the label.
+
+        :return: Label shape.
+        :rtype: (int, int, int)
+        """
+        return self.label_height, self.label_width, self.label_depth
+
+    @label_shape.setter
+    def label_shape(self, shape):
+        self.label_height, self.label_width, self.label_depth = shape
 
     @property
     def data_path(self):
@@ -45,8 +126,7 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    @staticmethod
-    def read_and_decode_single_example_from_tfrecords(file_name_queue):
+    def read_and_decode_single_example_from_tfrecords(self, file_name_queue):
         """
         A definition of how TF should read a single example proto from the file record.
 
@@ -64,30 +144,51 @@ class GoData:
                 'image_width': tf.FixedLenFeature([], tf.int64),
                 'image_depth': tf.FixedLenFeature([], tf.int64),
                 'image_raw': tf.FixedLenFeature([], tf.string),
+                'label_height': tf.FixedLenFeature([], tf.int64),
+                'label_width': tf.FixedLenFeature([], tf.int64),
+                'label_depth': tf.FixedLenFeature([], tf.int64),
                 'label_raw': tf.FixedLenFeature([], tf.string),
             })
 
+        image_shape, label_shape = self.extract_shapes_from_tfrecords_features(features)
+
+        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
+        unnormalized_image = tf.reshape(flat_image, image_shape)
+        image = tf.cast(unnormalized_image, tf.float32)
+
+        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
+        label = tf.reshape(flat_label, label_shape)
+
+        return image, label
+
+    @staticmethod
+    def extract_shapes_from_tfrecords_features(features):
+        """
+        Extracts the image and label shapes from the TFRecords' features. Uses a short TF session to do so.
+
+        :param features: The recovered TFRecords' protobuf features.
+        :type features: dict[str, tf.Tensor]
+        :return: The image and label shape tuples.
+        :rtype: (int, int, int), (int, int, int)
+        """
         image_height_tensor = tf.cast(features['image_height'], tf.int64)
         image_width_tensor = tf.cast(features['image_width'], tf.int64)
         image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
-
+        label_height_tensor = tf.cast(features['label_height'], tf.int64)
+        label_width_tensor = tf.cast(features['label_width'], tf.int64)
+        label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
             coordinator = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coordinator)
-            image_height, image_width, image_depth = session.run([image_height_tensor, image_width_tensor,
-                                                                  image_depth_tensor])
+            image_height, image_width, image_depth, label_height, label_width, label_depth = session.run(
+                [image_height_tensor, image_width_tensor, image_depth_tensor, label_height_tensor, label_width_tensor,
+                 label_depth_tensor])
             coordinator.request_stop()
             coordinator.join(threads)
-
-        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, [image_height, image_width, image_depth])
-        image = tf.cast(unnormalized_image, tf.float32)
-
-        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, [image_height, image_width, 1])
-
-        return image, label
+        image_shape = (image_height, image_width, image_depth)
+        label_shape = (label_height, label_width, label_depth)
+        return image_shape, label_shape
 
     def preaugmentation_preprocess(self, image, label):
         """
@@ -293,7 +394,7 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def numpy_files_to_tfrecords(self, augment=False):
+    def numpy_files_to_tfrecords(self):
         """
         Converts NumPy files to a TFRecords file.
         """
@@ -319,9 +420,18 @@ class GoData:
         if images.shape[0] != number_of_examples:
             raise ValueError("Images count %d does not match label count %d." %
                              (images.shape[0], number_of_examples))
-        rows = images.shape[1]
-        cols = images.shape[2]
-        depth = images.shape[3]
+        image_height = images.shape[1]
+        image_width = images.shape[2]
+        image_depth = images.shape[3]
+        label_height = labels.shape[1]
+        if len(labels.shape) > 2:
+            label_width = labels.shape[2]
+        else:
+            label_width = 1
+        if len(labels.shape) > 3:
+            label_depth = labels.shape[3]
+        else:
+            label_depth = 1
 
         filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
         print('Writing', filename)
@@ -330,10 +440,13 @@ class GoData:
             image_raw = images[index].tostring()
             label_raw = labels[index].tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
-                'image_height': _int64_feature(rows),
-                'image_width': _int64_feature(cols),
-                'image_depth': _int64_feature(depth),
+                'image_height': _int64_feature(image_height),
+                'image_width': _int64_feature(image_width),
+                'image_depth': _int64_feature(image_depth),
                 'image_raw': _bytes_feature(image_raw),
+                'label_height': _int64_feature(label_height),
+                'label_width': _int64_feature(label_width),
+                'label_depth': _int64_feature(label_depth),
                 'label_raw': _bytes_feature(label_raw),
             }))
             writer.write(example.SerializeToString())
