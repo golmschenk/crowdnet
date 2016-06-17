@@ -29,10 +29,6 @@ class GoData:
         self.images = None
         self.labels = None
 
-        self.train_size = 9
-        self.validation_size = 1
-        self.test_size = 0
-
         # Internal attributes.
         self._label_height = None
         self._label_width = None
