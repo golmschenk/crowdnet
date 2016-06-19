@@ -16,7 +16,6 @@ class CrowdData(GoData):
         super().__init__()
 
         self.data_directory = 'data'
-        self.data_name = 'human'
         self.images_numpy_file_name = 'images.npy'
         self.labels_numpy_file_name = 'densities.npy'
         self.image_height = 158 // 2  # The height we'll be training on (data will be shrunk if needed).
@@ -80,7 +79,7 @@ class CrowdData(GoData):
         :type file_path_pair: (str, str)
         """
         images = np.load(file_path_pair[0])
-        labels = np.load(file_path_pair[1])
+        labels = np.load(file_path_pair[1]).astype(np.float32)
         if len(images.shape) == 3:
             images = np.expand_dims(images, axis=0)
             labels = np.expand_dims(labels, axis=0)
