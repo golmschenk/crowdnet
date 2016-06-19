@@ -80,8 +80,14 @@ class CrowdData(GoData):
         :param file_path_pair: The pair of file paths.
         :type file_path_pair: (str, str)
         """
-        self.images = np.load(file_path_pair[0])
-        self.labels = np.load(file_path_pair[1])
+        images = np.load(file_path_pair[0])
+        labels = np.load(file_path_pair[1])
+        if images.shape == 3:
+            images = np.expand_dims(images, axis=0)
+            labels = np.expand_dims(labels, axis=0)
+        self.images = images
+        self.labels = labels
+
 
 if __name__ == '__main__':
     data = CrowdData()
