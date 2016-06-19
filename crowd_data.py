@@ -19,7 +19,6 @@ class CrowdData(GoData):
         self.data_name = 'human'
         self.images_numpy_file_name = 'images.npy'
         self.labels_numpy_file_name = 'densities.npy'
-        self.dataset_container = 'file'
         self.image_height = 158 // 2  # The height we'll be training on (data will be shrunk if needed).
         self.image_width = 238 // 2  # The width we'll be training on (data will be shrunk if needed).
         self.train_size = 'all'
@@ -61,7 +60,7 @@ class CrowdData(GoData):
         """
         image_file_path = import_file_path[0]
         export_name = os.path.splitext(os.path.basename(image_file_path))[0]
-        self.data_name = export_name.replace('images', 'data_pair').replace('image', 'data_pair')
+        self.data_name = export_name.replace('images', 'data_pairs').replace('image', 'data_pair')
 
     def import_file(self, file_path):
         """
