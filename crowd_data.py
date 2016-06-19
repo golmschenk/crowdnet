@@ -47,6 +47,19 @@ class CrowdData(GoData):
                     import_file_paths.append((numpy_file_name, labels_file_name))
         return import_file_paths
 
+    def obtain_export_name(self, import_file_path):
+        """
+        Extracts the name to be used for the export file.
+
+        :param import_file_path: The import path.
+        :type import_file_path: str | (str, str)
+        :return: The name of the export file.
+        :rtype: str
+        """
+        image_file_path = import_file_path[0]
+        export_name = os.path.splitext(os.path.basename(image_file_path))[0]
+        self.data_name = export_name.replace('images', 'data_pair').replace('image', 'data_pair')
+
 
 if __name__ == '__main__':
     data = CrowdData()
