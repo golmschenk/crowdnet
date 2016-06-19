@@ -604,7 +604,7 @@ class GoData:
         """
         import_file_paths = self.attain_import_file_paths()
         for import_file_path in import_file_paths:
-            print('Converting %s...' % import_file_path)
+            print('Converting %s...' % str(import_file_path))
             self.import_file(import_file_path)
             self.obtain_export_name(import_file_path)
             self.convert_to_tfrecords()
