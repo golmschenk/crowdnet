@@ -82,7 +82,7 @@ class CrowdData(GoData):
         """
         images = np.load(file_path_pair[0])
         labels = np.load(file_path_pair[1])
-        if images.shape == 3:
+        if len(images.shape) == 3:
             images = np.expand_dims(images, axis=0)
             labels = np.expand_dims(labels, axis=0)
         self.images = images
