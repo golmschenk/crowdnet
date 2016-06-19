@@ -606,8 +606,19 @@ class GoData:
         for import_file_path in import_file_paths:
             print('Converting %s...' % import_file_path)
             self.import_file(import_file_path)
-            self.data_name = os.path.splitext(os.path.basename(import_file_path))[0]
+            self.obtain_export_name(import_file_path)
             self.convert_to_tfrecords()
+
+    def obtain_export_name(self, import_file_path):
+        """
+        Extracts the name to be used for the export file.
+
+        :param import_file_path: The import path.
+        :type import_file_path: str | (str, str)
+        :return: The name of the export file.
+        :rtype: str
+        """
+        self.data_name = os.path.splitext(os.path.basename(import_file_path))[0]
 
     def attain_import_file_paths(self):
         """
