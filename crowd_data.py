@@ -16,8 +16,6 @@ class CrowdData(GoData):
         super().__init__()
 
         self.data_directory = 'data'
-        self.images_numpy_file_name = 'images.npy'
-        self.labels_numpy_file_name = 'densities.npy'
         self.image_height = 158 // 2  # The height we'll be training on (data will be shrunk if needed).
         self.image_width = 238 // 2  # The width we'll be training on (data will be shrunk if needed).
         self.train_size = 'all'
