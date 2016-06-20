@@ -7,6 +7,7 @@ import os
 import time
 import tensorflow as tf
 import numpy as np
+import sys
 
 from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
 from go_data import GoData
@@ -249,6 +250,12 @@ class GoNet(multiprocessing.Process):
         print('Starting training...')
         # Initialize the variables.
         self.session.run(initialize_op)
+
+        # Reload from saved model if passed.
+        command_line_arguments = sys.argv[1:]
+        if command_line_arguments:
+            print('Restoring model from %s...' % command_line_arguments[0])
+            self.saver.restore(self.session, command_line_arguments[0])
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
