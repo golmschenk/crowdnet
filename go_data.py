@@ -603,6 +603,8 @@ class GoData:
         Creates the TFRecords for the data.
         """
         import_file_paths = self.attain_import_file_paths()
+        if not import_file_paths:
+            print('No data found in %s.' % self.import_directory)
         for import_file_path in import_file_paths:
             print('Converting %s...' % str(import_file_path))
             self.import_file(import_file_path)
