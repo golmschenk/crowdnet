@@ -32,13 +32,39 @@ class CrowdNet(GoNet):
         :rtype: tf.Tensor
         """
         absolute_differences_tensor = self.create_absolute_differences_tensor(predicted_labels, labels)
-        miscount_tensor = tf.reduce_sum(absolute_differences_tensor)
-        person_count_tensor = tf.reduce_sum(labels)
-        relative_miscount_tensor = miscount_tensor / person_count_tensor
-        tf.scalar_summary('Person count', person_count_tensor)
-        tf.scalar_summary('Person miscount', miscount_tensor)
-        tf.scalar_summary('Relative person miscount', relative_miscount_tensor)
+        self.create_person_count_summaries(labels, predicted_labels)
         return absolute_differences_tensor
+
+    def create_person_count_summaries(self, labels, predicted_labels):
+        """
+        Creates the summaries for the counts of people.
+
+        :param labels: The true person density labels.
+        :type labels: tf.Tensor
+        :param predicted_labels: The predicted person density labels.
+        :type predicted_labels: tf.Tensor
+        """
+        true_person_count_tensor = self.mean_person_count_for_labels(labels)
+        predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels)
+        person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor)
+        relative_person_miscount_tensor = person_miscount_tensor / true_person_count_tensor
+        tf.scalar_summary('True person count', true_person_count_tensor)
+        tf.scalar_summary('Predicted person count', predicted_person_count_tensor)
+        tf.scalar_summary('Person miscount', person_miscount_tensor)
+        tf.scalar_summary('Relative person miscount', relative_person_miscount_tensor)
+
+    @staticmethod
+    def mean_person_count_for_labels(labels_tensor):
+        """
+        Sums the labels per image and takes the mean over the images.
+
+        :param labels_tensor: The person density labels tensor to process.
+        :type labels_tensor: tf.Tensor
+        :return: The mean count tensor.
+        :rtype: tf.Tensor
+        """
+        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]))
+        return mean_person_count_tensor
 
     def create_inference_op(self, images):
         """
