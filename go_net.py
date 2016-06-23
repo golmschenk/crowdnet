@@ -46,6 +46,7 @@ class GoNet(multiprocessing.Process):
         self.session = None
         self.dataset_selector_tensor = tf.placeholder(dtype=tf.string)
         self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
+        self.learning_rate_tensor = tf.placeholder(tf.float32)
         self.queue = message_queue
 
         os.nice(10)
@@ -56,6 +57,7 @@ class GoNet(multiprocessing.Process):
         return {
             self.dropout_keep_probability_tensor: self.dropout_keep_probability,
             self.dataset_selector_tensor: 'train',
+            self.learning_rate_tensor: self.initial_learning_rate
         }
 
     def train(self):
@@ -295,9 +297,13 @@ class GoNet(multiprocessing.Process):
                     save_path = self.saver.save(self.session, os.path.join('models', self.network_name + '.ckpt'),
                                                 global_step=self.step)
                     tf.train.write_graph(self.session.graph_def, 'models', self.network_name + '.pb')
-                    print("Model saved in file: %s" % save_path)
-                if message == 'quit':
+                    print('Model saved in file: %s' % save_path)
+                elif message == 'quit':
                     self.stop_signal = True
+                elif message.startswith('change learning rate'):
+                    message = self.queue.get()
+                    self.initial_learning_rate = float(message)
+                    print('New learning rate is %f.' % self.initial_learning_rate)
 
     def create_feed_selectable_input_tensors(self, dataset_dictionary):
         """
