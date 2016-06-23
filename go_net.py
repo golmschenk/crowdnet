@@ -50,6 +50,14 @@ class GoNet(multiprocessing.Process):
 
         os.nice(10)
 
+    @property
+    def default_feed_dictionary(self):
+        """The default feed dictionary"""
+        return {
+            self.dropout_keep_probability_tensor: self.dropout_keep_probability,
+            self.dataset_selector_tensor: 'train',
+        }
+
     def train(self):
         """
         Adds the training operations and runs the training loop.
@@ -113,8 +121,7 @@ class GoNet(multiprocessing.Process):
                 start_time = time.time()
                 _, loss, summaries = self.session.run(
                     [training_op, reduce_mean_loss_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability,
-                               self.dataset_selector_tensor: 'train'}
+                    feed_dict=self.default_feed_dictionary
                 )
                 duration = time.time() - start_time
 
@@ -128,7 +135,8 @@ class GoNet(multiprocessing.Process):
                     start_time = time.time()
                     loss, summaries = self.session.run(
                         [reduce_mean_loss_tensor, summaries_op],
-                        feed_dict={self.dropout_keep_probability_tensor: 1.0,
+                        feed_dict={**self.default_feed_dictionary,
+                                   self.dropout_keep_probability_tensor: 1.0,
                                    self.dataset_selector_tensor: 'validation'}
                     )
                     duration = time.time() - start_time
