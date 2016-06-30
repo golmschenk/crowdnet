@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from convenience import random_boolean_tensor
+from go_tfrecords_reader import GoTFRecordsReader
 
 
 class GoData:
@@ -131,60 +132,11 @@ class GoData:
         :return: The read file data including the image data and label data.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(file_name_queue)
-        features = tf.parse_single_example(
-            serialized_example,
-            features={
-                'image_height': tf.FixedLenFeature([], tf.int64),
-                'image_width': tf.FixedLenFeature([], tf.int64),
-                'image_depth': tf.FixedLenFeature([], tf.int64),
-                'image_raw': tf.FixedLenFeature([], tf.string),
-                'label_height': tf.FixedLenFeature([], tf.int64),
-                'label_width': tf.FixedLenFeature([], tf.int64),
-                'label_depth': tf.FixedLenFeature([], tf.int64),
-                'label_raw': tf.FixedLenFeature([], tf.string),
-            })
-
-        image_shape, label_shape = self.extract_shapes_from_tfrecords_features(features)
-
-        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, image_shape)
-        image = tf.cast(unnormalized_image, tf.float32)
-
-        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, label_shape)
+        go_tfrecords_reader = GoTFRecordsReader(file_name_queue)
+        image = tf.cast(go_tfrecords_reader.image, tf.float32)
+        label = go_tfrecords_reader.label
 
         return image, label
-
-    @staticmethod
-    def extract_shapes_from_tfrecords_features(features):
-        """
-        Extracts the image and label shapes from the TFRecords' features. Uses a short TF session to do so.
-
-        :param features: The recovered TFRecords' protobuf features.
-        :type features: dict[str, tf.Tensor]
-        :return: The image and label shape tuples.
-        :rtype: (int, int, int), (int, int, int)
-        """
-        image_height_tensor = tf.cast(features['image_height'], tf.int64)
-        image_width_tensor = tf.cast(features['image_width'], tf.int64)
-        image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
-        label_height_tensor = tf.cast(features['label_height'], tf.int64)
-        label_width_tensor = tf.cast(features['label_width'], tf.int64)
-        label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
-        # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
-        with tf.Session() as session:
-            coordinator = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coordinator)
-            image_height, image_width, image_depth, label_height, label_width, label_depth = session.run(
-                [image_height_tensor, image_width_tensor, image_depth_tensor, label_height_tensor, label_width_tensor,
-                 label_depth_tensor])
-            coordinator.request_stop()
-            coordinator.join(threads)
-        image_shape = (image_height, image_width, image_depth)
-        label_shape = (label_height, label_width, label_depth)
-        return image_shape, label_shape
 
     def preaugmentation_preprocess(self, image, label):
         """
