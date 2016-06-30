@@ -62,7 +62,3 @@ class GoTFRecordsReader:
         image_shape = (image_height, image_width, image_depth)
         label_shape = (label_height, label_width, label_depth)
         return image_shape, label_shape
-
-if __name__ == '__main__':
-    tfrecords_inspector = GoTFRecordsReader('data/nyud_micro.tfrecords')
-    print(self.image_shape)
