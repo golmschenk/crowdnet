@@ -22,12 +22,15 @@ class Interface:
             if user_input == 's':
                 print('Save requested.')
                 self.queue.put('save')
-                continue
             elif user_input == 'q':
                 print('Quit requested.')
                 self.queue.put('quit')
                 self.network.join()
                 break
+            elif user_input.startswith('l '):
+                print('Updating learning rate.')
+                self.queue.put('change learning rate')
+                self.queue.put(user_input[2:])
         print('Done.')
 
     def predict(self):

@@ -7,6 +7,7 @@ import os
 import time
 import tensorflow as tf
 import numpy as np
+import sys
 
 from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
 from go_data import GoData
@@ -45,9 +46,122 @@ class GoNet(multiprocessing.Process):
         self.session = None
         self.dataset_selector_tensor = tf.placeholder(dtype=tf.string)
         self.dropout_keep_probability_tensor = tf.placeholder(tf.float32)
+        self.learning_rate_tensor = tf.placeholder(tf.float32)
         self.queue = message_queue
 
         os.nice(10)
+
+    @property
+    def default_feed_dictionary(self):
+        """The default feed dictionary"""
+        return {
+            self.dropout_keep_probability_tensor: self.dropout_keep_probability,
+            self.dataset_selector_tensor: 'train',
+            self.learning_rate_tensor: self.initial_learning_rate
+        }
+
+    def train(self):
+        """
+        Adds the training operations and runs the training loop.
+        """
+        print('Preparing data...')
+        # Setup the inputs.
+        with tf.name_scope('Input'):
+            images_tensor, labels_tensor = self.create_input_tensors()
+
+        print('Building graph...')
+        # Add the forward pass operations to the graph.
+        predicted_labels_tensor = self.create_inference_op(images_tensor)
+
+        # Add the loss operations to the graph.
+        with tf.name_scope('loss'):
+            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            tf.scalar_summary(self.step_summary_name, reduce_mean_loss_tensor)
+            self.create_running_average_summary(reduce_mean_loss_tensor, summary_name=self.step_summary_name)
+
+        if self.image_summary_on:
+            with tf.name_scope('comparison_summary'):
+                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
+
+        # Add the training operations to the graph.
+        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
+
+        # Prepare session.
+        self.session = tf.Session()
+
+        # Prepare the summary operations.
+        summaries_op = tf.merge_all_summaries()
+        summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
+
+        # Prepare saver.
+        self.saver = tf.train.Saver()
+
+        print('Starting training...')
+        # Initialize the variables.
+        self.session.run(initialize_op)
+
+        # Reload from saved model if passed.
+        command_line_arguments = sys.argv[1:]
+        if command_line_arguments:
+            print('Restoring model from %s...' % command_line_arguments[0])
+            self.saver.restore(self.session, command_line_arguments[0])
+
+        # Start input enqueue threads.
+        coordinator = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
+
+        # Preform the training loop.
+        try:
+            while not coordinator.should_stop() and not self.stop_signal:
+                # Regular training step.
+                start_time = time.time()
+                _, loss, summaries = self.session.run(
+                    [training_op, reduce_mean_loss_tensor, summaries_op],
+                    feed_dict=self.default_feed_dictionary
+                )
+                duration = time.time() - start_time
+
+                # Information print and summary write step.
+                if self.step % self.summary_step_period == 0:
+                    train_writer.add_summary(summaries, self.step)
+                    print('Step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name, loss, duration))
+
+                # Validation step.
+                if self.step % self.validation_step_period == 0:
+                    start_time = time.time()
+                    loss, summaries = self.session.run(
+                        [reduce_mean_loss_tensor, summaries_op],
+                        feed_dict={**self.default_feed_dictionary,
+                                   self.dropout_keep_probability_tensor: 1.0,
+                                   self.dataset_selector_tensor: 'validation'}
+                    )
+                    duration = time.time() - start_time
+                    validation_writer.add_summary(summaries, self.step)
+                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (self.step, self.step_summary_name,
+                                                                               loss, duration))
+
+                self.step += 1
+
+                # Handle interface messages from the user.
+                self.interface_handler()
+        except tf.errors.OutOfRangeError:
+            if self.step == 0:
+                print('Data not found.')
+            else:
+                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
+        finally:
+            # When done, ask the threads to stop.
+            coordinator.request_stop()
+
+        # Wait for threads to finish.
+        coordinator.join(threads)
+        self.session.close()
 
     def create_inference_op(self, images):
         """
@@ -183,9 +297,13 @@ class GoNet(multiprocessing.Process):
                     save_path = self.saver.save(self.session, os.path.join('models', self.network_name + '.ckpt'),
                                                 global_step=self.step)
                     tf.train.write_graph(self.session.graph_def, 'models', self.network_name + '.pb')
-                    print("Model saved in file: %s" % save_path)
-                if message == 'quit':
+                    print('Model saved in file: %s' % save_path)
+                elif message == 'quit':
                     self.stop_signal = True
+                elif message.startswith('change learning rate'):
+                    message = self.queue.get()
+                    self.initial_learning_rate = float(message)
+                    print('New learning rate is %f.' % self.initial_learning_rate)
 
     def create_feed_selectable_input_tensors(self, dataset_dictionary):
         """
@@ -203,103 +321,6 @@ class GoNet(multiprocessing.Process):
                                                lambda: dataset_dictionary['validation'],
                                                lambda: dataset_dictionary['train'])
         return images_tensor, labels_tensor
-
-    def train(self):
-        """
-        Adds the training operations and runs the training loop.
-        """
-        print('Preparing data...')
-        # Setup the inputs.
-        with tf.name_scope('Input'):
-            images_tensor, labels_tensor = self.create_input_tensors()
-
-        print('Building graph...')
-        # Add the forward pass operations to the graph.
-        predicted_labels_tensor = self.create_inference_op(images_tensor)
-
-        # Add the loss operations to the graph.
-        with tf.name_scope('loss'):
-            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
-            tf.scalar_summary(self.step_summary_name, reduce_mean_loss_tensor)
-            self.create_running_average_summary(reduce_mean_loss_tensor, summary_name=self.step_summary_name)
-
-        if self.image_summary_on:
-            with tf.name_scope('comparison_summary'):
-                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
-
-        # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
-
-        # The op for initializing the variables.
-        initialize_op = tf.initialize_all_variables()
-
-        # Prepare session.
-        self.session = tf.Session()
-
-        # Prepare the summary operations.
-        summaries_op = tf.merge_all_summaries()
-        summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
-        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
-
-        # Prepare saver.
-        self.saver = tf.train.Saver()
-
-        print('Starting training...')
-        # Initialize the variables.
-        self.session.run(initialize_op)
-
-        # Start input enqueue threads.
-        coordinator = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
-
-        # Preform the training loop.
-        try:
-            while not coordinator.should_stop() and not self.stop_signal:
-                # Regular training step.
-                start_time = time.time()
-                _, loss, summaries = self.session.run(
-                    [training_op, reduce_mean_loss_tensor, summaries_op],
-                    feed_dict={self.dropout_keep_probability_tensor: self.dropout_keep_probability,
-                               self.dataset_selector_tensor: 'train'}
-                )
-                duration = time.time() - start_time
-
-                # Information print and summary write step.
-                if self.step % self.summary_step_period == 0:
-                    train_writer.add_summary(summaries, self.step)
-                    print('Step %d: %s = %.5f (%.3f sec / step)' % (self.step, self.step_summary_name, loss, duration))
-
-                # Validation step.
-                if self.step % self.validation_step_period == 0:
-                    start_time = time.time()
-                    loss, summaries = self.session.run(
-                        [reduce_mean_loss_tensor, summaries_op],
-                        feed_dict={self.dropout_keep_probability_tensor: 1.0,
-                                   self.dataset_selector_tensor: 'validation'}
-                    )
-                    duration = time.time() - start_time
-                    validation_writer.add_summary(summaries, self.step)
-                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (self.step, self.step_summary_name,
-                                                                               loss, duration))
-
-                self.step += 1
-
-                # Handle interface messages from the user.
-                self.interface_handler()
-        except tf.errors.OutOfRangeError:
-            if self.step == 0:
-                print('Data not found.')
-            else:
-                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
-        finally:
-            # When done, ask the threads to stop.
-            coordinator.request_stop()
-
-        # Wait for threads to finish.
-        coordinator.join(threads)
-        self.session.close()
 
     def create_input_tensors(self):
         """
