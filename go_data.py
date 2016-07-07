@@ -376,114 +376,6 @@ class GoData:
             }))
             writer.write(example.SerializeToString())
 
-    def shrink(self):
-        """
-        Rebins the data arrays into the specified data size.
-        """
-        self.images = self.shrink_array_with_rebinning(self.images)
-        self.labels = self.shrink_array_with_rebinning(self.labels)
-
-    def shrink_array_with_rebinning(self, array):
-        """
-        Rebins the NumPy array into a new size, averaging the bins between.
-        :param array: The array to resize.
-        :type array: np.ndarray
-        :return: The resized array.
-        :rtype: np.ndarray
-        """
-        if array.shape[1] == self.image_height and array.shape[2] == self.image_width:
-            return array  # The shape is already right, so don't needlessly process.
-        compression_shape = [
-            array.shape[0],
-            self.image_height,
-            array.shape[1] // self.image_height,
-            self.image_width,
-            array.shape[2] // self.image_width,
-        ]
-        if len(array.shape) == 4:
-            compression_shape.append(self.image_depth)
-            return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
-        else:
-            return array.reshape(compression_shape).mean(4).mean(2)
-
-    def gaussian_noise_augmentation(self, standard_deviation, number_of_variations):
-        """
-        Applies random gaussian noise to the images.
-
-        :param standard_deviation: The standard deviation of the gaussian noise.
-        :type standard_deviation: float
-        :param number_of_variations: The number of noisy copies to create.
-        :type number_of_variations: int
-        """
-        augmented_images_list = [self.images]
-        augmented_labels_list = [self.labels]
-        for _ in range(number_of_variations):
-            # noinspection PyTypeChecker
-            noise = np.random.normal(np.zeros(shape=self.image_shape, dtype=np.int16), standard_deviation)
-            augmented_images_list.append((self.images.astype(np.int16) + noise).clip(0, 255).astype(np.uint8))
-            augmented_labels_list.append(self.labels)
-        self.images = np.concatenate(augmented_images_list)
-        self.labels = np.concatenate(augmented_labels_list)
-
-    @staticmethod
-    def offset_array(array, offset, axis):
-        """
-        Offsets an array by the given amount (simply by copying the array to the given portion).
-        Note, this is only working for very specific cases at the moment.
-
-        :param array: The array to offset.
-        :type array: np.ndarray
-        :param offset: The amount of the offset.
-        :type offset: int
-        :param axis: The axis to preform the offset on.
-        :type axis: int
-        :return: The offset array.
-        :rtype: np.ndarray
-        """
-        offset_array = np.copy(array)
-        offset_array = np.swapaxes(offset_array, 0, axis)
-        if offset > 0:
-            offset_array[offset:] = offset_array[:-offset]
-        else:
-            offset_array[:offset] = offset_array[-offset:]
-        offset_array = np.swapaxes(offset_array, 0, axis)
-        return offset_array
-
-    def offset_augmentation(self, offset_limit):
-        """
-        Augments the data using a crude spatial shifting based on a given offset.
-
-        :param offset_limit: The value of the maximum offset.
-        :type offset_limit: int
-        """
-        augmented_images_list = [self.images]
-        augmented_labels_list = [self.labels]
-        for axis in [1, 2]:
-            for offset in range(-offset_limit, offset_limit + 1):
-                if offset == 0:
-                    continue
-                augmented_images_list.append(self.offset_array(self.images, offset, axis))
-                augmented_labels_list.append(self.offset_array(self.labels, offset, axis))
-        self.images = np.concatenate(augmented_images_list)
-        self.labels = np.concatenate(augmented_labels_list)
-
-    def augment_data_set(self):
-        """
-        Augments the data set with some basic approaches
-        """
-        print('Augmenting with spatial jittering...')
-        self.offset_augmentation(1)
-        print('Augmenting with gaussian noise...')
-        self.gaussian_noise_augmentation(10, 4)
-
-    def shuffle(self):
-        """
-        Shuffles the images and labels together.
-        """
-        permuted_indexes = np.random.permutation(len(self.images))
-        self.images = self.images[permuted_indexes]
-        self.labels = self.labels[permuted_indexes]
-
     def import_mat_file(self, mat_path):
         """
         Imports a Matlab mat file into the data images and labels (concatenating the arrays if they already exists).
@@ -508,18 +400,6 @@ class GoData:
         :type file_path: str
         """
         self.import_mat_file(file_path)
-
-    def pretfrecords_preprocess(self):
-        """
-        Preprocesses the data.
-        Should be overwritten by subclasses.
-        """
-        print('Shrinking the data...')
-        self.shrink()
-        print('Augmenting the data...')
-        self.augment_data_set()
-        print('Shuffling the data...')
-        self.shuffle()
 
     def convert_to_tfrecords(self):
         """
