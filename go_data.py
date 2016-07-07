@@ -319,24 +319,6 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def numpy_files_to_tfrecords(self):
-        """
-        Converts NumPy files to a TFRecords file.
-        """
-        self.load_numpy_files()
-        self.convert_to_tfrecords()
-
-    def load_numpy_files(self):
-        """
-        Loads data from the numpy files into the object.
-        """
-        images_numpy_file_path = os.path.join(self.data_path + '_images.npy')
-        labels_numpy_file_path = os.path.join(self.data_path + '_labels.npy')
-        self.images = np.load(images_numpy_file_path)
-        self.labels = np.load(labels_numpy_file_path)
-        if self.labels.dtype == np.float64:
-            self.labels = self.labels.astype(np.float32)
-
     def convert_numpy_to_tfrecords(self, images, labels=None):
         """
         Converts numpy arrays to a TFRecords.
