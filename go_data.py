@@ -20,7 +20,6 @@ class GoData:
         self.data_directory = 'data'
         self.data_name = 'nyud_micro'
         self.import_directory = 'data/import'
-        self.dataset_container = 'directory'
 
         # Note, these are *training* sizes. Data will be resized to this size.
         self.image_height = 464 // 8
@@ -237,11 +236,7 @@ class GoData:
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        if self.dataset_container == 'file':
-            file_name_queue = self.file_name_queue_for_dataset_file(data_type, num_epochs)
-        else:
-            file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
-
+        file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
         image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
         image, label = self.preaugmentation_preprocess(image, label)
         if data_type == 'train':
@@ -254,25 +249,6 @@ class GoData:
         )
 
         return images, labels
-
-    def file_name_queue_for_dataset_file(self, data_type=None, num_epochs=None):
-        """
-        Creates the files name queue for a single TFRecords file.
-
-        :param data_type: The type of dataset being created.
-        :type data_type: str
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
-        :return: The file name queue.
-        :rtype: tf.QueueBase
-        """
-        if data_type:
-            file_name = self.data_name + '.' + data_type + '.tfrecords'
-        else:
-            file_name = self.data_name + '.tfrecords'
-        file_path = os.path.join(self.data_directory, file_name)
-        file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
-        return file_name_queue
 
     def file_name_queue_for_dataset_directory(self, data_type, num_epochs=None):
         """
