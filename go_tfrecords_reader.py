@@ -54,7 +54,7 @@ class GoTFRecordsReader:
         image_width_tensor = tf.cast(features['image_width'], tf.int64)
         image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
         if self.data_type == 'test':
-            label_height_tensor, label_width_tensor, label_depth_tensor = None, None, None
+            label_height_tensor, label_width_tensor, label_depth_tensor = None, None, None  # Line to quiet inspections
         else:
             label_height_tensor = tf.cast(features['label_height'], tf.int64)
             label_width_tensor = tf.cast(features['label_width'], tf.int64)

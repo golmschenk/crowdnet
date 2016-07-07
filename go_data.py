@@ -337,43 +337,50 @@ class GoData:
         if self.labels.dtype == np.float64:
             self.labels = self.labels.astype(np.float32)
 
-    def convert_numpy_to_tfrecords(self, images, labels):
+    def convert_numpy_to_tfrecords(self, images, labels=None):
         """
         Converts numpy arrays to a TFRecords.
         """
-        number_of_examples = labels.shape[0]
-        if images.shape[0] != number_of_examples:
-            raise ValueError("Images count %d does not match label count %d." %
-                             (images.shape[0], number_of_examples))
+        number_of_examples = images.shape[0]
+        if labels is not None:
+            if labels.shape[0] != number_of_examples:
+                raise ValueError("Images count %d does not match label count %d." %
+                                 (labels.shape[0], number_of_examples))
+            label_height = labels.shape[1]
+            if len(labels.shape) > 2:
+                label_width = labels.shape[2]
+            else:
+                label_width = 1
+            if len(labels.shape) > 3:
+                label_depth = labels.shape[3]
+            else:
+                label_depth = 1
+        else:
+            label_height, label_width, label_depth = None, None, None  # Line to quiet inspections
         image_height = images.shape[1]
         image_width = images.shape[2]
         image_depth = images.shape[3]
-        label_height = labels.shape[1]
-        if len(labels.shape) > 2:
-            label_width = labels.shape[2]
-        else:
-            label_width = 1
-        if len(labels.shape) > 3:
-            label_depth = labels.shape[3]
-        else:
-            label_depth = 1
 
         filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
         print('Writing', filename)
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
             image_raw = images[index].tostring()
-            label_raw = labels[index].tostring()
-            example = tf.train.Example(features=tf.train.Features(feature={
+            features = {
                 'image_height': _int64_feature(image_height),
                 'image_width': _int64_feature(image_width),
                 'image_depth': _int64_feature(image_depth),
                 'image_raw': _bytes_feature(image_raw),
-                'label_height': _int64_feature(label_height),
-                'label_width': _int64_feature(label_width),
-                'label_depth': _int64_feature(label_depth),
-                'label_raw': _bytes_feature(label_raw),
-            }))
+            }
+            if labels is not None:
+                label_raw = labels[index].tostring()
+                features.update({
+                    'label_height': _int64_feature(label_height),
+                    'label_width': _int64_feature(label_width),
+                    'label_depth': _int64_feature(label_depth),
+                    'label_raw': _bytes_feature(label_raw)
+                })
+            example = tf.train.Example(features=tf.train.Features(feature=features))
             writer.write(example.SerializeToString())
 
     def import_mat_file(self, mat_path):
