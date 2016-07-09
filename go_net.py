@@ -413,7 +413,7 @@ class GoNet(multiprocessing.Process):
         :type model_file_name: str
         """
         if model_file_name is None:
-            model_file_name = 'go_net.ckpt-84'#self.network_name
+            model_file_name = self.network_name
 
         print('Preparing data...')
         # Setup the inputs.
@@ -451,17 +451,17 @@ class GoNet(multiprocessing.Process):
             while not coordinator.should_stop() and not self.stop_signal:
                 # Regular prediction step.
                 predicted_labels_batch = self.session.run(
-                    [predicted_labels_tensor],
+                    predicted_labels_tensor,
                     feed_dict={**self.default_feed_dictionary, self.dropout_keep_probability_tensor: 1.0}
                 )
                 predicted_labels = np.concatenate((predicted_labels, predicted_labels_batch))
                 self.step += 1
-                print('{processed} images processed.'.format(processed=self.step * self.batch_size))
+                print('{processed} images processed.'.format(processed=self.step * self.batch_size), end='\r')
         except tf.errors.OutOfRangeError:
             if self.step == 0:
                 print('Data not found.')
             else:
-                print('Done predicting for %d epochs, %d steps.' % (self.epoch_limit, self.step))
+                print('Done predicting after %d steps.' % self.step)
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
@@ -479,4 +479,4 @@ class GoNet(multiprocessing.Process):
 
 if __name__ == '__main__':
     interface = Interface(network_class=GoNet)
-    interface.predict()
+    interface.train()
