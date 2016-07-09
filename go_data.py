@@ -266,12 +266,14 @@ class GoData:
         """
         if data_type in ['test', 'deploy']:
             num_epochs = 1
+            shuffle = False
         else:
             num_epochs = None
+            shuffle = True
         file_paths = []
         for file_path in glob.glob(os.path.join(self.data_directory, data_type, '*.tfrecords')):
             file_paths.append(file_path)
-        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs)
+        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs, shuffle=shuffle)
         return file_name_queue
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
