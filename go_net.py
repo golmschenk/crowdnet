@@ -7,9 +7,8 @@ import os
 import time
 import tensorflow as tf
 import numpy as np
-import sys
 
-from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
+from convenience import weight_variable, bias_variable
 from go_data import GoData
 from interface import Interface
 
@@ -64,6 +63,9 @@ class GoNet(multiprocessing.Process):
         """
         Adds the training operations and runs the training loop.
         """
+        # Prepare session.
+        self.session = tf.Session()
+
         print('Preparing data...')
         # Setup the inputs.
         with tf.name_scope('Input'):
@@ -84,20 +86,18 @@ class GoNet(multiprocessing.Process):
             with tf.name_scope('comparison_summary'):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
+        # Prepare the summary operations.
+        summaries_op = tf.merge_all_summaries()
+        summary_path = os.path.join(self.log_directory,
+                                    datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
+
         # Add the training operations to the graph.
         training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
-
-        # Prepare session.
-        self.session = tf.Session()
-
-        # Prepare the summary operations.
-        summaries_op = tf.merge_all_summaries()
-        summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
-        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
 
         # Prepare saver.
         self.saver = tf.train.Saver()
@@ -442,7 +442,7 @@ class GoNet(multiprocessing.Process):
         coordinator = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
 
-        predicted_labels = np.ndarray(shape=[0] + list(self.data.label_shape), dtype=np.float32)
+        predicted_labels = np.ndarray(shape=[0] + list(self.data.label_shape), dtype=np.float32).squeeze()
 
         # Preform the prediction loop.
         try:
@@ -454,7 +454,7 @@ class GoNet(multiprocessing.Process):
                 )
                 predicted_labels = np.concatenate((predicted_labels, predicted_labels_batch))
                 self.step += 1
-                print('{processed} images processed.'.format(processed=self.step * self.batch_size), end='\r')
+                print('{image_count} images processed.'.format(image_count=self.step * self.batch_size))
         except tf.errors.OutOfRangeError:
             if self.step == 0:
                 print('Data not found.')
