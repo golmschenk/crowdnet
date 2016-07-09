@@ -27,7 +27,7 @@ class Interface:
         else:
             self.train()
 
-        print('Done.')
+        print('Program done.')
 
     def train(self):
         """

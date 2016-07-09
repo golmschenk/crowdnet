@@ -472,11 +472,11 @@ class GoNet(multiprocessing.Process):
         coordinator.join(threads)
         self.session.close()
 
-        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), predicted_labels)
-        print('Labels saved.')
+        predicted_labels_save_path = os.path.join(self.data.data_directory, 'predicted_labels')
+        print('Saving labels to {}.npy...'.format(predicted_labels_save_path))
+        np.save(predicted_labels_save_path, predicted_labels)
 
         self.session.close()
-        print('Done.')
 
     def attain_latest_model_path(self):
         """
