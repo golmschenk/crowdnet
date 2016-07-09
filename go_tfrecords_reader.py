@@ -35,7 +35,7 @@ class GoTFRecordsReader:
         flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
         self.image = tf.reshape(flat_image, self.image_shape)
 
-        if self.data_type != 'test':
+        if self.data_type != 'deploy':
             flat_label = tf.decode_raw(features['label_raw'], tf.float32)
             self.label = tf.reshape(flat_label, self.label_shape)
         else:
