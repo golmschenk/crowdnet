@@ -2,7 +2,6 @@
 Code related to the GoNet.
 """
 import datetime
-import glob
 import multiprocessing
 import os
 import time
@@ -29,7 +28,6 @@ class GoNet(multiprocessing.Process):
         self.data = GoData()
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
-        self.epoch_limit = None
 
         # Logging.
         self.log_directory = 'logs'
@@ -151,11 +149,11 @@ class GoNet(multiprocessing.Process):
 
                 # Handle interface messages from the user.
                 self.interface_handler()
-        except tf.errors.OutOfRangeError:
+        except tf.errors.OutOfRangeError as error:
             if self.step == 0:
                 print('Data not found.')
             else:
-                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
+                raise error
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
@@ -333,8 +331,7 @@ class GoNet(multiprocessing.Process):
         """
         training_images_tensor, training_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='train',
-            batch_size=self.batch_size,
-            num_epochs=self.epoch_limit
+            batch_size=self.batch_size
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
@@ -356,8 +353,7 @@ class GoNet(multiprocessing.Process):
         :rtype: tf.Tensor, tf.Tensor
         """
         images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(data_type='test',
-                                                                                  batch_size=self.batch_size,
-                                                                                  num_epochs=1)
+                                                                                  batch_size=self.batch_size)
         return images_tensor, labels_tensor
 
     def create_running_average_summary(self, tensor, summary_name=None):

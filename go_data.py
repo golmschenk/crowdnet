@@ -225,7 +225,7 @@ class GoData:
 
         return image, label
 
-    def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
+    def create_input_tensors_for_dataset(self, data_type, batch_size):
         """
         Prepares the data inputs.
 
@@ -233,12 +233,10 @@ class GoData:
         :type data_type: str
         :param batch_size: The size of the batches
         :type batch_size: int
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
+        file_name_queue = self.file_name_queue_for_dataset_directory(data_type)
         image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
         image, label = self.preaugmentation_preprocess(image, label)
         if data_type == 'train':
@@ -257,17 +255,19 @@ class GoData:
 
         return images, labels
 
-    def file_name_queue_for_dataset_directory(self, data_type, num_epochs=None):
+    def file_name_queue_for_dataset_directory(self, data_type):
         """
         Creates the files name queue for a single TFRecords file.
 
         :param data_type: The type of dataset being created.
         :type data_type: str
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
         :return: The file name queue.
         :rtype: tf.QueueBase
         """
+        if data_type in ['test', 'deploy']:
+            num_epochs = 1
+        else:
+            num_epochs = None
         file_paths = []
         for file_path in glob.glob(os.path.join(self.data_directory, data_type, '*.tfrecords')):
             file_paths.append(file_path)
