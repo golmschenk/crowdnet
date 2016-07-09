@@ -9,6 +9,7 @@ class Interface:
     """
     A class to help interact with the neural networks.
     """
+
     def __init__(self, network_class):
         self.queue = multiprocessing.Queue()
         self.network = network_class(message_queue=self.queue)
@@ -17,11 +18,21 @@ class Interface:
         """
         Runs the interface between the user and the network.
         """
-        parser = argparse.ArgumentParser(description='Runs the {}.'.format(type(self.network).__name__))
-        parser.add_argument('--test', help='Runs the network on the test data, using the test structure',
+        # Setup the parser.
+        parser = argparse.ArgumentParser(
+            description='Runs the {}. By default, training will be run.'.format(type(self.network).__name__))
+        parser.add_argument('-t', '--test',
+                            help=('Runs the network on the test data, using the test structure. By default, the model'
+                                  'with the latest step number and matching network name will be restored'),
                             action='store_true')
+        parser.add_argument('-r', '--restore-model', metavar='MODEL_PATH',
+                            help='Used to restore a model. The model path should follow this flag.')
         args = parser.parse_args()
 
+        # Handle any parameters.
+        self.network.restore_model = args.restore_model
+
+        # Run the network.
         if args.test:
             self.test()
         else:

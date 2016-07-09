@@ -37,6 +37,7 @@ class GoNet(multiprocessing.Process):
         self.image_summary_on = True
 
         # Internal setup.
+        self.restore_model = None
         self.moving_average_loss = None
         self.moving_average_decay = 0.1
         self.stop_signal = False
@@ -106,10 +107,9 @@ class GoNet(multiprocessing.Process):
         self.session.run(initialize_op)
 
         # Reload from saved model if passed.
-        command_line_arguments = sys.argv[1:]
-        if command_line_arguments:
-            print('Restoring model from %s...' % command_line_arguments[0])
-            self.saver.restore(self.session, command_line_arguments[0])
+        if self.restore_model:
+            print('Restoring model from %s...' % self.restore_model)
+            self.saver.restore(self.session, self.restore_model)
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
@@ -402,15 +402,12 @@ class GoNet(multiprocessing.Process):
         """
         self.train()
 
-    def test(self, model_file_path=None):
+    def test(self):
         """
         Use a trained model to predict labels for a test set of images.
-
-        :param model_file_path: The trained model's file name.
-        :type model_file_path: str
         """
-        if model_file_path is None:
-            model_file_path = self.attain_latest_model_path()
+        if self.restore_model is None:
+            self.restore_model = self.attain_latest_model_path()
 
         print('Preparing data...')
         # Setup the inputs.
@@ -435,8 +432,8 @@ class GoNet(multiprocessing.Process):
         self.session.run(initialize_op)
 
         # Load model.
-        print('Restoring model from {model_file_path}...'.format(model_file_path=model_file_path))
-        saver.restore(self.session, model_file_path)
+        print('Restoring model from {model_file_path}...'.format(model_file_path=self.restore_model))
+        saver.restore(self.session, self.restore_model)
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
