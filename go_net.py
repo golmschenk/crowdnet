@@ -2,6 +2,7 @@
 Code related to the GoNet.
 """
 import datetime
+import glob
 import multiprocessing
 import os
 import time
@@ -405,15 +406,15 @@ class GoNet(multiprocessing.Process):
         """
         self.train()
 
-    def predict(self, model_file_name=None):
+    def predict(self, model_file_path=None):
         """
         Use a trained model to predict labels for a new set of images.
 
         :param model_file_name: The trained model's file name.
         :type model_file_name: str
         """
-        if model_file_name is None:
-            model_file_name = self.network_name
+        if model_file_path is None:
+            model_file_path = self.attain_latest_model_path()
 
         print('Preparing data...')
         # Setup the inputs.
@@ -438,7 +439,8 @@ class GoNet(multiprocessing.Process):
         self.session.run(initialize_op)
 
         # Load model.
-        saver.restore(self.session, os.path.join('models', model_file_name))
+        print('Restoring model from {model_file_path}...'.format(model_file_path=model_file_path))
+        saver.restore(self.session, model_file_path)
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
@@ -476,6 +478,25 @@ class GoNet(multiprocessing.Process):
         self.session.close()
         print('Done.')
 
+    def attain_latest_model_path(self):
+        """
+        Determines the model path for the model which matches the network name and has the highest step label.
+
+        :return: The model path.
+        :rtype: str
+        """
+        latest_model_name = None
+        latest_model_step = -1
+        for file_name in os.listdir("models"):
+            if self.network_name + '.ckpt' in file_name and 'meta' not in file_name:
+                number_start_index = file_name.index('ckpt-') + len('ckpt-')
+                model_step = int(file_name[number_start_index:])
+                if model_step > latest_model_step:
+                    latest_model_step = model_step
+                    latest_model_name = file_name
+        if not latest_model_name:
+            return
+        return os.path.join('models', latest_model_name)
 
 if __name__ == '__main__':
     interface = Interface(network_class=GoNet)
