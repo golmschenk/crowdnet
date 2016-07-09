@@ -39,7 +39,7 @@ class GoTFRecordsReader:
             flat_label = tf.decode_raw(features['label_raw'], tf.float32)
             self.label = tf.reshape(flat_label, self.label_shape)
         else:
-            self.label = None
+            self.label = tf.constant(-1.0, [1, 1, 1])  # Makes a fake label tensor for preprocessing to work on.
 
     def extract_shapes_from_tfrecords_features(self, features):
         """

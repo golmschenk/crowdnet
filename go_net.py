@@ -347,6 +347,18 @@ class GoNet(multiprocessing.Process):
         )
         return images_tensor, labels_tensor
 
+    def create_test_dataset_input_tensors(self):
+        """
+        Creates the images input tensor for the test dataset.
+
+        :return: The images and labels tensors for the test dataset.
+        :rtype: tf.Tensor, tf.Tensor
+        """
+        images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(data_type='test',
+                                                                                  batch_size=self.batch_size,
+                                                                                  num_epochs=1)
+        return images_tensor, labels_tensor
+
     def create_running_average_summary(self, tensor, summary_name=None):
         """
         Create a running average summary of a scalar tensor.
@@ -405,42 +417,64 @@ class GoNet(multiprocessing.Process):
 
         print('Preparing data...')
         # Setup the inputs.
-        original_images = np.load('test_images.npy').astype(np.float32)
-        images = self.data.shrink_array_with_rebinning(original_images)
-        np.save('shrunk_images.npy', images.astype(np.uint8))
-        images -= np.mean(images)
-        images /= np.std(images)
-
-        images_tensor = tf.placeholder(tf.float32, [None, self.data.image_height, self.data.image_width, 3])
+        images_tensor, labels_tensor = self.create_test_dataset_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
         predicted_labels_tensor = self.create_inference_op(images_tensor)
 
-        # The op for initializing the variables.
-        initialize_op = tf.initialize_all_variables()
+        # Create a session for running operations in the Graph.
+        self.session = tf.Session()
+
+        print('Running prediction...')
+        # Start input enqueue threads.
+        coordinator = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
 
         # Prepare the saver.
         saver = tf.train.Saver()
 
-        # Create a session for running operations in the Graph.
-        session = tf.Session()
+        saver.restore(self.session, os.path.join('models', model_file_name))
 
-        print('Running prediction...')
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
+
         # Initialize the variables.
-        session.run(initialize_op)
+        self.session.run(initialize_op)
 
-        saver.restore(session, os.path.join('models', model_file_name))
+        predicted_labels = np.ndarray(shape=[0] + list(self.data.label_shape), dtype=np.float32)
 
-        # Preform the training loop.
-        labels = session.run([predicted_labels_tensor], feed_dict={images_tensor: images,
-                                                                   self.dropout_keep_probability_tensor: 1.0})
-        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), labels)
+        # Preform the prediction loop.
+        try:
+            while not coordinator.should_stop() and not self.stop_signal:
+                # Regular prediction step.
+                predicted_labels_batch = self.session.run(
+                    [predicted_labels_tensor],
+                    feed_dict={**self.default_feed_dictionary, self.dropout_keep_probability_tensor: 1.0}
+                )
+                predicted_labels = np.concatenate((predicted_labels, predicted_labels_batch))
+                self.step += 1
+                print('{processed} images processed.'.format(processed=self.step * self.batch_size))
+        except tf.errors.OutOfRangeError:
+            if self.step == 0:
+                print('Data not found.')
+            else:
+                print('Done predicting for %d epochs, %d steps.' % (self.epoch_limit, self.step))
+        finally:
+            # When done, ask the threads to stop.
+            coordinator.request_stop()
 
-        session.close()
+        # Wait for threads to finish.
+        coordinator.join(threads)
+        self.session.close()
+
+        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), predicted_labels)
+        print('Labels saved.')
+
+        self.session.close()
         print('Done.')
 
 
 if __name__ == '__main__':
     interface = Interface(network_class=GoNet)
-    interface.train()
+    interface.predict()
