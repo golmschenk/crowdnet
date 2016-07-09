@@ -500,4 +500,4 @@ class GoNet(multiprocessing.Process):
 
 if __name__ == '__main__':
     interface = Interface(network_class=GoNet)
-    interface.train()
+    interface.run()

@@ -2,6 +2,7 @@
 Interface to help interact with the neural networks.
 """
 import multiprocessing
+import argparse
 
 
 class Interface:
@@ -12,9 +13,25 @@ class Interface:
         self.queue = multiprocessing.Queue()
         self.network = network_class(message_queue=self.queue)
 
+    def run(self):
+        """
+        Runs the interface between the user and the network.
+        """
+        parser = argparse.ArgumentParser(description='Runs the {}.'.format(type(self.network).__name__))
+        parser.add_argument('--test', help='Runs the network on the test data, using the test structure',
+                            action='store_true')
+        args = parser.parse_args()
+
+        if args.test:
+            self.predict()
+        else:
+            self.train()
+
+        print('Done.')
+
     def train(self):
         """
-        Runs the main interactions between the user and the network.
+        Runs the main interactions between the user and the network during training.
         """
         self.network.start()
         while True:
@@ -31,7 +48,6 @@ class Interface:
                 print('Updating learning rate.')
                 self.queue.put('change learning rate')
                 self.queue.put(user_input[2:])
-        print('Done.')
 
     def predict(self):
         """
