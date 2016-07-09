@@ -21,7 +21,7 @@ class GoTFRecordsReader:
             'image_depth': tf.FixedLenFeature([], tf.int64),
             'image_raw': tf.FixedLenFeature([], tf.string)
         }
-        if self.data_type != 'test':
+        if self.data_type != 'deploy':
             feature_types.update({
                 'label_height': tf.FixedLenFeature([], tf.int64),
                 'label_width': tf.FixedLenFeature([], tf.int64),
@@ -54,7 +54,7 @@ class GoTFRecordsReader:
         image_height_tensor = tf.cast(features['image_height'], tf.int64)
         image_width_tensor = tf.cast(features['image_width'], tf.int64)
         image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
-        if self.data_type == 'test':
+        if self.data_type == 'deploy':
             label_height_tensor, label_width_tensor, label_depth_tensor = None, None, None  # Line to quiet inspections
         else:
             label_height_tensor = tf.cast(features['label_height'], tf.int64)
@@ -66,7 +66,7 @@ class GoTFRecordsReader:
             session.run(initialize_op)
             coordinator = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coordinator)
-            if self.data_type == 'test':
+            if self.data_type == 'deploy':
                 image_height, image_width, image_depth = session.run(
                     [image_height_tensor, image_width_tensor, image_depth_tensor])
                 label_shape = None

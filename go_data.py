@@ -245,7 +245,7 @@ class GoData:
             image, label = self.augment(image, label)
         image, label = self.postaugmentation_preprocess(image, label)
 
-        if data_type == 'test':
+        if data_type in ['test', 'deploy']:
             images, labels = tf.train.batch(
                 [image, label], batch_size=batch_size, num_threads=1, capacity=1000 + 3 * batch_size
             )
