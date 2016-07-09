@@ -408,6 +408,9 @@ class GoNet(multiprocessing.Process):
         """
         if self.restore_model is None:
             self.restore_model = self.attain_latest_model_path()
+            if not self.restore_model:
+                print('No model to restore from found.')
+                return
 
         print('Preparing data...')
         # Setup the inputs.
