@@ -39,7 +39,8 @@ class GoTFRecordsReader:
             flat_label = tf.decode_raw(features['label_raw'], tf.float32)
             self.label = tf.reshape(flat_label, self.label_shape)
         else:
-            self.label = tf.constant(-1.0, [1, 1, 1])  # Makes a fake label tensor for preprocessing to work on.
+            # Makes a fake label tensor for preprocessing to work on.
+            self.label = tf.constant(-1.0, dtype=tf.float32, shape=[1, 1, 1])
 
     def extract_shapes_from_tfrecords_features(self, features):
         """
@@ -61,6 +62,8 @@ class GoTFRecordsReader:
             label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
         # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
         with tf.Session() as session:
+            initialize_op = tf.initialize_all_variables()
+            session.run(initialize_op)
             coordinator = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coordinator)
             if self.data_type == 'test':

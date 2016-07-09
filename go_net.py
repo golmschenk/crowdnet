@@ -413,7 +413,7 @@ class GoNet(multiprocessing.Process):
         :type model_file_name: str
         """
         if model_file_name is None:
-            model_file_name = self.network_name
+            model_file_name = 'go_net.ckpt-84'#self.network_name
 
         print('Preparing data...')
         # Setup the inputs.
@@ -423,24 +423,26 @@ class GoNet(multiprocessing.Process):
         # Add the forward pass operations to the graph.
         predicted_labels_tensor = self.create_inference_op(images_tensor)
 
+        # The op for initializing the variables.
+        initialize_op = tf.initialize_all_variables()
+
+        # Prepare the saver.
+        variables_to_restore = [v for v in tf.all_variables() if "input_producer/limit_epochs/epochs" not in v.name]
+        saver = tf.train.Saver(variables_to_restore)
+
         # Create a session for running operations in the Graph.
         self.session = tf.Session()
 
         print('Running prediction...')
+        # Initialize the variables.
+        self.session.run(initialize_op)
+
+        # Load model.
+        saver.restore(self.session, os.path.join('models', model_file_name))
+
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
-
-        # Prepare the saver.
-        saver = tf.train.Saver()
-
-        saver.restore(self.session, os.path.join('models', model_file_name))
-
-        # The op for initializing the variables.
-        initialize_op = tf.initialize_all_variables()
-
-        # Initialize the variables.
-        self.session.run(initialize_op)
 
         predicted_labels = np.ndarray(shape=[0] + list(self.data.label_shape), dtype=np.float32)
 
