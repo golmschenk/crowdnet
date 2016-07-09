@@ -406,12 +406,12 @@ class GoNet(multiprocessing.Process):
         """
         self.train()
 
-    def predict(self, model_file_path=None):
+    def test(self, model_file_path=None):
         """
-        Use a trained model to predict labels for a new set of images.
+        Use a trained model to predict labels for a test set of images.
 
-        :param model_file_name: The trained model's file name.
-        :type model_file_name: str
+        :param model_file_path: The trained model's file name.
+        :type model_file_path: str
         """
         if model_file_path is None:
             model_file_path = self.attain_latest_model_path()

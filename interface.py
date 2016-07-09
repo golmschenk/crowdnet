@@ -23,7 +23,7 @@ class Interface:
         args = parser.parse_args()
 
         if args.test:
-            self.predict()
+            self.test()
         else:
             self.train()
 
@@ -49,8 +49,8 @@ class Interface:
                 self.queue.put('change learning rate')
                 self.queue.put(user_input[2:])
 
-    def predict(self):
+    def test(self):
         """
         Runs the network prediction.
         """
-        self.network.predict()
+        self.network.test()
