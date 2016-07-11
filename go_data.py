@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from convenience import random_boolean_tensor
+from go_tfrecords_reader import GoTFRecordsReader
 
 
 class GoData:
@@ -19,7 +20,6 @@ class GoData:
         self.data_directory = 'data'
         self.data_name = 'nyud_micro'
         self.import_directory = 'data/import'
-        self.dataset_container = 'directory'
 
         # Note, these are *training* sizes. Data will be resized to this size.
         self.image_height = 464 // 8
@@ -122,69 +122,23 @@ class GoData:
         """
         return os.path.join(self.data_directory, self.data_name)
 
-    def read_and_decode_single_example_from_tfrecords(self, file_name_queue):
+    @staticmethod
+    def read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=None):
         """
         A definition of how TF should read a single example proto from the file record.
 
         :param file_name_queue: The file name queue to be read.
         :type file_name_queue: tf.QueueBase
+        :param data_type: The dataset type being used in.
+        :type data_type: str
         :return: The read file data including the image data and label data.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(file_name_queue)
-        features = tf.parse_single_example(
-            serialized_example,
-            features={
-                'image_height': tf.FixedLenFeature([], tf.int64),
-                'image_width': tf.FixedLenFeature([], tf.int64),
-                'image_depth': tf.FixedLenFeature([], tf.int64),
-                'image_raw': tf.FixedLenFeature([], tf.string),
-                'label_height': tf.FixedLenFeature([], tf.int64),
-                'label_width': tf.FixedLenFeature([], tf.int64),
-                'label_depth': tf.FixedLenFeature([], tf.int64),
-                'label_raw': tf.FixedLenFeature([], tf.string),
-            })
-
-        image_shape, label_shape = self.extract_shapes_from_tfrecords_features(features)
-
-        flat_image = tf.decode_raw(features['image_raw'], tf.uint8)
-        unnormalized_image = tf.reshape(flat_image, image_shape)
-        image = tf.cast(unnormalized_image, tf.float32)
-
-        flat_label = tf.decode_raw(features['label_raw'], tf.float32)
-        label = tf.reshape(flat_label, label_shape)
+        go_tfrecords_reader = GoTFRecordsReader(file_name_queue, data_type=data_type)
+        image = tf.cast(go_tfrecords_reader.image, tf.float32)
+        label = go_tfrecords_reader.label
 
         return image, label
-
-    @staticmethod
-    def extract_shapes_from_tfrecords_features(features):
-        """
-        Extracts the image and label shapes from the TFRecords' features. Uses a short TF session to do so.
-
-        :param features: The recovered TFRecords' protobuf features.
-        :type features: dict[str, tf.Tensor]
-        :return: The image and label shape tuples.
-        :rtype: (int, int, int), (int, int, int)
-        """
-        image_height_tensor = tf.cast(features['image_height'], tf.int64)
-        image_width_tensor = tf.cast(features['image_width'], tf.int64)
-        image_depth_tensor = tf.cast(features['image_depth'], tf.int64)
-        label_height_tensor = tf.cast(features['label_height'], tf.int64)
-        label_width_tensor = tf.cast(features['label_width'], tf.int64)
-        label_depth_tensor = tf.cast(features['label_depth'], tf.int64)
-        # To read the TFRecords file, we need to start a TF session (including queues to read the file name).
-        with tf.Session() as session:
-            coordinator = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coordinator)
-            image_height, image_width, image_depth, label_height, label_width, label_depth = session.run(
-                [image_height_tensor, image_width_tensor, image_depth_tensor, label_height_tensor, label_width_tensor,
-                 label_depth_tensor])
-            coordinator.request_stop()
-            coordinator.join(threads)
-        image_shape = (image_height, image_width, image_depth)
-        label_shape = (label_height, label_width, label_depth)
-        return image_shape, label_shape
 
     def preaugmentation_preprocess(self, image, label):
         """
@@ -271,7 +225,7 @@ class GoData:
 
         return image, label
 
-    def create_input_tensors_for_dataset(self, data_type, batch_size, num_epochs=None):
+    def create_input_tensors_for_dataset(self, data_type, batch_size):
         """
         Prepares the data inputs.
 
@@ -279,63 +233,47 @@ class GoData:
         :type data_type: str
         :param batch_size: The size of the batches
         :type batch_size: int
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
         :return: The images and depths inputs.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        if self.dataset_container == 'file':
-            file_name_queue = self.file_name_queue_for_dataset_file(data_type, num_epochs)
-        else:
-            file_name_queue = self.file_name_queue_for_dataset_directory(data_type, num_epochs)
-
-        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue)
+        file_name_queue = self.file_name_queue_for_dataset_directory(data_type)
+        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
         image, label = self.preaugmentation_preprocess(image, label)
         if data_type == 'train':
             image, label = self.augment(image, label)
         image, label = self.postaugmentation_preprocess(image, label)
 
-        images, labels = tf.train.shuffle_batch(
-            [image, label], batch_size=batch_size, num_threads=2,
-            capacity=500 + 3 * batch_size, min_after_dequeue=500
-        )
+        if data_type in ['test', 'deploy']:
+            images, labels = tf.train.batch(
+                [image, label], batch_size=batch_size, num_threads=1, capacity=1000 + 3 * batch_size
+            )
+        else:
+            images, labels = tf.train.shuffle_batch(
+                [image, label], batch_size=batch_size, num_threads=2,
+                capacity=1000 + 3 * batch_size, min_after_dequeue=1000
+            )
 
         return images, labels
 
-    def file_name_queue_for_dataset_file(self, data_type=None, num_epochs=None):
+    def file_name_queue_for_dataset_directory(self, data_type):
         """
         Creates the files name queue for a single TFRecords file.
 
         :param data_type: The type of dataset being created.
         :type data_type: str
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
         :return: The file name queue.
         :rtype: tf.QueueBase
         """
-        if data_type:
-            file_name = self.data_name + '.' + data_type + '.tfrecords'
+        if data_type in ['test', 'deploy']:
+            num_epochs = 1
+            shuffle = False
         else:
-            file_name = self.data_name + '.tfrecords'
-        file_path = os.path.join(self.data_directory, file_name)
-        file_name_queue = tf.train.string_input_producer([file_path], num_epochs=num_epochs)
-        return file_name_queue
-
-    def file_name_queue_for_dataset_directory(self, data_type, num_epochs=None):
-        """
-        Creates the files name queue for a single TFRecords file.
-
-        :param data_type: The type of dataset being created.
-        :type data_type: str
-        :param num_epochs: Number of epochs to run for. Infinite if None.
-        :type num_epochs: int or None
-        :return: The file name queue.
-        :rtype: tf.QueueBase
-        """
+            num_epochs = None
+            shuffle = True
         file_paths = []
         for file_path in glob.glob(os.path.join(self.data_directory, data_type, '*.tfrecords')):
             file_paths.append(file_path)
-        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs)
+        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs, shuffle=shuffle)
         return file_name_queue
 
     def convert_mat_file_to_numpy_file(self, mat_file_path, number_of_samples=None):
@@ -390,170 +328,51 @@ class GoData:
         """
         return array[:, 8:-8, 8:-8]
 
-    def numpy_files_to_tfrecords(self):
-        """
-        Converts NumPy files to a TFRecords file.
-        """
-        self.load_numpy_files()
-        self.convert_to_tfrecords()
-
-    def load_numpy_files(self):
-        """
-        Loads data from the numpy files into the object.
-        """
-        images_numpy_file_path = os.path.join(self.data_path + '_images.npy')
-        labels_numpy_file_path = os.path.join(self.data_path + '_labels.npy')
-        self.images = np.load(images_numpy_file_path)
-        self.labels = np.load(labels_numpy_file_path)
-        if self.labels.dtype == np.float64:
-            self.labels = self.labels.astype(np.float32)
-
-    def convert_numpy_to_tfrecords(self, images, labels):
+    def convert_numpy_to_tfrecords(self, images, labels=None):
         """
         Converts numpy arrays to a TFRecords.
         """
-        number_of_examples = labels.shape[0]
-        if images.shape[0] != number_of_examples:
-            raise ValueError("Images count %d does not match label count %d." %
-                             (images.shape[0], number_of_examples))
+        number_of_examples = images.shape[0]
+        if labels is not None:
+            if labels.shape[0] != number_of_examples:
+                raise ValueError("Images count %d does not match label count %d." %
+                                 (labels.shape[0], number_of_examples))
+            label_height = labels.shape[1]
+            if len(labels.shape) > 2:
+                label_width = labels.shape[2]
+            else:
+                label_width = 1
+            if len(labels.shape) > 3:
+                label_depth = labels.shape[3]
+            else:
+                label_depth = 1
+        else:
+            label_height, label_width, label_depth = None, None, None  # Line to quiet inspections
         image_height = images.shape[1]
         image_width = images.shape[2]
         image_depth = images.shape[3]
-        label_height = labels.shape[1]
-        if len(labels.shape) > 2:
-            label_width = labels.shape[2]
-        else:
-            label_width = 1
-        if len(labels.shape) > 3:
-            label_depth = labels.shape[3]
-        else:
-            label_depth = 1
 
         filename = os.path.join(self.data_directory, self.data_name + '.tfrecords')
         print('Writing', filename)
         writer = tf.python_io.TFRecordWriter(filename)
         for index in range(number_of_examples):
             image_raw = images[index].tostring()
-            label_raw = labels[index].tostring()
-            example = tf.train.Example(features=tf.train.Features(feature={
+            features = {
                 'image_height': _int64_feature(image_height),
                 'image_width': _int64_feature(image_width),
                 'image_depth': _int64_feature(image_depth),
                 'image_raw': _bytes_feature(image_raw),
-                'label_height': _int64_feature(label_height),
-                'label_width': _int64_feature(label_width),
-                'label_depth': _int64_feature(label_depth),
-                'label_raw': _bytes_feature(label_raw),
-            }))
+            }
+            if labels is not None:
+                label_raw = labels[index].tostring()
+                features.update({
+                    'label_height': _int64_feature(label_height),
+                    'label_width': _int64_feature(label_width),
+                    'label_depth': _int64_feature(label_depth),
+                    'label_raw': _bytes_feature(label_raw)
+                })
+            example = tf.train.Example(features=tf.train.Features(feature=features))
             writer.write(example.SerializeToString())
-
-    def shrink(self):
-        """
-        Rebins the data arrays into the specified data size.
-        """
-        self.images = self.shrink_array_with_rebinning(self.images)
-        self.labels = self.shrink_array_with_rebinning(self.labels)
-
-    def shrink_array_with_rebinning(self, array):
-        """
-        Rebins the NumPy array into a new size, averaging the bins between.
-        :param array: The array to resize.
-        :type array: np.ndarray
-        :return: The resized array.
-        :rtype: np.ndarray
-        """
-        if array.shape[1] == self.image_height and array.shape[2] == self.image_width:
-            return array  # The shape is already right, so don't needlessly process.
-        compression_shape = [
-            array.shape[0],
-            self.image_height,
-            array.shape[1] // self.image_height,
-            self.image_width,
-            array.shape[2] // self.image_width,
-        ]
-        if len(array.shape) == 4:
-            compression_shape.append(self.image_depth)
-            return array.reshape(compression_shape).mean(4).mean(2).astype(np.uint8)
-        else:
-            return array.reshape(compression_shape).mean(4).mean(2)
-
-    def gaussian_noise_augmentation(self, standard_deviation, number_of_variations):
-        """
-        Applies random gaussian noise to the images.
-
-        :param standard_deviation: The standard deviation of the gaussian noise.
-        :type standard_deviation: float
-        :param number_of_variations: The number of noisy copies to create.
-        :type number_of_variations: int
-        """
-        augmented_images_list = [self.images]
-        augmented_labels_list = [self.labels]
-        for _ in range(number_of_variations):
-            # noinspection PyTypeChecker
-            noise = np.random.normal(np.zeros(shape=self.image_shape, dtype=np.int16), standard_deviation)
-            augmented_images_list.append((self.images.astype(np.int16) + noise).clip(0, 255).astype(np.uint8))
-            augmented_labels_list.append(self.labels)
-        self.images = np.concatenate(augmented_images_list)
-        self.labels = np.concatenate(augmented_labels_list)
-
-    @staticmethod
-    def offset_array(array, offset, axis):
-        """
-        Offsets an array by the given amount (simply by copying the array to the given portion).
-        Note, this is only working for very specific cases at the moment.
-
-        :param array: The array to offset.
-        :type array: np.ndarray
-        :param offset: The amount of the offset.
-        :type offset: int
-        :param axis: The axis to preform the offset on.
-        :type axis: int
-        :return: The offset array.
-        :rtype: np.ndarray
-        """
-        offset_array = np.copy(array)
-        offset_array = np.swapaxes(offset_array, 0, axis)
-        if offset > 0:
-            offset_array[offset:] = offset_array[:-offset]
-        else:
-            offset_array[:offset] = offset_array[-offset:]
-        offset_array = np.swapaxes(offset_array, 0, axis)
-        return offset_array
-
-    def offset_augmentation(self, offset_limit):
-        """
-        Augments the data using a crude spatial shifting based on a given offset.
-
-        :param offset_limit: The value of the maximum offset.
-        :type offset_limit: int
-        """
-        augmented_images_list = [self.images]
-        augmented_labels_list = [self.labels]
-        for axis in [1, 2]:
-            for offset in range(-offset_limit, offset_limit + 1):
-                if offset == 0:
-                    continue
-                augmented_images_list.append(self.offset_array(self.images, offset, axis))
-                augmented_labels_list.append(self.offset_array(self.labels, offset, axis))
-        self.images = np.concatenate(augmented_images_list)
-        self.labels = np.concatenate(augmented_labels_list)
-
-    def augment_data_set(self):
-        """
-        Augments the data set with some basic approaches
-        """
-        print('Augmenting with spatial jittering...')
-        self.offset_augmentation(1)
-        print('Augmenting with gaussian noise...')
-        self.gaussian_noise_augmentation(10, 4)
-
-    def shuffle(self):
-        """
-        Shuffles the images and labels together.
-        """
-        permuted_indexes = np.random.permutation(len(self.images))
-        self.images = self.images[permuted_indexes]
-        self.labels = self.labels[permuted_indexes]
 
     def import_mat_file(self, mat_path):
         """
@@ -579,18 +398,6 @@ class GoData:
         :type file_path: str
         """
         self.import_mat_file(file_path)
-
-    def pretfrecords_preprocess(self):
-        """
-        Preprocesses the data.
-        Should be overwritten by subclasses.
-        """
-        print('Shrinking the data...')
-        self.shrink()
-        print('Augmenting the data...')
-        self.augment_data_set()
-        print('Shuffling the data...')
-        self.shuffle()
 
     def convert_to_tfrecords(self):
         """

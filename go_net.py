@@ -7,9 +7,8 @@ import os
 import time
 import tensorflow as tf
 import numpy as np
-import sys
 
-from convenience import weight_variable, bias_variable, conv2d, leaky_relu, size_from_stride_two
+from convenience import weight_variable, bias_variable
 from go_data import GoData
 from interface import Interface
 
@@ -28,7 +27,6 @@ class GoNet(multiprocessing.Process):
         self.data = GoData()
         self.dropout_keep_probability = 0.5
         self.network_name = 'go_net'
-        self.epoch_limit = None
 
         # Logging.
         self.log_directory = 'logs'
@@ -38,6 +36,7 @@ class GoNet(multiprocessing.Process):
         self.image_summary_on = True
 
         # Internal setup.
+        self.restore_model = None
         self.moving_average_loss = None
         self.moving_average_decay = 0.1
         self.stop_signal = False
@@ -64,6 +63,9 @@ class GoNet(multiprocessing.Process):
         """
         Adds the training operations and runs the training loop.
         """
+        # Prepare session.
+        self.session = tf.Session()
+
         print('Preparing data...')
         # Setup the inputs.
         with tf.name_scope('Input'):
@@ -84,20 +86,18 @@ class GoNet(multiprocessing.Process):
             with tf.name_scope('comparison_summary'):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
+        # Prepare the summary operations.
+        summaries_op = tf.merge_all_summaries()
+        summary_path = os.path.join(self.log_directory,
+                                    datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
+
         # Add the training operations to the graph.
         training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # The op for initializing the variables.
         initialize_op = tf.initialize_all_variables()
-
-        # Prepare session.
-        self.session = tf.Session()
-
-        # Prepare the summary operations.
-        summaries_op = tf.merge_all_summaries()
-        summary_path = os.path.join(self.log_directory, datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        train_writer = tf.train.SummaryWriter(summary_path + '_train', self.session.graph)
-        validation_writer = tf.train.SummaryWriter(summary_path + '_validation', self.session.graph)
 
         # Prepare saver.
         self.saver = tf.train.Saver()
@@ -107,10 +107,9 @@ class GoNet(multiprocessing.Process):
         self.session.run(initialize_op)
 
         # Reload from saved model if passed.
-        command_line_arguments = sys.argv[1:]
-        if command_line_arguments:
-            print('Restoring model from %s...' % command_line_arguments[0])
-            self.saver.restore(self.session, command_line_arguments[0])
+        if self.restore_model:
+            print('Restoring model from %s...' % self.restore_model)
+            self.saver.restore(self.session, self.restore_model)
 
         # Start input enqueue threads.
         coordinator = tf.train.Coordinator()
@@ -150,11 +149,11 @@ class GoNet(multiprocessing.Process):
 
                 # Handle interface messages from the user.
                 self.interface_handler()
-        except tf.errors.OutOfRangeError:
+        except tf.errors.OutOfRangeError as error:
             if self.step == 0:
                 print('Data not found.')
             else:
-                print('Done training for %d epochs, %d steps.' % (self.epoch_limit, self.step))
+                raise error
         finally:
             # When done, ask the threads to stop.
             coordinator.request_stop()
@@ -332,8 +331,7 @@ class GoNet(multiprocessing.Process):
         """
         training_images_tensor, training_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='train',
-            batch_size=self.batch_size,
-            num_epochs=self.epoch_limit
+            batch_size=self.batch_size
         )
         validation_images_tensor, validation_labels_tensor = self.data.create_input_tensors_for_dataset(
             data_type='validation',
@@ -345,6 +343,17 @@ class GoNet(multiprocessing.Process):
                 'validation': (validation_images_tensor, validation_labels_tensor)
             }
         )
+        return images_tensor, labels_tensor
+
+    def create_test_dataset_input_tensors(self):
+        """
+        Creates the images input tensor for the test dataset.
+
+        :return: The images and labels tensors for the test dataset.
+        :rtype: tf.Tensor, tf.Tensor
+        """
+        images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(data_type='test',
+                                                                                  batch_size=self.batch_size)
         return images_tensor, labels_tensor
 
     def create_running_average_summary(self, tensor, summary_name=None):
@@ -393,25 +402,19 @@ class GoNet(multiprocessing.Process):
         """
         self.train()
 
-    def predict(self, model_file_name=None):
+    def test(self):
         """
-        Use a trained model to predict labels for a new set of images.
-
-        :param model_file_name: The trained model's file name.
-        :type model_file_name: str
+        Use a trained model to predict labels for a test set of images.
         """
-        if model_file_name is None:
-            model_file_name = self.network_name
+        if self.restore_model is None:
+            self.restore_model = self.attain_latest_model_path()
+            if not self.restore_model:
+                print('No model to restore from found.')
+                return
 
         print('Preparing data...')
         # Setup the inputs.
-        original_images = np.load('test_images.npy').astype(np.float32)
-        images = self.data.shrink_array_with_rebinning(original_images)
-        np.save('shrunk_images.npy', images.astype(np.uint8))
-        images -= np.mean(images)
-        images /= np.std(images)
-
-        images_tensor = tf.placeholder(tf.float32, [None, self.data.image_height, self.data.image_width, 3])
+        images_tensor, labels_tensor = self.create_test_dataset_input_tensors()
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
@@ -421,26 +424,76 @@ class GoNet(multiprocessing.Process):
         initialize_op = tf.initialize_all_variables()
 
         # Prepare the saver.
-        saver = tf.train.Saver()
+        variables_to_restore = [v for v in tf.all_variables() if "input_producer/limit_epochs/epochs" not in v.name]
+        saver = tf.train.Saver(variables_to_restore)
 
         # Create a session for running operations in the Graph.
-        session = tf.Session()
+        self.session = tf.Session()
 
         print('Running prediction...')
         # Initialize the variables.
-        session.run(initialize_op)
+        self.session.run(initialize_op)
 
-        saver.restore(session, os.path.join('models', model_file_name))
+        # Load model.
+        print('Restoring model from {model_file_path}...'.format(model_file_path=self.restore_model))
+        saver.restore(self.session, self.restore_model)
 
-        # Preform the training loop.
-        labels = session.run([predicted_labels_tensor], feed_dict={images_tensor: images,
-                                                                   self.dropout_keep_probability_tensor: 1.0})
-        np.save(os.path.join(self.data.data_directory, 'predicted_labels'), labels)
+        # Start input enqueue threads.
+        coordinator = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
 
-        session.close()
-        print('Done.')
+        predicted_labels = np.ndarray(shape=[0] + list(self.data.label_shape), dtype=np.float32).squeeze()
 
+        # Preform the prediction loop.
+        try:
+            while not coordinator.should_stop() and not self.stop_signal:
+                # Regular prediction step.
+                predicted_labels_batch = self.session.run(
+                    predicted_labels_tensor,
+                    feed_dict={**self.default_feed_dictionary, self.dropout_keep_probability_tensor: 1.0}
+                )
+                predicted_labels = np.concatenate((predicted_labels, predicted_labels_batch))
+                self.step += 1
+                print('{image_count} images processed.'.format(image_count=self.step * self.batch_size))
+        except tf.errors.OutOfRangeError:
+            if self.step == 0:
+                print('Data not found.')
+            else:
+                print('Done predicting after %d steps.' % self.step)
+        finally:
+            # When done, ask the threads to stop.
+            coordinator.request_stop()
+
+        # Wait for threads to finish.
+        coordinator.join(threads)
+        self.session.close()
+
+        predicted_labels_save_path = os.path.join(self.data.data_directory, 'predicted_labels')
+        print('Saving labels to {}.npy...'.format(predicted_labels_save_path))
+        np.save(predicted_labels_save_path, predicted_labels)
+
+        self.session.close()
+
+    def attain_latest_model_path(self):
+        """
+        Determines the model path for the model which matches the network name and has the highest step label.
+
+        :return: The model path.
+        :rtype: str
+        """
+        latest_model_name = None
+        latest_model_step = -1
+        for file_name in os.listdir("models"):
+            if self.network_name + '.ckpt' in file_name and 'meta' not in file_name:
+                number_start_index = file_name.index('ckpt-') + len('ckpt-')
+                model_step = int(file_name[number_start_index:])
+                if model_step > latest_model_step:
+                    latest_model_step = model_step
+                    latest_model_name = file_name
+        if not latest_model_name:
+            return
+        return os.path.join('models', latest_model_name)
 
 if __name__ == '__main__':
     interface = Interface(network_class=GoNet)
-    interface.train()
+    interface.run()
