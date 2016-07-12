@@ -30,6 +30,7 @@ class GoData:
         self.labels = None
 
         # Internal attributes.
+        self.dataset_type = None
         self._label_height = None
         self._label_width = None
         self._label_depth = None
