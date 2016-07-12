@@ -3,6 +3,7 @@ Code for simple conversions between file types.
 """
 import os
 import shlex
+import shutil
 import subprocess
 
 import numpy as np
@@ -94,10 +95,20 @@ class GoConverter:
         """
         return [int(text) if text.isdigit() else text.lower() for text in re.split(_natural_sort_regex, sequence)]
 
-    '''def convert_video_to_numpy(self, input_video_path, output_numpy_path, frames_per_second=30):
+    def convert_video_to_numpy(self, input_video_path, output_numpy_path, frames_per_second=30):
+        """
+        Converts a video into a NumPy array.
+
+        :param input_video_path: The path to the video.
+        :type input_video_path: str
+        :param output_numpy_path: The path where the NumPy array should be saved.
+        :type output_numpy_path: str
+        :param frames_per_second: The frames per second to export.
+        :type frames_per_second: int
+        """
         output_directory = os.path.dirname(output_numpy_path)
         temporary_frames_directory = os.path.join(output_directory, 'temporary_frames_directory')
         os.mkdir(temporary_frames_directory)
-        self.convert_video_to_images(input_video_path, temporary_frames_directory)
-
-        shutil.rmtree(temporary_frames_directory)'''
+        self.convert_video_to_images(input_video_path, temporary_frames_directory, frames_per_second=frames_per_second)
+        self.convert_images_to_numpy(temporary_frames_directory, output_numpy_path)
+        shutil.rmtree(temporary_frames_directory)
