@@ -2,6 +2,7 @@
 Code for managing the crowd data.
 """
 import numpy as np
+import tensorflow as tf
 import os
 
 from go_data import GoData
@@ -107,6 +108,24 @@ class CrowdData(GoData):
             labels = np.expand_dims(labels, axis=0)
         self.images = images
         self.labels = labels
+
+    def preaugmentation_preprocess(self, image, label):
+        """
+        Preprocesses the image and label to be in the correct format for training.
+
+        :param image: The image to be processed.
+        :type image: tf.Tensor
+        :param label: The label to be processed.
+        :type label: tf.Tensor
+        :return: The processed image and label.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image = tf.image.resize_images(image, self.image_height, self.image_width)
+        resized_label = tf.image.resize_images(label, self.image_height, self.image_width)
+        # Normalize the label to have the same sum as before resizing.
+        label_sum = tf.reduce_sum(label)
+        label = (resized_label / tf.reduce_sum(label)) * label_sum
+        return image, label
 
 
 if __name__ == '__main__':
