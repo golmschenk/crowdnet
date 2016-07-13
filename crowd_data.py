@@ -124,9 +124,12 @@ class CrowdData(GoData):
         resized_label = tf.image.resize_images(label, self.image_height, self.image_width)
         # Normalize the label to have the same sum as before resizing.
         label_sum = tf.reduce_sum(label)
-        resized_label_sum = tf.reduce_sum(label)
-        if resized_label_sum != 0:
-            label = (resized_label / resized_label_sum) * label_sum
+        resized_label_sum = tf.reduce_sum(resized_label)
+        label = tf.cond(
+            tf.not_equal(resized_label_sum, 0),
+            lambda: (resized_label / resized_label_sum) * label_sum,
+            lambda: resized_label
+        )
         return image, label
 
 
