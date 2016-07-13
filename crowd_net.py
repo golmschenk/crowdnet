@@ -18,6 +18,7 @@ class CrowdNet(GoNet):
         super().__init__(*args, **kwargs)
 
         self.data = CrowdData()
+        self.batch_size = 16
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -192,4 +193,4 @@ class CrowdNet(GoNet):
 
 if __name__ == '__main__':
     interface = Interface(network_class=CrowdNet)
-    interface.train()
+    interface.run()

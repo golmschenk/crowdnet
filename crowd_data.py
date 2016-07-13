@@ -16,9 +16,10 @@ class CrowdData(GoData):
         super().__init__()
 
         self.data_directory = 'data'
-        self.image_height = 158 // 2  # The height we'll be training on (data will be shrunk if needed).
-        self.image_width = 238 // 2  # The width we'll be training on (data will be shrunk if needed).
+        self.image_height = 480 // 8  # The height we'll be training on (data will be resized if needed).
+        self.image_width = 704 // 8  # The width we'll be training on (data will be resized if needed).
         self.train_size = 'all'
+        self.dataset_type = None
 
     def attain_import_file_paths(self):
         """
@@ -32,6 +33,10 @@ class CrowdData(GoData):
             numpy_file_names = [file_name for file_name in file_names if file_name.endswith('.npy')]
             for numpy_file_name in numpy_file_names:
                 if 'image' in numpy_file_name:
+                    if self.dataset_type == 'deploy':
+                        images_path = os.path.abspath(os.path.join(file_directory, numpy_file_name))
+                        import_file_paths.append(images_path)
+                        continue
                     images_path = os.path.abspath(os.path.join(file_directory, numpy_file_name))
                     if os.path.isfile(images_path.replace('image', 'density')):
                         labels_path = images_path.replace('image', 'density')
@@ -55,7 +60,10 @@ class CrowdData(GoData):
         :return: The name of the export file.
         :rtype: str
         """
-        image_file_path = import_file_path[0]
+        if self.dataset_type == 'deploy':
+            image_file_path = import_file_path
+        else:
+            image_file_path = import_file_path[0]
         export_name = os.path.splitext(os.path.basename(image_file_path))[0]
         self.data_name = export_name.replace('images', 'data_pairs').replace('image', 'data_pair')
 
@@ -67,7 +75,23 @@ class CrowdData(GoData):
         :param file_path: The file path of the file to be imported.
         :type file_path: str | (str, str)
         """
-        self.import_numpy_pair_files(file_path)
+        if self.dataset_type == 'deploy':
+            self.import_numpy_images_file(file_path)
+        else:
+            self.import_numpy_pair_files(file_path)
+
+    def import_numpy_images_file(self, file_path):
+        """
+        Imports the images from the file path.
+
+        :param file_path: The file path of the numpy image.
+        :type file_path: str
+        """
+        images = np.load(file_path)
+        if len(images.shape) == 3:
+            images = np.expand_dims(images, axis=0)
+        self.images = images
+        self.labels = None
 
     def import_numpy_pair_files(self, file_path_pair):
         """
