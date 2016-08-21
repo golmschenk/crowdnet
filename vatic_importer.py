@@ -27,6 +27,9 @@ class VaticImporter:
                                                            self.text_dump_filename).split(' '))
 
     def create_head_point_position_files_from_text_dump(self):
+        """
+        Creates the head position Numpy files from the text dump.
+        """
         with open(self.text_dump_filename) as text_dump_file:
             text_dump_content = csv.reader(text_dump_file, delimiter=' ')
         for row in text_dump_content:
@@ -47,6 +50,14 @@ class VaticImporter:
                 np.save(numpy_path, np.array([[x, y]]))
 
     def get_frame_file_path(self, frame_number):
+        """
+        Finds the path to the frame in the vatic frame directory.
+
+        :param frame_number: The number of the frame whose path is to be retrieved.
+        :type frame_number: int
+        :return: The full path to the frame.
+        :rtype: str
+        """
         for root, directories, filenames in os.walk(self.frames_directory):
             for filename in filenames:
                 if filename == '{}.jpg'.format(frame_number):
