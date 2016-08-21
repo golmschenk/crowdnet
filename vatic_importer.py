@@ -3,6 +3,7 @@ Code for importing data from Vatic.
 """
 import csv
 import os
+from shutil import copyfile
 from subprocess import call
 import numpy as np
 
@@ -26,7 +27,7 @@ class VaticImporter:
         call('(cd {} && exec turkic dump {} -o {})'.format(self.vatic_directory, self.identifier_name,
                                                            self.text_dump_filename).split(' '))
 
-    def create_head_point_position_files_from_text_dump(self):
+    def create_head_point_position_files_from_text_dump(self, copy_frame_image=True):
         """
         Creates the head position Numpy files from the text dump.
         """
@@ -39,13 +40,16 @@ class VaticImporter:
             x = int((x0 + x1) / 2)
             y = int((y0 + y1) / 2)
             frame_file_path = self.get_frame_file_path(frame_number)
-            frame_filename_without_extension = os.path.splitext(os.path.basename(frame_file_path))[0]
+            frame_filename = os.path.basename(frame_file_path)
+            frame_filename_without_extension = os.path.splitext(frame_filename)[0]
             numpy_path = os.path.join(self.output_directory, frame_filename_without_extension + '.npy')
             if os.path.isfile(numpy_path):
                 head_position_array = np.load(numpy_path)
                 new_head_position = np.array([[x, y]])
                 head_position_array = np.concatenate((head_position_array, new_head_position))
                 np.save(numpy_path, head_position_array)
+                if copy_frame_image:
+                    copyfile(frame_file_path, os.path.join(self.output_directory, frame_filename))
             else:
                 np.save(numpy_path, np.array([[x, y]]))
 
