@@ -45,3 +45,9 @@ class VaticImporter:
                 np.save(numpy_path, head_position_array)
             else:
                 np.save(numpy_path, np.array([[x, y]]))
+
+    def get_frame_file_path(self, frame_number):
+        for root, directories, filenames in os.walk(self.frames_directory):
+            for filename in filenames:
+                if filename == '{}.jpg'.format(frame_number):
+                    return os.path.join(root, filename)
