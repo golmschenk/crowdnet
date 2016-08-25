@@ -75,6 +75,9 @@ class VaticExporter:
 
     @classmethod
     def command_line_interface(cls):
+        """
+        Allows for running the exporter from the command line.
+        """
         # Parse arguments.
         parser = argparse.ArgumentParser(
             description='Exports data from Vatic into other forms. The default is exporting to head positions.'
