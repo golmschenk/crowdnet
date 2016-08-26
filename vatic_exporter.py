@@ -59,6 +59,13 @@ class VaticExporter:
                 else:
                     np.save(numpy_path, np.array([[x, y]]))
 
+    def calculate_polynomial_fit_from_text_dump(self, polynomial_degree):
+        head_y_and_height_array = self.extract_head_y_and_height_array()
+        head_y_array = head_y_and_height_array[:, 0]
+        height_array = head_y_and_height_array[:, 1]
+        coefficients = np.polyfit(head_y_array, height_array, polynomial_degree)
+        return coefficients
+
     def get_frame_file_path(self, frame_number):
         """
         Finds the path to the frame in the vatic frame directory.
