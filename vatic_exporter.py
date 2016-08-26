@@ -59,8 +59,64 @@ class VaticExporter:
                 else:
                     np.save(numpy_path, np.array([[x, y]]))
 
-    def calculate_polynomial_fit_from_text_dump(self, polynomial_degree):
-        head_y_and_height_array = self.extract_head_y_and_height_array()
+    def extract_head_y_and_height_array_from_text_dump(self):
+        """
+        Gets head y positions paired with heights from a text dump file containing head and person labels.
+
+        :return: The array containing the head y and height values.
+        :rtype: np.ndarray
+        """
+        frame_objects_dict = {}
+        with open(self.text_dump_filename) as text_dump_file:
+            text_dump_content = csv.reader(text_dump_file, delimiter=' ')
+            for row in text_dump_content:
+                out_of_frame = row[6]
+                if out_of_frame == '1':
+                    continue
+                if 'Head' not in row and 'Person' not in row:
+                    continue
+                frame_number = row[5]
+                if frame_number not in frame_objects_dict:
+                    frame_objects_dict[frame_number] = {'Heads': [], 'People': []}
+                if 'Head' in row:
+                    head = (int(row[1]), int(row[2]), int(row[3]), int(row[4]))
+                    frame_objects_dict[frame_number]['Heads'].append(head)
+                if 'Person' in row:
+                    person = (int(row[1]), int(row[2]), int(row[3]), int(row[4]))
+                    frame_objects_dict[frame_number]['People'].append(person)
+
+        # Find matching head people pairs
+        pairs = []
+        for frame_objects in frame_objects_dict:
+            heads = frame_objects['Heads']
+            people = frame_objects['People']
+            for head in heads:
+                for person in people:
+                    # Matching check.
+                    if person[1] < head[1] < head[3] < person[3] and abs(head[2] - person[2]) < 5:
+                        pairs.append((head, person))
+                        break  # One head per person.
+
+        # Keep only the head y position and the height.
+        head_y_and_height_list = []
+        for pair in pairs:
+            head = pair[0]
+            person = pair[1]
+            y = int(head[2] + head[4]) // 2
+            height = person[4] - person[2]
+            head_y_and_height_list.append((y, height))
+        return np.stack(head_y_and_height_list)
+
+    def calculate_height_to_head_position_polynomial_fit_from_text_dump(self, polynomial_degree):
+        """
+        Calculates the coefficients of the polynomial fit from the head position to the height.
+
+        :param polynomial_degree: The degree of polynomial to fit to the data.
+        :type polynomial_degree: int
+        :return: The array containing the coefficients. Highest degree first.
+        :rtype: np.ndarray
+        """
+        head_y_and_height_array = self.extract_head_y_and_height_array_from_text_dump()
         head_y_array = head_y_and_height_array[:, 0]
         height_array = head_y_and_height_array[:, 1]
         coefficients = np.polyfit(head_y_array, height_array, polynomial_degree)
