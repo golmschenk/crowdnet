@@ -94,7 +94,10 @@ class VaticExporter:
                 for person in people:
                     # Matching check.
                     if person[1] < head[1] < head[3] < person[3] and abs(head[2] - person[2]) < 5:
-                        pairs.append((head, person))
+                        if (head, person) not in pairs:
+                            # Only allow unique combinations to prevent people who just stand still for a long time
+                            # from being over fit for.
+                            pairs.append((head, person))
                         break  # One head per person.
 
         # Keep only the head y position and the height.
