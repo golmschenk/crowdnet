@@ -88,13 +88,13 @@ class VaticExporter:
 
         # Find matching head people pairs
         pairs = []
-        for frame_objects in frame_objects_dict:
+        for frame_number, frame_objects in frame_objects_dict.items():
             heads = frame_objects['Heads']
             people = frame_objects['People']
             for head in heads:
                 for person in people:
                     # Matching check.
-                    if person[1] < head[1] < head[3] < person[3] and abs(head[2] - person[2]) < 5:
+                    if person[0] < head[0] < head[2] < person[2] and abs(head[1] - person[1]) < 5:
                         if (head, person) not in pairs:
                             # Only allow unique combinations to prevent people who just stand still for a long time
                             # from being over weighted for.
@@ -106,12 +106,12 @@ class VaticExporter:
         for pair in pairs:
             head = pair[0]
             person = pair[1]
-            y = int(head[2] + head[4]) // 2
-            height = person[4] - person[2]
+            y = int(head[1] + head[3]) // 2
+            height = person[3] - person[1]
             head_y_and_height_list.append((y, height))
         return np.stack(head_y_and_height_list)
 
-    def calculate_height_to_head_position_polynomial_fit_from_text_dump(self, polynomial_degree):
+    def calculate_height_to_head_position_polynomial_fit_from_text_dump(self, polynomial_degree=1):
         """
         Calculates the coefficients of the polynomial fit from the head position to the height.
 
@@ -151,26 +151,28 @@ class VaticExporter:
         )
         # Subparsers.
         subparsers = parser.add_subparsers()
-        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.')
-        height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.')
 
-        parser.add_argument('vatic_directory', help='The vatic directory to run Turkic from.')
-        parser.add_argument('identifier', help=('The identifier of the video in Vatic (should also be the name of the'
-                                                'subdirectory in frames root directory).'))
-        parser.add_argument('output_root_directory', help='The path to export the data to.')
+        parser.add_argument('--identifier', required=True, type=str,
+                            help=('The identifier of the video in Vatic (should also be the name of the subdirectory in'
+                                  'frames root directory).'))
+        parser.add_argument('--vatic_directory', required=True, type=str,
+                            help='The vatic directory to run Turkic from.')
+        parser.add_argument('--output_root_directory', required=True, type=str, help='The path to export the data to.')
 
         # Head subparser specific arguments.
-        head_export_parser.add_argument('frames_root_directory',
+        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.')
+        head_export_parser.add_argument('--frames_root_directory', required=True, type=str,
                                         help='The parent directory in which all Vatic video frames are stored')
         head_export_parser.set_defaults(program='head')
 
         # Height subparser specific arguments.
+        height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.')
         height_export_parser.set_defaults(program='height')
 
         args = parser.parse_args()
 
         # Create the exporter.
-        if not args.frames_root_directory:
+        if not hasattr(args, 'frames_root_directory'):
             args.frames_root_directory = None
         vatic_exporter = cls(args.identifier, args.vatic_directory, args.output_root_directory,
                              args.frames_root_directory)
