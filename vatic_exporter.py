@@ -14,9 +14,10 @@ class VaticExporter:
     A class for working with data from Vatic.
     """
 
-    def __init__(self, identifier, frames_root_directory, vatic_directory, output_root_directory):
+    def __init__(self, identifier, vatic_directory, output_root_directory, frames_root_directory=None):
         self.identifier = identifier
-        self.frames_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
+        if frames_root_directory:
+            self.frames_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
         self.vatic_directory = os.path.abspath(vatic_directory)
         self.output_directory = os.path.join(os.path.abspath(output_root_directory), self.identifier)
         if not os.path.isdir(self.output_directory):
@@ -96,7 +97,7 @@ class VaticExporter:
                     if person[1] < head[1] < head[3] < person[3] and abs(head[2] - person[2]) < 5:
                         if (head, person) not in pairs:
                             # Only allow unique combinations to prevent people who just stand still for a long time
-                            # from being over fit for.
+                            # from being over weighted for.
                             pairs.append((head, person))
                         break  # One head per person.
 
@@ -148,21 +149,37 @@ class VaticExporter:
         parser = argparse.ArgumentParser(
             description='Exports data from Vatic into other forms. The default is exporting to head positions.'
         )
+        # Subparsers.
+        subparsers = parser.add_subparsers()
+        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.')
+        height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.')
+
         parser.add_argument('vatic_directory', help='The vatic directory to run Turkic from.')
-        parser.add_argument('frames_root_directory',
-                            help='The parent directory in which all Vatic video frames are stored')
         parser.add_argument('identifier', help=('The identifier of the video in Vatic (should also be the name of the'
                                                 'subdirectory in frames root directory).'))
         parser.add_argument('output_root_directory', help='The path to export the data to.')
+
+        # Head subparser specific arguments.
+        head_export_parser.add_argument('frames_root_directory',
+                                        help='The parent directory in which all Vatic video frames are stored')
+        head_export_parser.set_defaults(program='head')
+
+        # Height subparser specific arguments.
+        height_export_parser.set_defaults(program='height')
+
         args = parser.parse_args()
 
         # Create the exporter.
-        vatic_exporter = cls(args.identifier, args.frames_root_directory, args.vatic_directory,
-                             args.output_root_directory)
+        if not args.frames_root_directory:
+            args.frames_root_directory = None
+        vatic_exporter = cls(args.identifier, args.vatic_directory, args.output_root_directory,
+                             args.frames_root_directory)
 
-        # Run the exporter.
         vatic_exporter.dump_vatic_data_to_text()
-        vatic_exporter.create_head_point_position_files_from_text_dump()
+        if args.program == 'head':
+            vatic_exporter.create_head_point_position_files_from_text_dump()
+        elif args.program == 'height':
+            print(vatic_exporter.calculate_height_to_head_position_polynomial_fit_from_text_dump())
 
 
 if __name__ == '__main__':
