@@ -155,10 +155,10 @@ class VaticExporter:
         # Generic arguments.
         generic_parser = argparse.ArgumentParser(add_help=False)
         generic_parser.add_argument('--identifier', type=str,
-                            help=('The identifier of the video in Vatic (should also be the name of the subdirectory in'
-                                  'frames root directory).'))
+                                    help=('The identifier of the video in Vatic (should alsobe the name of the'
+                                          'subdirectory in frames root directory).'))
         generic_parser.add_argument('--vatic_directory', type=str,
-                            help='The vatic directory to run Turkic from.')
+                                    help='The vatic directory to run Turkic from.')
         generic_parser.add_argument('--output_root_directory', type=str, help='The path to export the data to.')
 
         # Head subparser specific arguments.
