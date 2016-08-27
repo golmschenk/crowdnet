@@ -152,21 +152,24 @@ class VaticExporter:
         # Subparsers.
         subparsers = parser.add_subparsers()
 
-        parser.add_argument('--identifier', required=True, type=str,
+        # Generic arguments.
+        generic_parser = argparse.ArgumentParser(add_help=False)
+        generic_parser.add_argument('--identifier', type=str,
                             help=('The identifier of the video in Vatic (should also be the name of the subdirectory in'
                                   'frames root directory).'))
-        parser.add_argument('--vatic_directory', required=True, type=str,
+        generic_parser.add_argument('--vatic_directory', type=str,
                             help='The vatic directory to run Turkic from.')
-        parser.add_argument('--output_root_directory', required=True, type=str, help='The path to export the data to.')
+        generic_parser.add_argument('--output_root_directory', type=str, help='The path to export the data to.')
 
         # Head subparser specific arguments.
-        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.')
-        head_export_parser.add_argument('--frames_root_directory', required=True, type=str,
+        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.', parents=[generic_parser])
+        head_export_parser.add_argument('--frames_root_directory', type=str,
                                         help='The parent directory in which all Vatic video frames are stored')
         head_export_parser.set_defaults(program='head')
 
         # Height subparser specific arguments.
-        height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.')
+        height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.',
+                                                     parents=[generic_parser])
         height_export_parser.set_defaults(program='height')
 
         args = parser.parse_args()
