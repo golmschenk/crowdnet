@@ -1,5 +1,5 @@
 """
-Code for exporting data from Vatic.
+Code for exporting and importing data from and to Vatic.
 """
 import csv
 import os
@@ -9,7 +9,7 @@ import numpy as np
 import argparse
 
 
-class VaticExporter:
+class VaticHelper:
     """
     A class for working with data from Vatic.
     """
@@ -188,4 +188,4 @@ class VaticExporter:
 
 
 if __name__ == '__main__':
-    VaticExporter.command_line_interface()
+    VaticHelper.command_line_interface()
