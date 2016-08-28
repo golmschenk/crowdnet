@@ -14,15 +14,16 @@ class VaticHelper:
     A class for working with data from Vatic.
     """
 
-    def __init__(self, identifier, vatic_directory, output_root_directory, frames_root_directory=None):
+    def __init__(self, identifier, vatic_directory, output_root_directory=None, frames_root_directory=None):
         self.identifier = identifier
         if frames_root_directory:
             self.frames_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
         self.vatic_directory = os.path.abspath(vatic_directory)
-        self.output_directory = os.path.join(os.path.abspath(output_root_directory), self.identifier)
-        if not os.path.isdir(self.output_directory):
-            os.mkdir(self.output_directory)
-        self.text_dump_filename = os.path.join(self.output_directory, 'text_dump.txt')
+        if output_root_directory:
+            self.output_directory = os.path.join(os.path.abspath(output_root_directory), self.identifier)
+            if not os.path.isdir(self.output_directory):
+                os.mkdir(self.output_directory)
+            self.text_dump_filename = os.path.join(self.output_directory, 'text_dump.txt')
 
     def dump_vatic_data_to_text(self):
         """
@@ -152,25 +153,37 @@ class VaticHelper:
         # Subparsers.
         subparsers = parser.add_subparsers()
 
-        # Generic arguments.
-        generic_parser = argparse.ArgumentParser(add_help=False)
-        generic_parser.add_argument('--identifier', type=str,
+        # Parser parents.
+        vatic_parser = argparse.ArgumentParser(add_help=False)
+        vatic_parser.add_argument('--identifier', type=str,
                                     help=('The identifier of the video in Vatic (should alsobe the name of the'
                                           'subdirectory in frames root directory).'))
-        generic_parser.add_argument('--vatic_directory', type=str,
+        vatic_parser.add_argument('--vatic_directory', type=str,
                                     help='The vatic directory to run Turkic from.')
-        generic_parser.add_argument('--output_root_directory', type=str, help='The path to export the data to.')
 
-        # Head subparser specific arguments.
-        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.', parents=[generic_parser])
-        head_export_parser.add_argument('--frames_root_directory', type=str,
-                                        help='The parent directory in which all Vatic video frames are stored')
+        output_parser = argparse.ArgumentParser(add_help=False)
+        output_parser.add_argument('--output_root_directory', type=str, help='The path to export the data to.')
+
+        frames_parser = argparse.ArgumentParser(add_help=False)
+        frames_parser.add_argument('--frames_root_directory', type=str,
+                                   help='The parent directory in which all Vatic video frames are stored')
+
+        # Head exporter subparser specific arguments.
+        head_export_parser = subparsers.add_parser('head', help='Exports the head positions.',
+                                                   parents=[vatic_parser, output_parser, frames_parser])
         head_export_parser.set_defaults(program='head')
 
-        # Height subparser specific arguments.
+        # Height calculation subparser specific arguments.
         height_export_parser = subparsers.add_parser('height', help='Exports the coefficients for the height fitting.',
-                                                     parents=[generic_parser])
+                                                     parents=[vatic_parser, output_parser])
         height_export_parser.set_defaults(program='height')
+
+        # Video load subparser specific arguments.
+        import_parser = subparsers.add_parser('import', help='Adds a video to Vatic.',
+                                                     parents=[vatic_parser, frames_parser])
+        import_parser.add_argument('--add_height_copy',
+                                   help='The parent directory in which all Vatic video frames are stored')
+        import_parser.set_defaults(program='import')
 
         args = parser.parse_args()
 
