@@ -14,10 +14,10 @@ class VaticHelper:
     A class for working with data from Vatic.
     """
 
-    def __init__(self, identifier, vatic_directory, output_root_directory=None, frames_root_directory=None):
+    def __init__(self, identifier=None, vatic_directory=None, output_root_directory=None, frames_root_directory=None):
         self.identifier = identifier
         if frames_root_directory:
-            self.frames_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
+            self.frames_root_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
         self.vatic_directory = os.path.abspath(vatic_directory)
         if output_root_directory:
             self.output_directory = os.path.join(os.path.abspath(output_root_directory), self.identifier)
@@ -136,15 +136,35 @@ class VaticHelper:
         :return: The full path to the frame.
         :rtype: str
         """
-        for root, directories, filenames in os.walk(self.frames_directory):
+        for root, directories, filenames in os.walk(self.frames_root_directory):
             for filename in filenames:
                 if filename == '{}.jpg'.format(frame_number):
                     return os.path.join(root, filename)
 
+    def import_video(self, video_path, add_height_copy=False):
+        """
+        Imports a video into Vatic
+
+        :param video_path: The path to the video.
+        :type video_path: str
+        :param add_height_copy: Whether or not to add a height calibration copy of the video.
+        :type add_height_copy: bool
+        """
+        frames_directory = os.path.join(self.frames_root_directory, self.identifier)
+        if not os.path.isdir(frames_directory):
+            os.mkdir(frames_directory)
+        call('/usr/local/bin/turkic extract {} {} --no-resize'.format(video_path, frames_directory).split(' '),
+             cwd=self.vatic_directory)
+        call('/usr/local/bin/turkic load {} {} Head --offline --length 100000000'.format(
+            self.identifier, frames_directory).split(' '), cwd=self.vatic_directory)
+        if add_height_copy:
+            call('/usr/local/bin/turkic load {}_Height_Calibration {} Head Person --offline --length 100000000'.format(
+                self.identifier, frames_directory).split(' '), cwd=self.vatic_directory)
+
     @classmethod
     def command_line_interface(cls):
         """
-        Allows for running the exporter from the command line.
+        Allows for running the helper from the command line.
         """
         # Parse arguments.
         parser = argparse.ArgumentParser(
@@ -156,17 +176,17 @@ class VaticHelper:
         # Parser parents.
         vatic_parser = argparse.ArgumentParser(add_help=False)
         vatic_parser.add_argument('--identifier', type=str,
-                                    help=('The identifier of the video in Vatic (should alsobe the name of the'
-                                          'subdirectory in frames root directory).'))
+                                  help=('The identifier of the video in Vatic (should alsobe the name of the'
+                                        'subdirectory in frames root directory).'))
         vatic_parser.add_argument('--vatic_directory', type=str,
-                                    help='The vatic directory to run Turkic from.')
+                                  help='The vatic directory to run Turkic from.')
 
         output_parser = argparse.ArgumentParser(add_help=False)
         output_parser.add_argument('--output_root_directory', type=str, help='The path to export the data to.')
 
         frames_parser = argparse.ArgumentParser(add_help=False)
         frames_parser.add_argument('--frames_root_directory', type=str,
-                                   help='The parent directory in which all Vatic video frames are stored')
+                                   help='The parent directory in which all Vatic video frames are stored.')
 
         # Head exporter subparser specific arguments.
         head_export_parser = subparsers.add_parser('head', help='Exports the head positions.',
@@ -180,9 +200,11 @@ class VaticHelper:
 
         # Video load subparser specific arguments.
         import_parser = subparsers.add_parser('import', help='Adds a video to Vatic.',
-                                                     parents=[vatic_parser, frames_parser])
-        import_parser.add_argument('--add_height_copy',
-                                   help='The parent directory in which all Vatic video frames are stored')
+                                              parents=[vatic_parser, frames_parser])
+        import_parser.add_argument('--video_path', type=str,
+                                   help='The path to the to be imported.')
+        import_parser.add_argument('--add_height_copy', action='store_true', default=False,
+                                   help='Flag to add a duplicate of the video for height estimation purposes.')
         import_parser.set_defaults(program='import')
 
         args = parser.parse_args()
@@ -190,14 +212,27 @@ class VaticHelper:
         # Create the exporter.
         if not hasattr(args, 'frames_root_directory'):
             args.frames_root_directory = None
-        vatic_exporter = cls(args.identifier, args.vatic_directory, args.output_root_directory,
-                             args.frames_root_directory)
+        vatic_helper = cls(args.identifier, args.vatic_directory, args.output_root_directory,
+                           args.frames_root_directory)
 
-        vatic_exporter.dump_vatic_data_to_text()
+        vatic_helper.dump_vatic_data_to_text()
         if args.program == 'head':
-            vatic_exporter.create_head_point_position_files_from_text_dump()
+            vatic_helper = cls(identifier=args.identifier, vatic_directory=args.vatic_directory,
+                               output_root_directory=args.output_root_directory,
+                               frames_root_directory=args.frames_root_directory)
+            vatic_helper.create_head_point_position_files_from_text_dump()
         elif args.program == 'height':
-            print(vatic_exporter.calculate_height_to_head_position_polynomial_fit_from_text_dump())
+            vatic_helper = cls(identifier=args.identifier, vatic_directory=args.vatic_directory,
+                               output_root_directory=args.output_root_directory)
+            print(vatic_helper.calculate_height_to_head_position_polynomial_fit_from_text_dump())
+        elif args.program == 'import':
+            if args.identifier:
+                identifier = args.identifier
+            else:
+                identifier = os.path.splitext(os.path.basename(args.video_path))[0]
+            vatic_helper = cls(identifier=identifier, vatic_directory=args.vatic_directory,
+                               frames_root_directory=args.frames_root_directory)
+            vatic_helper.import_video(args.video_path, add_height_copy=args.add_height_copy)
 
 
 if __name__ == '__main__':
