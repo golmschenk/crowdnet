@@ -17,7 +17,7 @@ class VaticHelper:
     def __init__(self, identifier=None, vatic_directory=None, output_root_directory=None, frames_root_directory=None):
         self.identifier = identifier
         if frames_root_directory:
-            self.frames_root_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
+            self.frames_directory = os.path.join(os.path.abspath(frames_root_directory), self.identifier)
         self.vatic_directory = os.path.abspath(vatic_directory)
         if output_root_directory:
             self.output_directory = os.path.join(os.path.abspath(output_root_directory), self.identifier)
@@ -136,7 +136,7 @@ class VaticHelper:
         :return: The full path to the frame.
         :rtype: str
         """
-        for root, directories, filenames in os.walk(self.frames_root_directory):
+        for root, directories, filenames in os.walk(self.frames_directory):
             for filename in filenames:
                 if filename == '{}.jpg'.format(frame_number):
                     return os.path.join(root, filename)
@@ -150,16 +150,15 @@ class VaticHelper:
         :param add_height_copy: Whether or not to add a height calibration copy of the video.
         :type add_height_copy: bool
         """
-        frames_directory = os.path.join(self.frames_root_directory, self.identifier)
-        if not os.path.isdir(frames_directory):
-            os.mkdir(frames_directory)
-        call('/usr/local/bin/turkic extract {} {} --no-resize'.format(video_path, frames_directory).split(' '),
+        if not os.path.isdir(self.frames_directory):
+            os.mkdir(self.frames_directory)
+        call('/usr/local/bin/turkic extract {} {} --no-resize'.format(video_path, self.frames_directory).split(' '),
              cwd=self.vatic_directory)
         call('/usr/local/bin/turkic load {} {} Head --offline --length 100000000'.format(
-            self.identifier, frames_directory).split(' '), cwd=self.vatic_directory)
+            self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
         if add_height_copy:
             call('/usr/local/bin/turkic load {}_Height_Calibration {} Head Person --offline --length 100000000'.format(
-                self.identifier, frames_directory).split(' '), cwd=self.vatic_directory)
+                self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
 
     @classmethod
     def command_line_interface(cls):
@@ -212,18 +211,17 @@ class VaticHelper:
         # Create the exporter.
         if not hasattr(args, 'frames_root_directory'):
             args.frames_root_directory = None
-        vatic_helper = cls(args.identifier, args.vatic_directory, args.output_root_directory,
-                           args.frames_root_directory)
 
-        vatic_helper.dump_vatic_data_to_text()
         if args.program == 'head':
             vatic_helper = cls(identifier=args.identifier, vatic_directory=args.vatic_directory,
                                output_root_directory=args.output_root_directory,
                                frames_root_directory=args.frames_root_directory)
+            vatic_helper.dump_vatic_data_to_text()
             vatic_helper.create_head_point_position_files_from_text_dump()
         elif args.program == 'height':
             vatic_helper = cls(identifier=args.identifier, vatic_directory=args.vatic_directory,
                                output_root_directory=args.output_root_directory)
+            vatic_helper.dump_vatic_data_to_text()
             print(vatic_helper.calculate_height_to_head_position_polynomial_fit_from_text_dump())
         elif args.program == 'import':
             if args.identifier:
