@@ -95,11 +95,8 @@ class VaticHelper:
             for head in heads:
                 for person in people:
                     # Matching check.
-                    if person[0] < head[0] < head[2] < person[2] and abs(head[1] - person[1]) < (head[2] - head[1])/8:
-                        if (head, person) not in pairs:
-                            # Only allow unique combinations to prevent people who just stand still for a long time
-                            # from being over weighted for.
-                            pairs.append((head, person))
+                    if person[0] < head[0] < head[2] < person[2] and abs(head[1] - person[1]) < (head[2] - head[1]) / 8:
+                        pairs.append((head, person))
                         break  # One head per person.
 
         # Keep only the head y position and the height.
