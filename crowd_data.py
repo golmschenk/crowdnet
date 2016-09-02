@@ -5,10 +5,10 @@ import numpy as np
 import tensorflow as tf
 import os
 
-from go_data import GoData
+from gonet.data import Data
 
 
-class CrowdData(GoData):
+class CrowdData(Data):
     """
     A class for managing the crowd data.
     """

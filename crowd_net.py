@@ -4,12 +4,12 @@ Code related to the CrowdNet.
 import tensorflow as tf
 
 from crowd_data import CrowdData
-from go_net import GoNet
-from interface import Interface
-from convenience import weight_variable, bias_variable, leaky_relu, conv2d, size_from_stride_two
+from gonet.net import Net
+from gonet.interface import Interface
+from gonet.convenience import weight_variable, bias_variable, leaky_relu, conv2d, size_from_stride_two
 
 
-class CrowdNet(GoNet):
+class CrowdNet(Net):
     """
     A neural network class to estimate crowd density from single 2D images.
     """
