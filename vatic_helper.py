@@ -56,10 +56,10 @@ class VaticHelper:
                     new_head_position = np.array([[x, y]])
                     head_position_array = np.concatenate((head_position_array, new_head_position))
                     np.save(numpy_path, head_position_array)
-                    if copy_frame_image:
-                        copyfile(frame_file_path, os.path.join(self.output_directory, frame_filename))
                 else:
                     np.save(numpy_path, np.array([[x, y]]))
+        if copy_frame_image:
+            self.copy_frames_to_output()
 
     def extract_head_y_and_height_array_from_text_dump(self):
         """
@@ -123,6 +123,16 @@ class VaticHelper:
         height_array = head_y_and_height_array[:, 1]
         coefficients = np.polyfit(head_y_array, height_array, polynomial_degree)
         return coefficients
+
+    def copy_frames_to_output(self):
+        """
+        Copies all frames in the frames directory to the output directory.
+        """
+        for root, directories, filenames in os.walk(self.frames_directory):
+            for filename in filenames:
+                image_types = ('.jpg', '.jpeg', '.png', '.bmp')
+                if filename.endswith(image_types):
+                    copyfile(os.path.join(root, filename), os.path.join(self.output_directory, filename))
 
     def get_frame_file_path(self, frame_number):
         """
