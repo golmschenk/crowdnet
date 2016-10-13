@@ -190,6 +190,27 @@ class CrowdNet(Net):
         predicted_labels = h_conv
         return predicted_labels
 
+    def create_gaea_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+
+        module1_output = self.terra_module('module1', images, 32)
+        module2_output = self.terra_module('module2', module1_output, 64)
+        module3_output = self.terra_module('module3', module2_output, 64)
+        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True)
+        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True)
+        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True)
+        module7_output = self.terra_module('module7', module6_output, 1, kernel_size=7, batch_norm_on=False)
+
+        predicted_labels = module7_output
+        return predicted_labels
+
 
 if __name__ == '__main__':
     interface = Interface(network_class=CrowdNet)
