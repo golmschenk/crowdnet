@@ -3,10 +3,12 @@ Code related to the CrowdNet.
 """
 import tensorflow as tf
 
-from crowd_data import CrowdData
 from gonet.net import Net
 from gonet.interface import Interface
 from gonet.convenience import weight_variable, bias_variable, leaky_relu, conv2d, size_from_stride_two
+
+from crowd_data import CrowdData
+from settings import Settings
 
 
 class CrowdNet(Net):
@@ -15,7 +17,7 @@ class CrowdNet(Net):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(settings=Settings(), *args, **kwargs)
 
         self.data = CrowdData()
         self.batch_size = 16
