@@ -20,7 +20,6 @@ class CrowdNet(Net):
         super().__init__(settings=Settings(), *args, **kwargs)
 
         self.data = CrowdData()
-        self.batch_size = 16
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
