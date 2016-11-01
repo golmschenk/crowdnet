@@ -9,6 +9,8 @@ class Settings(GoSettings):
     A class for the settings of the network.
     """
     def __init__(self):
+        super().__init__()
+
         self.network_name = 'crowd_net'
 
         self.batch_size = 3
