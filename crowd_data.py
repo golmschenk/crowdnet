@@ -16,7 +16,6 @@ class CrowdData(Data):
     def __init__(self):
         super().__init__()
 
-        self.data_directory = 'data'
         self.image_height = 480 // 8  # The height we'll be training on (data will be resized if needed).
         self.image_width = 704 // 8  # The width we'll be training on (data will be resized if needed).
         self.train_size = 'all'

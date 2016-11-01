@@ -12,6 +12,6 @@ class Settings(GoSettings):
         self.network_name = 'crowd_net'
 
         self.batch_size = 3
-        self.initial_learning_rate = 0.00001
-        self.learning_rate_decay_rate = 0.96
-        self.learning_rate_decay_steps = 10000
+        self.initial_learning_rate = 0.0001
+        self.learning_rate_decay_rate = 0.1
+        self.learning_rate_decay_steps = 100000
