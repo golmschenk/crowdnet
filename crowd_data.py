@@ -119,8 +119,8 @@ class CrowdData(Data):
         :return: The processed image and label.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        image = tf.image.resize_images(image, self.image_height, self.image_width)
-        resized_label = tf.image.resize_images(label, self.image_height, self.image_width)
+        image = tf.image.resize_images(image, [self.image_height, self.image_width])
+        resized_label = tf.image.resize_images(label, [self.image_height, self.image_width])
         # Normalize the label to have the same sum as before resizing.
         label_sum = tf.reduce_sum(label)
         resized_label_sum = tf.reduce_sum(resized_label)
