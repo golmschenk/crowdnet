@@ -161,10 +161,10 @@ class VaticHelper:
             os.mkdir(self.frames_directory)
         call('/usr/local/bin/turkic extract {} {} --no-resize'.format(video_path, self.frames_directory).split(' '),
              cwd=self.vatic_directory)
-        call('/usr/local/bin/turkic load {} {} Head --offline --length 100000000'.format(
+        call('/usr/local/bin/turkic load {} {} Head ~Child ~Seated --offline --length 100000000'.format(
             self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
         if add_height_copy:
-            call('/usr/local/bin/turkic load {}_Height_Calibration {} Head Person --offline --length 100000000'.format(
+            call('/usr/local/bin/turkic load {}_Height_Calibration {} Head ~Child ~Seated Person --offline --length 100000000'.format(
                 self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
 
     @classmethod
