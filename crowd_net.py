@@ -212,6 +212,29 @@ class CrowdNet(Net):
         predicted_labels = module7_output
         return predicted_labels
 
+    def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
+        """
+        Combines the image, label, and difference tensors together into a presentable image. Then adds the
+        image summary op to the graph. Handles images that include depth maps as well.
+
+        :param images: The original image.
+        :type images: tf.Tensor
+        :param labels: The tensor containing the actual label values.
+        :type labels: tf.Tensor
+        :param predicted_labels: The tensor containing the predicted labels.
+        :type predicted_labels: tf.Tensor
+        :param label_differences: The tensor containing the difference between the actual and predicted labels.
+        :type label_differences: tf.Tensor
+        """
+        if self.data.image_depth == 4:
+            concatenated_labels = tf.concat(1, [labels, predicted_labels, label_differences, images[:, :, :, 4]])
+            concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
+            display_images = tf.div(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))
+            comparison_image = tf.concat(1, [display_images, concatenated_heat_maps])
+            tf.image_summary('comparison', comparison_image)
+        else:
+            super().image_comparison_summary(images, labels, predicted_labels, label_differences)
+
 
 if __name__ == '__main__':
     interface = Interface(network_class=CrowdNet)

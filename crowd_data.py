@@ -29,7 +29,7 @@ class CrowdData(Data):
         :rtype: list[str]
         """
         import_file_paths = []
-        for file_directory, _, file_names in os.walk(self.import_directory):
+        for file_directory, _, file_names in os.walk(self.settings.import_directory):
             numpy_file_names = [file_name for file_name in file_names if file_name.endswith('.npy')]
             for numpy_file_name in numpy_file_names:
                 if 'image' in numpy_file_name:
@@ -105,6 +105,10 @@ class CrowdData(Data):
         if len(images.shape) == 3:
             images = np.expand_dims(images, axis=0)
             labels = np.expand_dims(labels, axis=0)
+        if os.path.isfile(file_path_pair[0].replace('images', 'depth')):
+            depth = np.load(file_path_pair[0].replace('images', 'depth'))
+            depths = np.tile(depth[np.newaxis, :, :], (images.shape[0], 1))
+            images = np.concatenate((images, depths), axis=3)
         self.images = images
         self.labels = labels
 
