@@ -7,6 +7,8 @@ import os
 
 from gonet.data import Data
 
+from settings import Settings
+
 
 class CrowdData(Data):
     """
@@ -14,10 +16,11 @@ class CrowdData(Data):
     """
 
     def __init__(self):
-        super().__init__()
+        super().__init__(settings=Settings())
 
-        self.image_height = 480 // 8  # The height we'll be training on (data will be resized if needed).
-        self.image_width = 704 // 8  # The width we'll be training on (data will be resized if needed).
+        self.image_height = 240 // 4  # The height we'll be training on (data will be resized if needed).
+        self.image_width = 352 // 4  # The width we'll be training on (data will be resized if needed).
+        self.image_depth = 4
         self.train_size = 'all'
         self.dataset_type = None
 
@@ -29,7 +32,8 @@ class CrowdData(Data):
         :rtype: list[str]
         """
         import_file_paths = []
-        for file_directory, _, file_names in os.walk(self.settings.import_directory):
+        for file_directory, _, file_names in os.walk(os.path.join(self.settings.data_directory,
+                                                                  self.settings.import_directory)):
             numpy_file_names = [file_name for file_name in file_names if file_name.endswith('.npy')]
             for numpy_file_name in numpy_file_names:
                 if 'image' in numpy_file_name:
@@ -107,7 +111,7 @@ class CrowdData(Data):
             labels = np.expand_dims(labels, axis=0)
         if os.path.isfile(file_path_pair[0].replace('images', 'depth')):
             depth = np.load(file_path_pair[0].replace('images', 'depth'))
-            depths = np.tile(depth[np.newaxis, :, :], (images.shape[0], 1))
+            depths = np.tile(depth[np.newaxis, :, :, np.newaxis], (images.shape[0], 1, 1, 1))
             images = np.concatenate((images, depths), axis=3)
         self.images = images
         self.labels = labels

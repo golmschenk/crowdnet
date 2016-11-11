@@ -78,7 +78,7 @@ class CrowdNet(Net):
         :return: The label maps tensor.
         :rtype: tf.Tensor
         """
-        return self.create_patchwise_inference_op(images)
+        return self.create_gaea_inference_op(images)
 
     def create_standard_net_inference_op(self, images):
         """
@@ -201,12 +201,12 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
 
-        module1_output = self.terra_module('module1', images, 32)
-        module2_output = self.terra_module('module2', module1_output, 64)
-        module3_output = self.terra_module('module3', module2_output, 64)
-        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True)
-        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True)
-        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True)
+        module1_output = self.terra_module('module1', images, 32, batch_norm_on=False)
+        module2_output = self.terra_module('module2', module1_output, 64, batch_norm_on=False)
+        module3_output = self.terra_module('module3', module2_output, 64, batch_norm_on=False)
+        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True, batch_norm_on=False)
+        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True, batch_norm_on=False)
+        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True, batch_norm_on=False)
         module7_output = self.terra_module('module7', module6_output, 1, kernel_size=7, batch_norm_on=False)
 
         predicted_labels = module7_output
@@ -227,10 +227,12 @@ class CrowdNet(Net):
         :type label_differences: tf.Tensor
         """
         if self.data.image_depth == 4:
-            concatenated_labels = tf.concat(1, [labels, predicted_labels, label_differences, images[:, :, :, 4]])
+            concatenated_labels = tf.concat(1, [labels, predicted_labels, label_differences])
             concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
             display_images = tf.div(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))
-            comparison_image = tf.concat(1, [display_images, concatenated_heat_maps])
+            depth_image = tf.expand_dims(images[:, :, :, 3], -1)
+            depth_heat_map = self.convert_to_heat_map_rgb(depth_image)
+            comparison_image = tf.concat(1, [display_images, concatenated_heat_maps, depth_heat_map])
             tf.image_summary('comparison', comparison_image)
         else:
             super().image_comparison_summary(images, labels, predicted_labels, label_differences)
