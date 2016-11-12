@@ -6,6 +6,7 @@ import tensorflow as tf
 import os
 
 from gonet.data import Data
+from gonet.tfrecords_reader import TFRecordsReader
 
 from settings import Settings
 
@@ -137,6 +138,26 @@ class CrowdData(Data):
             lambda: (resized_label / resized_label_sum) * label_sum,
             lambda: resized_label
         )
+        return image, label
+
+    # TODO: This is a really hacky fix, remove it.
+    def read_and_decode_single_example_from_tfrecords(self, file_name_queue, data_type=None):
+        """
+        A definition of how TF should read a single example proto from the file record.
+
+        :param file_name_queue: The file name queue to be read.
+        :type file_name_queue: tf.QueueBase
+        :param data_type: The dataset type being used in.
+        :type data_type: str
+        :return: The read file data including the image data and label data.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        go_tfrecords_reader = TFRecordsReader(file_name_queue, data_type=data_type)
+        image = go_tfrecords_reader.image
+        if self.image_depth == 3:
+            image = image[:, :, :, :3]
+        image = tf.cast(image, tf.float32)
+        label = go_tfrecords_reader.label
         return image, label
 
 
