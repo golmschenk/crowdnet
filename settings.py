@@ -17,3 +17,7 @@ class Settings(GoSettings):
         self.initial_learning_rate = 0.0001
         self.learning_rate_decay_rate = 0.1
         self.learning_rate_decay_steps = 100000
+
+        self.image_height = 240 // 4
+        self.image_width = 352 // 4
+        self.image_depth = 4

@@ -19,9 +19,6 @@ class CrowdData(Data):
     def __init__(self):
         super().__init__(settings=Settings())
 
-        self.image_height = 240 // 4  # The height we'll be training on (data will be resized if needed).
-        self.image_width = 352 // 4  # The width we'll be training on (data will be resized if needed).
-        self.image_depth = 4
         self.train_size = 'all'
         self.dataset_type = None
 
@@ -154,7 +151,7 @@ class CrowdData(Data):
         """
         go_tfrecords_reader = TFRecordsReader(file_name_queue, data_type=data_type)
         image = go_tfrecords_reader.image
-        if self.image_depth == 3:
+        if self.settings.image_depth == 3:
             image = image[:, :, :, :3]
         image = tf.cast(image, tf.float32)
         label = go_tfrecords_reader.label
