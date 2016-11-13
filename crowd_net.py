@@ -108,8 +108,8 @@ class CrowdNet(Net):
             h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
 
         with tf.name_scope('fc1'):
-            fc0_size = size_from_stride_two(self.data.image_height, iterations=2) * size_from_stride_two(
-                self.data.image_width, iterations=2) * 32
+            fc0_size = size_from_stride_two(self.settings.image_height, iterations=2) * size_from_stride_two(
+                self.settings.image_width, iterations=2) * 32
             fc1_size = fc0_size // 2
             h_fc = tf.reshape(h_conv, [-1, fc0_size])
             w_fc = weight_variable([fc0_size, fc1_size])
@@ -125,12 +125,12 @@ class CrowdNet(Net):
             h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
 
         with tf.name_scope('fc3'):
-            fc3_size = self.data.image_height * self.data.image_width
+            fc3_size = self.settings.image_height * self.settings.image_width
             w_fc = weight_variable([fc2_size, fc3_size])
             b_fc = bias_variable([fc3_size])
 
             h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc, [-1, self.data.image_height, self.data.image_width, 1])
+            predicted_labels = tf.reshape(h_fc, [-1, self.settings.image_height, self.settings.image_width, 1])
 
         return predicted_labels
 
@@ -226,7 +226,7 @@ class CrowdNet(Net):
         :param label_differences: The tensor containing the difference between the actual and predicted labels.
         :type label_differences: tf.Tensor
         """
-        if self.data.image_depth == 4:
+        if self.settings.image_depth == 4:
             concatenated_labels = tf.concat(1, [labels, predicted_labels, label_differences])
             concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
             display_images = tf.div(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))

@@ -6,7 +6,6 @@ import tensorflow as tf
 import os
 
 from gonet.data import Data
-from gonet.tfrecords_reader import TFRecordsReader
 
 from settings import Settings
 
@@ -125,8 +124,11 @@ class CrowdData(Data):
         :return: The processed image and label.
         :rtype: (tf.Tensor, tf.Tensor)
         """
-        image = tf.image.resize_images(image, [self.image_height, self.image_width])
-        resized_label = tf.image.resize_images(label, [self.image_height, self.image_width])
+        # Choose whether to include depth data (if it's in the TFRecords.
+        if image.get_shape()[2] != 3 and self.settings.image_depth == 3:
+            image = image[:, :, :3]
+        image = tf.image.resize_images(image, [self.settings.image_height, self.settings.image_width])
+        resized_label = tf.image.resize_images(label, [self.settings.image_height, self.settings.image_width])
         # Normalize the label to have the same sum as before resizing.
         label_sum = tf.reduce_sum(label)
         resized_label_sum = tf.reduce_sum(resized_label)
@@ -135,26 +137,6 @@ class CrowdData(Data):
             lambda: (resized_label / resized_label_sum) * label_sum,
             lambda: resized_label
         )
-        return image, label
-
-    # TODO: This is a really hacky fix, remove it.
-    def read_and_decode_single_example_from_tfrecords(self, file_name_queue, data_type=None):
-        """
-        A definition of how TF should read a single example proto from the file record.
-
-        :param file_name_queue: The file name queue to be read.
-        :type file_name_queue: tf.QueueBase
-        :param data_type: The dataset type being used in.
-        :type data_type: str
-        :return: The read file data including the image data and label data.
-        :rtype: (tf.Tensor, tf.Tensor)
-        """
-        go_tfrecords_reader = TFRecordsReader(file_name_queue, data_type=data_type)
-        image = go_tfrecords_reader.image
-        if self.settings.image_depth == 3:
-            image = image[:, :, :, :3]
-        image = tf.cast(image, tf.float32)
-        label = go_tfrecords_reader.label
         return image, label
 
 
