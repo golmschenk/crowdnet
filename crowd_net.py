@@ -80,60 +80,6 @@ class CrowdNet(Net):
         """
         return self.create_gaea_inference_op(images)
 
-    def create_standard_net_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a AlexNet-like graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        with tf.name_scope('conv1'):
-            w_conv = weight_variable([7, 7, 3, 16])
-            b_conv = bias_variable([16])
-
-            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
-
-        with tf.name_scope('conv2'):
-            w_conv = weight_variable([7, 7, 16, 24])
-            b_conv = bias_variable([24])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
-
-        with tf.name_scope('conv3'):
-            w_conv = weight_variable([7, 7, 24, 32])
-            b_conv = bias_variable([32])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv, [1, 2, 2, 1]) + b_conv)
-
-        with tf.name_scope('fc1'):
-            fc0_size = size_from_stride_two(self.settings.image_height, iterations=2) * size_from_stride_two(
-                self.settings.image_width, iterations=2) * 32
-            fc1_size = fc0_size // 2
-            h_fc = tf.reshape(h_conv, [-1, fc0_size])
-            w_fc = weight_variable([fc0_size, fc1_size])
-            b_fc = bias_variable([fc1_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-
-        with tf.name_scope('fc2'):
-            fc2_size = fc1_size // 2
-            w_fc = weight_variable([fc1_size, fc2_size])
-            b_fc = bias_variable([fc2_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-
-        with tf.name_scope('fc3'):
-            fc3_size = self.settings.image_height * self.settings.image_width
-            w_fc = weight_variable([fc2_size, fc3_size])
-            b_fc = bias_variable([fc3_size])
-
-            h_fc = leaky_relu(tf.matmul(h_fc, w_fc) + b_fc)
-            predicted_labels = tf.reshape(h_fc, [-1, self.settings.image_height, self.settings.image_width, 1])
-
-        return predicted_labels
-
     def create_patchwise_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
@@ -201,13 +147,14 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
 
-        module1_output = self.terra_module('module1', images, 32, batch_norm_on=False)
-        module2_output = self.terra_module('module2', module1_output, 64, batch_norm_on=False)
-        module3_output = self.terra_module('module3', module2_output, 64, batch_norm_on=False)
-        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True, batch_norm_on=False)
-        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True, batch_norm_on=False)
-        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True, batch_norm_on=False)
-        module7_output = self.terra_module('module7', module6_output, 1, kernel_size=7, batch_norm_on=False)
+        module1_output = self.terra_module('module1', images, 32)
+        module2_output = self.terra_module('module2', module1_output, 64)
+        module3_output = self.terra_module('module3', module2_output, 64)
+        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True)
+        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True)
+        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True)
+        module7_output = self.terra_module('module7', module6_output, 1, kernel_size=7, activation_function=None,
+                                           normalization_function=None)
 
         predicted_labels = module7_output
         return predicted_labels
