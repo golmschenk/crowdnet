@@ -101,7 +101,7 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
         with tf.name_scope('conv1'):
-            w_conv = weight_variable([3, 3, 3, 32])
+            w_conv = weight_variable([3, 3, self.settings.image_depth, 32])
             b_conv = bias_variable([32])
 
             h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
