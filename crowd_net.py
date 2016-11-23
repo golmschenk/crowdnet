@@ -21,6 +21,12 @@ class CrowdNet(Net):
 
         self.data = CrowdData()
 
+        self.alternate_loss_on = True
+
+        # Internal variables.
+        self.alternate_loss = None
+        self.labels_tensor = None
+
     def create_loss_tensor(self, predicted_labels, labels):
         """
         Create the loss op and add it to the graph.
@@ -34,7 +40,9 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
         absolute_differences_tensor = self.create_absolute_differences_tensor(predicted_labels, labels)
-        self.create_person_count_summaries(labels, predicted_labels)
+        relative_person_miscount_tensor = self.create_person_count_summaries(labels, predicted_labels)
+        if self.alternate_loss_on:
+            self.alternate_loss = relative_person_miscount_tensor
         return absolute_differences_tensor
 
     def create_person_count_summaries(self, labels, predicted_labels):
@@ -45,6 +53,8 @@ class CrowdNet(Net):
         :type labels: tf.Tensor
         :param predicted_labels: The predicted person density labels.
         :type predicted_labels: tf.Tensor
+        :return: The relative person miscount tensor.
+        :rtype: tf.Tensor
         """
         true_person_count_tensor = self.mean_person_count_for_labels(labels)
         predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels)
@@ -54,6 +64,7 @@ class CrowdNet(Net):
         tf.scalar_summary('Predicted person count', predicted_person_count_tensor)
         tf.scalar_summary('Person miscount', person_miscount_tensor)
         tf.scalar_summary('Relative person miscount', relative_person_miscount_tensor)
+        return relative_person_miscount_tensor
 
     @staticmethod
     def mean_person_count_for_labels(labels_tensor):
@@ -183,6 +194,37 @@ class CrowdNet(Net):
             tf.image_summary('comparison', comparison_image)
         else:
             super().image_comparison_summary(images, labels, predicted_labels, label_differences)
+
+    def create_training_op(self, value_to_minimize):
+        """
+        Create and add the training op to the graph.
+
+        :param value_to_minimize: The value to train on.
+        :type value_to_minimize: tf.Tensor or list[tf.Tensor]
+        :return: The training op.
+        :rtype: tf.Operation
+        """
+        if self.alternate_loss_on:
+            tf.scalar_summary('Learning rate', self.learning_rate_tensor)
+            alternating_value_to_minimize = tf.cond(tf.equal(tf.mod(self.global_step, 2), 0),
+                                                    lambda: value_to_minimize,
+                                                    lambda: self.alternate_loss)
+            return tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(alternating_value_to_minimize,
+                                                                              global_step=self.global_step)
+        else:
+            return super().create_training_op(value_to_minimize)
+
+    def create_input_tensors(self):
+        """
+        Create the image and label tensors for each dataset and produces a selector tensor to choose between datasets
+        during runtime.
+
+        :return: The general images and labels tensors which are conditional on a selector tensor.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        images_tensor, labels_tensor = super().create_input_tensors()
+        self.labels_tensor = labels_tensor
+        return images_tensor, labels_tensor
 
 
 if __name__ == '__main__':
