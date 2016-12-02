@@ -164,8 +164,8 @@ class VaticHelper:
         call('/usr/local/bin/turkic load {} {} Head ~Child ~Seated --offline --length 100000000'.format(
             self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
         if add_height_copy:
-            call('/usr/local/bin/turkic load {}_Height_Calibration {} Head ~Child ~Seated Person --offline --length 100000000'.format(
-                self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
+            call(('/usr/local/bin/turkic load {}_Height_Calibration {} Head ~Child ~Seated Person --offline --length' +
+                  '100000000').format(self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
 
     @classmethod
     def command_line_interface(cls):
@@ -182,7 +182,7 @@ class VaticHelper:
         # Parser parents.
         vatic_parser = argparse.ArgumentParser(add_help=False)
         vatic_parser.add_argument('--identifier', type=str,
-                                  help=('The identifier of the video in Vatic (should alsobe the name of the'
+                                  help=('The identifier of the video in Vatic (should also be the name of the'
                                         'subdirectory in frames root directory).'))
         vatic_parser.add_argument('--vatic_directory', type=str,
                                   help='The vatic directory to run Turkic from.')

@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from gonet.net import Net
 from gonet.interface import Interface
-from gonet.convenience import weight_variable, bias_variable, leaky_relu, conv2d, size_from_stride_two
+from gonet.convenience import weight_variable, bias_variable, leaky_relu, conv2d
 
 from crowd_data import CrowdData
 from settings import Settings
