@@ -167,6 +167,12 @@ class VaticHelper:
             call(('/usr/local/bin/turkic load {}_Height_Calibration {} Head ~Child ~Seated Person --offline --length' +
                   '100000000').format(self.identifier, self.frames_directory).split(' '), cwd=self.vatic_directory)
 
+    def delete_text_dump_file(self):
+        """
+        Deletes the temporary text dump file.
+        """
+        os.remove(self.text_dump_filename)
+
     @classmethod
     def command_line_interface(cls):
         """
@@ -225,11 +231,13 @@ class VaticHelper:
                                frames_root_directory=args.frames_root_directory)
             vatic_helper.dump_vatic_data_to_text()
             vatic_helper.create_head_point_position_files_from_text_dump()
+            vatic_helper.delete_text_dump_file()
         elif args.program == 'height':
             vatic_helper = cls(identifier=args.identifier, vatic_directory=args.vatic_directory,
                                output_root_directory=args.output_root_directory)
             vatic_helper.dump_vatic_data_to_text()
             print(vatic_helper.calculate_height_to_head_position_polynomial_fit_from_text_dump())
+            vatic_helper.delete_text_dump_file()
         elif args.program == 'import':
             if args.identifier:
                 identifier = args.identifier
