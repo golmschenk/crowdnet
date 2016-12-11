@@ -3,6 +3,7 @@ data/*
 logs/*
 models/*
 !*.gitkeep
+/venv/
 
 
 # Created by .ignore support plugin (hsz.mobi)
