@@ -29,8 +29,7 @@ class CrowdData(Data):
         :rtype: list[str]
         """
         import_file_paths = []
-        for file_directory, _, file_names in os.walk(os.path.join(self.settings.data_directory,
-                                                                  self.settings.import_directory)):
+        for file_directory, _, file_names in os.walk(self.settings.import_directory):
             numpy_file_names = [file_name for file_name in file_names if file_name.endswith('.npy')]
             for numpy_file_name in numpy_file_names:
                 if 'image' in numpy_file_name:

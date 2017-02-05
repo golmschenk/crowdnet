@@ -20,4 +20,4 @@ class Settings(GoSettings):
 
         self.image_height = 240 // 4
         self.image_width = 352 // 4
-        self.image_depth = 4
+        self.image_depth = 3
