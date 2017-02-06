@@ -205,14 +205,10 @@ class CrowdNet(Net):
         :rtype: tf.Operation
         """
         if self.alternate_loss_on:
-            tf.scalar_summary('Learning rate', self.learning_rate_tensor)
-            alternating_value_to_minimize = tf.cond(tf.equal(tf.mod(self.global_step, 2), 0),
-                                                    lambda: value_to_minimize,
-                                                    lambda: self.alternate_loss)
-            return tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(alternating_value_to_minimize,
-                                                                              global_step=self.global_step)
-        else:
-            return super().create_training_op(value_to_minimize)
+            value_to_minimize = tf.cond(tf.equal(tf.mod(self.global_step, 2), 0),
+                                        lambda: value_to_minimize,
+                                        lambda: self.alternate_loss)
+        return super().create_training_op(value_to_minimize)
 
     def create_input_tensors(self):
         """
