@@ -153,8 +153,8 @@ class CrowdNet(Net):
         module5_output = self.terra_module('module5', module4_output, 128)
         module6_output = self.terra_module('module6', module5_output, 256)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1)
+        module8_output = self.terra_module('module8', module7_output, 32, kernel_size=1, dropout_on=True)
+        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
 
