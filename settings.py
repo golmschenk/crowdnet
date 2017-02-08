@@ -12,6 +12,7 @@ class Settings(GoSettings):
         super().__init__()
 
         self.network_name = 'crowd_net'
+        self.inference_op_name = 'gaea'
 
         self.batch_size = 3
         self.initial_learning_rate = 0.001

@@ -60,10 +60,10 @@ class CrowdNet(Net):
         predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels)
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor)
         relative_person_miscount_tensor = person_miscount_tensor / true_person_count_tensor
-        tf.scalar_summary('True person count', true_person_count_tensor)
-        tf.scalar_summary('Predicted person count', predicted_person_count_tensor)
-        tf.scalar_summary('Person miscount', person_miscount_tensor)
-        tf.scalar_summary('Relative person miscount', relative_person_miscount_tensor)
+        tf.summary.scalar('True person count', true_person_count_tensor)
+        tf.summary.scalar('Predicted person count', predicted_person_count_tensor)
+        tf.summary.scalar('Person miscount', person_miscount_tensor)
+        tf.summary.scalar('Relative person miscount', relative_person_miscount_tensor)
         return relative_person_miscount_tensor
 
     @staticmethod
@@ -78,18 +78,6 @@ class CrowdNet(Net):
         """
         mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]))
         return mean_person_count_tensor
-
-    def create_inference_op(self, images):
-        """
-        Creates and adds graph components to perform a forward pass estimating label maps from RGB images.
-        Overrides the GoNet method of the same name.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        return self.create_gaea_inference_op(images)
 
     def create_patchwise_inference_op(self, images):
         """
@@ -161,13 +149,13 @@ class CrowdNet(Net):
         module1_output = self.terra_module('module1', images, 32)
         module2_output = self.terra_module('module2', module1_output, 64)
         module3_output = self.terra_module('module3', module2_output, 64)
-        module4_output = self.terra_module('module4', module3_output, 128, dropout_on=True)
-        module5_output = self.terra_module('module5', module4_output, 128, dropout_on=True)
-        module6_output = self.terra_module('module6', module5_output, 256, dropout_on=True)
-        module7_output = self.terra_module('module7', module6_output, 1, kernel_size=7, activation_function=None,
-                                           normalization_function=None)
-
-        predicted_labels = module7_output
+        module4_output = self.terra_module('module4', module3_output, 128)
+        module5_output = self.terra_module('module5', module4_output, 128)
+        module6_output = self.terra_module('module6', module5_output, 256)
+        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
+        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1)
+        predicted_labels = module9_output
         return predicted_labels
 
     def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
