@@ -21,7 +21,7 @@ class CrowdNet(Net):
 
         self.data = CrowdData()
 
-        self.alternate_loss_on = True
+        self.alternate_loss_on = False
 
         # Internal variables.
         self.alternate_loss = None
@@ -153,7 +153,7 @@ class CrowdNet(Net):
         module5_output = self.terra_module('module5', module4_output, 128)
         module6_output = self.terra_module('module6', module5_output, 256)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 32, kernel_size=1, dropout_on=True)
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
@@ -179,7 +179,7 @@ class CrowdNet(Net):
             depth_image = tf.expand_dims(images[:, :, :, 3], -1)
             depth_heat_map = self.convert_to_heat_map_rgb(depth_image)
             comparison_image = tf.concat(1, [display_images, concatenated_heat_maps, depth_heat_map])
-            tf.image_summary('comparison', comparison_image)
+            tf.summary.image('comparison', comparison_image)
         else:
             super().image_comparison_summary(images, labels, predicted_labels, label_differences)
 
