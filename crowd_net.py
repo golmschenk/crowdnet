@@ -173,12 +173,12 @@ class CrowdNet(Net):
         :type label_differences: tf.Tensor
         """
         if self.settings.image_depth == 4:
-            concatenated_labels = tf.concat(1, [labels, predicted_labels, label_differences])
+            concatenated_labels = tf.concat(axis=1, values=[labels, predicted_labels, label_differences])
             concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
-            display_images = tf.div(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))
+            display_images = tf.divide(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))
             depth_image = tf.expand_dims(images[:, :, :, 3], -1)
             depth_heat_map = self.convert_to_heat_map_rgb(depth_image)
-            comparison_image = tf.concat(1, [display_images, concatenated_heat_maps, depth_heat_map])
+            comparison_image = tf.concat(axis=1, values=[display_images, concatenated_heat_maps, depth_heat_map])
             tf.summary.image('comparison', comparison_image)
         else:
             super().image_comparison_summary(images, labels, predicted_labels, label_differences)
