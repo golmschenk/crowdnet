@@ -22,6 +22,7 @@ class CrowdNet(Net):
         self.data = CrowdData()
 
         self.alternate_loss_on = False
+        self.edge_percentage = 0.05
 
         # Internal variables.
         self.alternate_loss = None
@@ -40,6 +41,14 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
         absolute_differences_tensor = self.create_absolute_differences_tensor(predicted_labels, labels)
+        if self.edge_percentage > 0:
+            edge_width = int(self.settings.image_width * self.edge_percentage)
+            edge_height = int(self.settings.image_height * self.edge_percentage)
+            absolute_differences_tensor = absolute_differences_tensor[:, edge_height:-edge_height,
+                                                                      edge_width:-edge_width]
+            padding = [[0, 0], [edge_height, edge_height], [edge_width, edge_width], [0, 0]]
+            absolute_differences_tensor = tf.pad(absolute_differences_tensor, padding)
+
         relative_person_miscount_tensor = self.create_person_count_summaries(labels, predicted_labels)
         if self.alternate_loss_on:
             self.alternate_loss = relative_person_miscount_tensor
