@@ -45,7 +45,7 @@ class CrowdNet(Net):
             edge_width = int(self.settings.image_width * self.edge_percentage)
             edge_height = int(self.settings.image_height * self.edge_percentage)
             absolute_differences_tensor = absolute_differences_tensor[:, edge_height:-edge_height,
-                                                                      edge_width:-edge_width]
+                                          edge_width:-edge_width]
             padding = [[0, 0], [edge_height, edge_height], [edge_width, edge_width], [0, 0]]
             absolute_differences_tensor = tf.pad(absolute_differences_tensor, padding)
 
@@ -163,6 +163,29 @@ class CrowdNet(Net):
         module6_output = self.terra_module('module6', module5_output, 256)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
         module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
+        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
+        predicted_labels = module9_output
+        return predicted_labels
+
+    def create_gaea_with_final_tanh_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+
+        module1_output = self.terra_module('module1', images, 32)
+        module2_output = self.terra_module('module2', module1_output, 64)
+        module3_output = self.terra_module('module3', module2_output, 64)
+        module4_output = self.terra_module('module4', module3_output, 128)
+        module5_output = self.terra_module('module5', module4_output, 128)
+        module6_output = self.terra_module('module6', module5_output, 256)
+        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True,
+                                           activation_function=tf.nn.tanh)
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
