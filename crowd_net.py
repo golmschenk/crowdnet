@@ -190,6 +190,36 @@ class CrowdNet(Net):
         predicted_labels = module9_output
         return predicted_labels
 
+    def create_gaea_with_depth_split_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+        depth = tf.expand_dims(images[:, :, :, 3], axis=3)
+        depth_module1_output = self.terra_module('depth_module1', depth, 4)
+        depth_module2_output = self.terra_module('depth_module2', depth_module1_output, 8)
+        depth_module3_output = self.terra_module('depth_module3', depth_module2_output, 16)
+        depth_module4_output = self.terra_module('depth_module4', depth_module3_output, 32)
+        depth_module5_attention = self.terra_module('depth_module5', depth_module4_output, 128,
+                                                    activation_function=tf.nn.tanh)
+
+        module1_output = self.terra_module('module1', images[:, :, :, :3], 32)
+        module2_output = self.terra_module('module2', module1_output, 64)
+        module3_output = self.terra_module('module3', module2_output, 64)
+        module4_output = self.terra_module('module4', module3_output, 128)
+        module5_output = self.terra_module('module5', module4_output, 128)
+        module5_output_depth_attention = tf.multiply(module5_output, depth_module5_attention)
+        module6_output = self.terra_module('module6', module5_output_depth_attention, 256)
+        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
+        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
+        predicted_labels = module9_output
+        return predicted_labels
+
     def create_gaea_with_depth_skip_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
