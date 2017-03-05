@@ -345,19 +345,19 @@ class CrowdNet(Net):
         """
         The code that will be run once the inference test loop is finished. Mostly for saving data or statistics.
         """
-        predicted_labels_save_path = 'predicted_labels'
+        predicted_labels_save_path = os.path.join('visualization', 'predicted_labels')
         print('Saving {}.npy...'.format(predicted_labels_save_path))
-        np.save(predicted_labels_save_path, self.predicted_test_labels)
+        np.save(predicted_labels_save_path, np.squeeze(self.predicted_test_labels))
 
-        average_loss_save_path = 'average_loss'
+        average_loss_save_path = os.path.join('visualization', 'average_loss')
         print('Saving {}.npy...'.format(average_loss_save_path))
         np.save(average_loss_save_path, self.predicted_test_labels_average_loss)
 
-        person_count_save_path = 'predicted_person_count'
+        person_count_save_path = os.path.join('visualization', 'predicted_person_count')
         print('Saving {}.npy...'.format(person_count_save_path))
         np.save(person_count_save_path, self.predicted_test_labels_person_count)
 
-        relative_miscount_count_save_path = 'relative_miscount_count'
+        relative_miscount_count_save_path = os.path.join('visualization', 'relative_miscount_count')
         print('Saving {}.npy...'.format(relative_miscount_count_save_path))
         np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount)
 
