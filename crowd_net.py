@@ -50,7 +50,7 @@ class CrowdNet(Net):
             edge_width = int(self.settings.image_width * self.edge_percentage)
             edge_height = int(self.settings.image_height * self.edge_percentage)
             absolute_differences_tensor = absolute_differences_tensor[:, edge_height:-edge_height,
-                                          edge_width:-edge_width]
+                                                                      edge_width:-edge_width]
             padding = [[0, 0], [edge_height, edge_height], [edge_width, edge_width], [0, 0]]
             absolute_differences_tensor = tf.pad(absolute_differences_tensor, padding)
 
@@ -345,20 +345,20 @@ class CrowdNet(Net):
         """
         The code that will be run once the inference test loop is finished. Mostly for saving data or statistics.
         """
-        predicted_labels_save_path = os.path.join(self.settings.data_directory, 'predicted_labels')
-        print('Saving labels to {}.npy...'.format(predicted_labels_save_path))
+        predicted_labels_save_path = 'predicted_labels'
+        print('Saving {}.npy...'.format(predicted_labels_save_path))
         np.save(predicted_labels_save_path, self.predicted_test_labels)
 
-        average_loss_save_path = os.path.join(self.settings.data_directory, 'average_loss')
-        print('Saving labels to {}.npy...'.format(average_loss_save_path))
+        average_loss_save_path = 'average_loss'
+        print('Saving {}.npy...'.format(average_loss_save_path))
         np.save(average_loss_save_path, self.predicted_test_labels_average_loss)
 
-        person_count_save_path = os.path.join(self.settings.data_directory, 'predicted_person_count')
-        print('Saving labels to {}.npy...'.format(person_count_save_path))
+        person_count_save_path = 'predicted_person_count'
+        print('Saving {}.npy...'.format(person_count_save_path))
         np.save(person_count_save_path, self.predicted_test_labels_person_count)
 
-        relative_miscount_count_save_path = os.path.join(self.settings.data_directory, 'relative_miscount_count')
-        print('Saving labels to {}.npy...'.format(relative_miscount_count_save_path))
+        relative_miscount_count_save_path = 'relative_miscount_count'
+        print('Saving {}.npy...'.format(relative_miscount_count_save_path))
         np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount)
 
 
