@@ -2,6 +2,8 @@
 Code related to the CrowdNet.
 """
 import tensorflow as tf
+import numpy as np
+import os
 
 from gonet.net import Net
 from gonet.interface import Interface
@@ -27,6 +29,9 @@ class CrowdNet(Net):
         # Internal variables.
         self.alternate_loss = None
         self.labels_tensor = None
+        self.predicted_test_labels_average_loss = None
+        self.predicted_test_labels_person_count = None
+        self.predicted_test_labels_relative_miscount = None
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -68,7 +73,8 @@ class CrowdNet(Net):
         true_person_count_tensor = self.mean_person_count_for_labels(labels)
         predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels)
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor)
-        relative_person_miscount_tensor = person_miscount_tensor / true_person_count_tensor
+        relative_person_miscount_tensor = tf.divide(person_miscount_tensor, true_person_count_tensor,
+                                                    name='mean_relative_person_miscount')
         tf.summary.scalar('True person count', true_person_count_tensor)
         tf.summary.scalar('Predicted person count', predicted_person_count_tensor)
         tf.summary.scalar('Person miscount', person_miscount_tensor)
@@ -85,7 +91,7 @@ class CrowdNet(Net):
         :return: The mean count tensor.
         :rtype: tf.Tensor
         """
-        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]))
+        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]), name='mean_person_count')
         return mean_person_count_tensor
 
     def create_patchwise_inference_op(self, images):
@@ -295,6 +301,65 @@ class CrowdNet(Net):
         images_tensor, labels_tensor = super().create_input_tensors()
         self.labels_tensor = labels_tensor
         return images_tensor, labels_tensor
+
+    def test_run_preloop(self):
+        """
+        The code run before the test loop. Mostly for setting up things that will be used within the loop.
+        """
+        with tf.variable_scope('loss'):
+            loss_tensor = self.create_loss_tensor(
+                self.session.graph.get_tensor_by_name('images_input_op:0'),
+                self.session.graph.get_tensor_by_name('labels_input_op:0')
+            )
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor, name='mean_loss_per_pixel')
+        self.predicted_test_labels = np.ndarray(shape=[0] + list(self.settings.label_shape), dtype=np.float32)
+        self.predicted_test_labels_average_loss = np.empty(shape=[], dtype=np.float32)
+        self.predicted_test_labels_person_count = np.ndarray(shape=[], dtype=np.float32)
+        self.predicted_test_labels_relative_miscount = np.ndarray(shape=[], dtype=np.float32)
+
+    def test_run_loop_step(self):
+        """
+        The code that will be used during the each iteration of the test loop (excluding the step incrementation).
+        """
+        predicted_labels_tensor = self.session.graph.get_tensor_by_name('inference_op:0')
+        predicted_labels_average_loss_tensor = self.session.graph.get_tensor_by_name('loss/mean_loss_per_pixel:0')
+        predicted_labels_person_count_tensor = self.session.graph.get_tensor_by_name('loss/mean_person_count:0')
+        predicted_labels_relative_miscount_tensor = self.session.graph.get_tensor_by_name(
+            'loss/mean_relative_person_miscount:0')
+        run_result = self.session.run([predicted_labels_tensor, predicted_labels_average_loss_tensor,
+                                       predicted_labels_person_count_tensor, predicted_labels_relative_miscount_tensor],
+                                      feed_dict={**self.default_feed_dictionary,
+                                                 self.dropout_keep_probability_tensor: 1.0})
+        predicted_labels_batch, predicted_labels_average_loss_batch = run_result[0], run_result[1]
+        predicted_labels_person_count_batch, predicted_labels_relative_miscount_batch = run_result[2], run_result[3]
+        self.predicted_test_labels = np.concatenate((self.predicted_test_labels, predicted_labels_batch))
+        self.predicted_test_labels_average_loss = np.append(self.predicted_test_labels_average_loss,
+                                                            predicted_labels_average_loss_batch)
+        self.predicted_test_labels_person_count = np.append(self.predicted_test_labels,
+                                                            predicted_labels_person_count_batch)
+        self.predicted_test_labels_relative_miscount = np.append(self.predicted_test_labels,
+                                                                 predicted_labels_relative_miscount_batch)
+        print('{image_count} images processed.'.format(image_count=(self.test_step + 1) * self.settings.batch_size))
+
+    def test_run_postloop(self):
+        """
+        The code that will be run once the inference test loop is finished. Mostly for saving data or statistics.
+        """
+        predicted_labels_save_path = os.path.join(self.settings.data_directory, 'predicted_labels')
+        print('Saving labels to {}.npy...'.format(predicted_labels_save_path))
+        np.save(predicted_labels_save_path, self.predicted_test_labels)
+
+        average_loss_save_path = os.path.join(self.settings.data_directory, 'average_loss')
+        print('Saving labels to {}.npy...'.format(average_loss_save_path))
+        np.save(average_loss_save_path, self.predicted_test_labels_average_loss)
+
+        person_count_save_path = os.path.join(self.settings.data_directory, 'predicted_person_count')
+        print('Saving labels to {}.npy...'.format(person_count_save_path))
+        np.save(person_count_save_path, self.predicted_test_labels_person_count)
+
+        relative_miscount_count_save_path = os.path.join(self.settings.data_directory, 'relative_miscount_count')
+        print('Saving labels to {}.npy...'.format(relative_miscount_count_save_path))
+        np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount)
 
 
 if __name__ == '__main__':
