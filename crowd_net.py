@@ -347,30 +347,6 @@ class CrowdNet(Net):
                                                                  predicted_labels_relative_miscount_batch)
         print('{image_count} images processed.'.format(image_count=(self.test_step + 1) * self.settings.batch_size))
 
-    def test_run_postloop(self):
-        """
-        The code that will be run once the inference test loop is finished. Mostly for saving data or statistics.
-        """
-        predicted_labels_save_path = os.path.join('visualization', 'predicted_labels')
-        print('Saving {}.npy...'.format(predicted_labels_save_path))
-        np.save(predicted_labels_save_path, np.squeeze(self.predicted_test_labels))
-
-        true_labels_save_path = os.path.join('visualization', 'true_labels')
-        print('Saving {}.npy...'.format(true_labels_save_path))
-        np.save(true_labels_save_path, np.squeeze(self.true_labels))
-
-        average_loss_save_path = os.path.join('visualization', 'average_loss')
-        print('Saving {}.npy...'.format(average_loss_save_path))
-        np.save(average_loss_save_path, self.predicted_test_labels_average_loss[1:])
-
-        person_count_save_path = os.path.join('visualization', 'predicted_person_count')
-        print('Saving {}.npy...'.format(person_count_save_path))
-        np.save(person_count_save_path, self.predicted_test_labels_person_count[1:])
-
-        relative_miscount_count_save_path = os.path.join('visualization', 'relative_miscount_count')
-        print('Saving {}.npy...'.format(relative_miscount_count_save_path))
-        np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount[1:])
-
     @staticmethod
     def reset_graph():
         """
