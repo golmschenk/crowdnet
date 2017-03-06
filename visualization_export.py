@@ -13,6 +13,9 @@ from crowd_net import CrowdNet
 from settings import Settings
 
 class VisualizationExport:
+    """
+    Class for exporting the information needed to visualize the data in the Bokeh powered Jupyter notebook.
+    """
     def __init__(self, test_set='test'):
         self.test_set = test_set
         self.visualization_directory = os.path.join('visualization', test_set)
@@ -103,6 +106,10 @@ class VisualizationExport:
             pil_image.save(os.path.join(self.visualization_directory, 'true_label_images', '{}.jpeg'.format(index)))
 
     def switch_file(self):
+        """
+        Creates the datasets json file with the test and train swapped. A simple, hack for running the test network
+        on the training data.
+        """
         with open(self.settings.datasets_json) as original_json_file:
             datasets = json.load(original_json_file)
         datasets['test'], datasets['train'] = datasets['train'], datasets['test']
@@ -111,12 +118,18 @@ class VisualizationExport:
             json.dump(datasets, swap_json_file)
 
     def export(self):
+        """
+        Runs the full set of functions needed to export the data for the Jupyter notebook to use.
+        """
         self.predicted_export()
         self.true_export()
         self.generate_result_images()
 
     @classmethod
     def export_test_and_train(cls):
+        """
+        Export the data for both the test and train datasets.
+        """
         cls(test_set='test').export()
         cls(test_set='train').export()
 
