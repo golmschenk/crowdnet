@@ -32,6 +32,7 @@ class CrowdNet(Net):
         self.predicted_test_labels_average_loss = None
         self.predicted_test_labels_person_count = None
         self.predicted_test_labels_relative_miscount = None
+        self.true_labels = None
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -313,9 +314,10 @@ class CrowdNet(Net):
             )
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor, name='mean_loss_per_pixel')
         self.predicted_test_labels = np.ndarray(shape=[0] + list(self.settings.label_shape), dtype=np.float32)
+        self.true_labels = np.ndarray(shape=[0] + list(self.settings.label_shape), dtype=np.float32)
         self.predicted_test_labels_average_loss = np.empty(shape=[], dtype=np.float32)
-        self.predicted_test_labels_person_count = np.ndarray(shape=[], dtype=np.float32)
-        self.predicted_test_labels_relative_miscount = np.ndarray(shape=[], dtype=np.float32)
+        self.predicted_test_labels_person_count = np.empty(shape=[], dtype=np.float32)
+        self.predicted_test_labels_relative_miscount = np.empty(shape=[], dtype=np.float32)
 
     def test_run_loop_step(self):
         """
@@ -324,18 +326,22 @@ class CrowdNet(Net):
         predicted_labels_tensor = self.session.graph.get_tensor_by_name('inference_op:0')
         predicted_labels_average_loss_tensor = self.session.graph.get_tensor_by_name('loss/mean_loss_per_pixel:0')
         predicted_labels_person_count_tensor = self.session.graph.get_tensor_by_name('loss/mean_person_count:0')
+        true_labels_tensor = self.session.graph.get_tensor_by_name('labels_input_op:0')
         predicted_labels_relative_miscount_tensor = self.session.graph.get_tensor_by_name(
             'loss/mean_relative_person_miscount:0')
         run_result = self.session.run([predicted_labels_tensor, predicted_labels_average_loss_tensor,
-                                       predicted_labels_person_count_tensor, predicted_labels_relative_miscount_tensor],
+                                       predicted_labels_person_count_tensor, predicted_labels_relative_miscount_tensor,
+                                       true_labels_tensor],
                                       feed_dict={**self.default_feed_dictionary,
                                                  self.dropout_keep_probability_tensor: 1.0})
         predicted_labels_batch, predicted_labels_average_loss_batch = run_result[0], run_result[1]
         predicted_labels_person_count_batch, predicted_labels_relative_miscount_batch = run_result[2], run_result[3]
+        true_labels_batch = run_result[4]
         self.predicted_test_labels = np.concatenate((self.predicted_test_labels, predicted_labels_batch))
+        self.true_labels = np.concatenate((self.true_labels, true_labels_batch))
         self.predicted_test_labels_average_loss = np.append(self.predicted_test_labels_average_loss,
                                                             predicted_labels_average_loss_batch)
-        self.predicted_test_labels_person_count = np.append(self.predicted_test_labels,
+        self.predicted_test_labels_person_count = np.append(self.predicted_test_labels_person_count,
                                                             predicted_labels_person_count_batch)
         self.predicted_test_labels_relative_miscount = np.append(self.predicted_test_labels,
                                                                  predicted_labels_relative_miscount_batch)
@@ -349,17 +355,28 @@ class CrowdNet(Net):
         print('Saving {}.npy...'.format(predicted_labels_save_path))
         np.save(predicted_labels_save_path, np.squeeze(self.predicted_test_labels))
 
+        true_labels_save_path = os.path.join('visualization', 'true_labels')
+        print('Saving {}.npy...'.format(true_labels_save_path))
+        np.save(true_labels_save_path, np.squeeze(self.true_labels))
+
         average_loss_save_path = os.path.join('visualization', 'average_loss')
         print('Saving {}.npy...'.format(average_loss_save_path))
-        np.save(average_loss_save_path, self.predicted_test_labels_average_loss)
+        np.save(average_loss_save_path, self.predicted_test_labels_average_loss[1:])
 
         person_count_save_path = os.path.join('visualization', 'predicted_person_count')
         print('Saving {}.npy...'.format(person_count_save_path))
-        np.save(person_count_save_path, self.predicted_test_labels_person_count)
+        np.save(person_count_save_path, self.predicted_test_labels_person_count[1:])
 
         relative_miscount_count_save_path = os.path.join('visualization', 'relative_miscount_count')
         print('Saving {}.npy...'.format(relative_miscount_count_save_path))
-        np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount)
+        np.save(relative_miscount_count_save_path, self.predicted_test_labels_relative_miscount[1:])
+
+    @staticmethod
+    def reset_graph():
+        """
+        Reset the TensorFlow graph.
+        """
+        tf.reset_default_graph()
 
 
 if __name__ == '__main__':

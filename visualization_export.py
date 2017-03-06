@@ -20,6 +20,7 @@ def predicted_export():
     os.makedirs('visualization', exist_ok=True)
     net = CrowdNet()
     net.test()
+    net.reset_graph()
 
 
 def true_export():
@@ -42,10 +43,6 @@ def true_export():
     images_save_path = os.path.join('visualization', 'images')
     print('Saving {}.npy...'.format(images_save_path))
     np.save(images_save_path, images)
-
-    labels_save_path = os.path.join('visualization', 'true_labels')
-    print('Saving {}.npy...'.format(labels_save_path))
-    np.save(labels_save_path, labels)
 
     person_count_save_path = os.path.join('visualization', 'true_person_count')
     print('Saving {}.npy...'.format(person_count_save_path))
