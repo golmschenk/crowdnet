@@ -51,7 +51,7 @@ class CrowdNet(Net):
             edge_width = int(self.settings.image_width * self.edge_percentage)
             edge_height = int(self.settings.image_height * self.edge_percentage)
             absolute_differences_tensor = absolute_differences_tensor[:, edge_height:-edge_height,
-                                                                      edge_width:-edge_width]
+                                          edge_width:-edge_width]
             padding = [[0, 0], [edge_height, edge_height], [edge_width, edge_width], [0, 0]]
             absolute_differences_tensor = tf.pad(absolute_differences_tensor, padding)
 
@@ -71,8 +71,9 @@ class CrowdNet(Net):
         :return: The relative person miscount tensor.
         :rtype: tf.Tensor
         """
-        true_person_count_tensor = self.mean_person_count_for_labels(labels)
-        predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels)
+        true_person_count_tensor = self.mean_person_count_for_labels(labels, name='mean_person_count')
+        predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels,
+                                                                          name='predicted_mean_person_count')
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor)
         relative_person_miscount_tensor = tf.divide(person_miscount_tensor, true_person_count_tensor,
                                                     name='mean_relative_person_miscount')
@@ -83,7 +84,7 @@ class CrowdNet(Net):
         return relative_person_miscount_tensor
 
     @staticmethod
-    def mean_person_count_for_labels(labels_tensor):
+    def mean_person_count_for_labels(labels_tensor, name=None):
         """
         Sums the labels per image and takes the mean over the images.
 
@@ -92,7 +93,7 @@ class CrowdNet(Net):
         :return: The mean count tensor.
         :rtype: tf.Tensor
         """
-        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]), name='mean_person_count')
+        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]), name=name)
         return mean_person_count_tensor
 
     def create_patchwise_inference_op(self, images):
@@ -325,7 +326,8 @@ class CrowdNet(Net):
         """
         predicted_labels_tensor = self.session.graph.get_tensor_by_name('inference_op:0')
         predicted_labels_average_loss_tensor = self.session.graph.get_tensor_by_name('loss/mean_loss_per_pixel:0')
-        predicted_labels_person_count_tensor = self.session.graph.get_tensor_by_name('loss/mean_person_count:0')
+        predicted_labels_person_count_tensor = self.session.graph.get_tensor_by_name(
+            'loss/predicted_mean_person_count:0')
         true_labels_tensor = self.session.graph.get_tensor_by_name('labels_input_op:0')
         predicted_labels_relative_miscount_tensor = self.session.graph.get_tensor_by_name(
             'loss/mean_relative_person_miscount:0')

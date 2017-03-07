@@ -23,3 +23,6 @@ class Settings(GoSettings):
         self.image_height = 240 // 4
         self.image_width = 352 // 4
         self.image_depth = 4
+
+        self.run_mode = 'test'
+        self.restore_model_file_name = 'crowd_net.ckpt-33'
