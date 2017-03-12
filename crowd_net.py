@@ -93,7 +93,7 @@ class CrowdNet(Net):
         :return: The mean count tensor.
         :rtype: tf.Tensor
         """
-        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, [1, 2]), name=name)
+        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, axis=[1, 2]), name=name)
         return mean_person_count_tensor
 
     def create_patchwise_inference_op(self, images):
@@ -310,7 +310,7 @@ class CrowdNet(Net):
         """
         with tf.variable_scope('loss'):
             loss_tensor = self.create_loss_tensor(
-                self.session.graph.get_tensor_by_name('images_input_op:0'),
+                self.session.graph.get_tensor_by_name('inference_op:0'),
                 self.session.graph.get_tensor_by_name('labels_input_op:0')
             )
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor, name='mean_loss_per_pixel')
