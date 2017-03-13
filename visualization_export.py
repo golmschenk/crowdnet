@@ -12,6 +12,7 @@ from gonet.tfrecords_processor import TFRecordsProcessor
 from crowd_net import CrowdNet
 from settings import Settings
 
+
 class VisualizationExport:
     """
     Class for exporting the information needed to visualize the data in the Bokeh powered Jupyter notebook.
@@ -31,6 +32,7 @@ class VisualizationExport:
         if self.test_set == 'train':
             self.switch_file()
             net.settings.datasets_json = self.settings.datasets_json
+            net.data.settings.datasets_json = self.settings.datasets_json
         net.test()
 
         predicted_labels_save_path = os.path.join(self.visualization_directory, 'predicted_labels')
