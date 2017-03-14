@@ -2,6 +2,8 @@
 Code for viewing the data.
 """
 import json
+
+import shutil
 from PIL import Image
 import os
 from matplotlib import cm
@@ -84,6 +86,9 @@ class VisualizationExport:
         """
         Generates the images for displaying in the visualization.
         """
+        shutil.rmtree(os.path.join(self.visualization_directory, 'predicted_label_images'))
+        shutil.rmtree(os.path.join(self.visualization_directory, 'true_label_images'))
+        shutil.rmtree(os.path.join(self.visualization_directory, 'original_images'))
         os.makedirs(os.path.join(self.visualization_directory, 'predicted_label_images'), exist_ok=True)
         os.makedirs(os.path.join(self.visualization_directory, 'true_label_images'), exist_ok=True)
         os.makedirs(os.path.join(self.visualization_directory, 'original_images'), exist_ok=True)
