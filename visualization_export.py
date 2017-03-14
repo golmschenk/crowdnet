@@ -21,7 +21,6 @@ class VisualizationExport:
         self.test_set = test_set
         self.visualization_directory = os.path.join('visualization', test_set)
         self.settings = Settings()
-        self.datasets_file = self.settings.datasets_json
 
     def predicted_export(self):
         """
@@ -62,7 +61,7 @@ class VisualizationExport:
         Save the true statistics to NumPy files.
         """
         tfrecords_processor = TFRecordsProcessor()
-        with open(self.datasets_file) as datasets_json:
+        with open(self.settings.datasets_json) as datasets_json:
             dataset_file_names = json.load(datasets_json)
         images, labels = tfrecords_processor.read_to_numpy(os.path.join(self.settings.data_directory,
                                                                         dataset_file_names['test'][0]))
