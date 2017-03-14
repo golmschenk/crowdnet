@@ -86,9 +86,12 @@ class VisualizationExport:
         """
         Generates the images for displaying in the visualization.
         """
-        shutil.rmtree(os.path.join(self.visualization_directory, 'predicted_label_images'))
-        shutil.rmtree(os.path.join(self.visualization_directory, 'true_label_images'))
-        shutil.rmtree(os.path.join(self.visualization_directory, 'original_images'))
+        if os.path.exists(os.path.join(self.visualization_directory, 'predicted_label_images')):
+            shutil.rmtree(os.path.join(self.visualization_directory, 'predicted_label_images'))
+        if os.path.exists(os.path.join(self.visualization_directory, 'true_label_images')):
+            shutil.rmtree(os.path.join(self.visualization_directory, 'true_label_images'))
+        if os.path.exists(os.path.join(self.visualization_directory, 'original_images')):
+            shutil.rmtree(os.path.join(self.visualization_directory, 'original_images'))
         os.makedirs(os.path.join(self.visualization_directory, 'predicted_label_images'), exist_ok=True)
         os.makedirs(os.path.join(self.visualization_directory, 'true_label_images'), exist_ok=True)
         os.makedirs(os.path.join(self.visualization_directory, 'original_images'), exist_ok=True)
