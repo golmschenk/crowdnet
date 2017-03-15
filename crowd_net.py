@@ -78,7 +78,7 @@ class CrowdNet(Net):
                                                                           name='predicted_mean_person_count')
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor,
                                         name='person_miscount')
-        relative_person_miscount_tensor = tf.divide(person_miscount_tensor, true_person_count_tensor,
+        relative_person_miscount_tensor = tf.divide(person_miscount_tensor, tf.add(true_person_count_tensor, 0.01),
                                                     name='mean_relative_person_miscount')
         tf.summary.scalar('True person count', true_person_count_tensor)
         tf.summary.scalar('Predicted person count', predicted_person_count_tensor)
