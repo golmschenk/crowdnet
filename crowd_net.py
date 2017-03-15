@@ -1,10 +1,12 @@
 """
 Code related to the CrowdNet.
 """
+import datetime
 import tensorflow as tf
 import numpy as np
 import os
 
+import time
 from gonet.net import Net
 from gonet.interface import Interface
 from gonet.convenience import weight_variable, bias_variable, leaky_relu, conv2d
@@ -74,7 +76,8 @@ class CrowdNet(Net):
         true_person_count_tensor = self.mean_person_count_for_labels(labels, name='mean_person_count')
         predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels,
                                                                           name='predicted_mean_person_count')
-        person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor)
+        person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor,
+                                        name='person_miscount')
         relative_person_miscount_tensor = tf.divide(person_miscount_tensor, true_person_count_tensor,
                                                     name='mean_relative_person_miscount')
         tf.summary.scalar('True person count', true_person_count_tensor)
@@ -355,6 +358,115 @@ class CrowdNet(Net):
         Reset the TensorFlow graph.
         """
         tf.reset_default_graph()
+
+    def train(self):
+        """
+        Adds the training operations and runs the training loop.
+        """
+        # Prepare session.
+        self.session = tf.Session()
+
+        print('Preparing data...')
+        # Setup the inputs.
+        with tf.variable_scope('Input'):
+            images_tensor, labels_tensor = self.create_input_tensors()
+
+        print('Building graph...')
+        # Add the forward pass operations to the graph.
+        predicted_labels_tensor = self.create_inference_op(images_tensor)
+
+        # Add the loss operations to the graph.
+        with tf.variable_scope('loss'):
+            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
+
+        if self.image_summary_on:
+            with tf.variable_scope('comparison_summary'):
+                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
+
+        # Add the training operations to the graph.
+        value_to_minimize = self.session.graph.get_tensor_by_name('loss/person_miscount:0')
+        training_op = self.create_training_op(value_to_minimize=value_to_minimize)
+
+        # Prepare the summary operations.
+        summaries_op = tf.summary.merge_all()
+        summary_path = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                    datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        self.log_source_files(summary_path + '_source')
+        train_writer = tf.summary.FileWriter(summary_path + '_train', self.session.graph)
+        validation_writer = tf.summary.FileWriter(summary_path + '_validation', self.session.graph)
+
+        # The op for initializing the variables.
+        initialize_op = tf.global_variables_initializer()
+
+        # Prepare saver.
+        self.saver = tf.train.Saver(max_to_keep=self.settings.number_of_models_to_keep)
+
+        print('Initializing graph...')
+        # Initialize the variables.
+        self.session.run(initialize_op)
+
+        # Restore from saved model if passed.
+        if self.settings.restore_model_file_path:
+            self.model_restore()
+
+        # Start input enqueue threads.
+        coordinator = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
+
+        print('Starting training...')
+        # Preform the training loop.
+        try:
+            while not coordinator.should_stop() and not self.stop_signal:
+                # Regular training step.
+                start_time = time.time()
+                _, loss, summaries, step = self.session.run(
+                    [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
+                    feed_dict=self.default_feed_dictionary
+                )
+                duration = time.time() - start_time
+
+                # Information print step.
+                if step % self.settings.print_step_period == 0:
+                    print('Step %d: %s = %.5f (%.3f sec / step)' % (
+                        step, self.step_summary_name, loss, duration))
+
+                # Summary write step.
+                if step % self.settings.summary_step_period == 0:
+                    train_writer.add_summary(summaries, step)
+
+                # Validation step.
+                if step % self.settings.validation_step_period == 0:
+                    start_time = time.time()
+                    loss, summaries = self.session.run(
+                        [reduce_mean_loss_tensor, summaries_op],
+                        feed_dict={**self.default_feed_dictionary,
+                                   self.dropout_keep_probability_tensor: 1.0,
+                                   self.dataset_selector_tensor: 'validation'}
+                    )
+                    duration = time.time() - start_time
+                    validation_writer.add_summary(summaries, step)
+                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (step, self.step_summary_name,
+                                                                               loss, duration))
+
+                if step % self.settings.model_auto_save_step_period == 0 and step != 0:
+                    self.save_model()
+
+                # Handle interface messages from the user.
+                self.interface_handler()
+        except tf.errors.OutOfRangeError as error:
+            if self.global_step == 0:
+                print('Data not found.')
+            else:
+                raise error
+        finally:
+            # When done, ask the threads to stop.
+            coordinator.request_stop()
+
+        # Wait for threads to finish.
+        coordinator.join(threads)
+        self.session.close()
 
 
 if __name__ == '__main__':

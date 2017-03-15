@@ -12,7 +12,7 @@ class Settings(GoSettings):
         super().__init__()
 
         self.network_name = 'crowd_net'
-        self.inference_op_name = 'overfit'
+        self.inference_op_name = 'gaea'
         self.datasets_json = 'datasets.json'
 
         self.batch_size = 3
@@ -24,5 +24,3 @@ class Settings(GoSettings):
         self.image_width = 352 // 4
         self.image_depth = 4
 
-        self.run_mode = 'test'
-        self.restore_model_file_name = 'crowd_net.ckpt-3021'
