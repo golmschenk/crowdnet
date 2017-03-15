@@ -25,7 +25,7 @@ class CrowdNet(Net):
 
         self.data = CrowdData()
 
-        self.alternate_loss_on = False
+        self.alternate_loss_on = True
         self.edge_percentage = 0.0
 
         # Internal variables.
@@ -59,7 +59,7 @@ class CrowdNet(Net):
 
         relative_person_miscount_tensor = self.create_person_count_summaries(labels, predicted_labels)
         if self.alternate_loss_on:
-            self.alternate_loss = relative_person_miscount_tensor
+            self.alternate_loss = self.session.graph.get_tensor_by_name('loss/person_miscount:0')
         return absolute_differences_tensor
 
     def create_person_count_summaries(self, labels, predicted_labels):
@@ -285,15 +285,24 @@ class CrowdNet(Net):
         Create and add the training op to the graph.
 
         :param value_to_minimize: The value to train on.
-        :type value_to_minimize: tf.Tensor or list[tf.Tensor]
+        :type value_to_minimize: tf.Tensor
         :return: The training op.
         :rtype: tf.Operation
         """
+        tf.summary.scalar('Learning rate', self.learning_rate_tensor)
+        variables_to_train = self.attain_variables_to_train()
+        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
+                                                                                 global_step=self.global_step,
+                                                                                 var_list=variables_to_train)
         if self.alternate_loss_on:
-            value_to_minimize = tf.cond(tf.equal(tf.mod(self.global_step, 2), 0),
-                                        lambda: value_to_minimize,
-                                        lambda: self.alternate_loss)
-        return super().create_training_op(value_to_minimize)
+            variables_to_train = self.attain_variables_to_train()
+            alternate_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+                self.alternate_loss,
+                global_step=None,  # Don't increment the global step on each optimizer.
+                var_list=variables_to_train
+            )
+            training_op = tf.group(training_op, alternate_training_op)
+        return training_op
 
     def create_input_tensors(self):
         """
@@ -386,8 +395,7 @@ class CrowdNet(Net):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        value_to_minimize = self.session.graph.get_tensor_by_name('loss/person_miscount:0')
-        training_op = self.create_training_op(value_to_minimize=value_to_minimize)
+        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
