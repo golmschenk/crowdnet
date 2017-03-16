@@ -25,7 +25,7 @@ class CrowdNet(Net):
 
         self.data = CrowdData()
 
-        self.alternate_loss_on = True
+        self.alternate_loss_on = False
         self.edge_percentage = 0.0
 
         # Internal variables.
