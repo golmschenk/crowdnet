@@ -48,7 +48,10 @@ class CrowdNet(Net):
         :return: The loss tensor.
         :rtype: tf.Tensor
         """
-        absolute_differences_tensor = self.create_absolute_differences_tensor(predicted_labels, labels)
+
+        differences = predicted_labels - labels
+        tf.summary.scalar('Mean difference', tf.reduce_mean(differences))
+        absolute_differences_tensor = tf.abs(differences)
         if self.edge_percentage > 0.001:
             edge_width = int(self.settings.image_width * self.edge_percentage)
             edge_height = int(self.settings.image_height * self.edge_percentage)
