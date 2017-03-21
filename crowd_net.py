@@ -297,17 +297,20 @@ class CrowdNet(Net):
         :return: The training op.
         :rtype: tf.Operation
         """
+        if self.settings.scopes_to_train:
+            print('`scopes_to_train` is disabled in this branch. Quitting.')
+            exit()
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
-        variables_to_train = self.attain_variables_to_train()
-        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
-                                                                                 global_step=self.global_step,
-                                                                                 var_list=variables_to_train)
+        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+            value_to_minimize,
+            global_step=self.global_step,
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+        )
         if self.alternate_loss_on:
-            variables_to_train = self.attain_variables_to_train()
             alternate_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
                 self.alternate_loss,
                 global_step=None,  # Don't increment the global step on each optimizer.
-                var_list=variables_to_train
+                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
             )
             training_op = tf.group(training_op, alternate_training_op)
         return training_op
@@ -379,10 +382,11 @@ class CrowdNet(Net):
     def generator(self):
         noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
         net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 4], stride=[1, 1], padding='VALID')
-        net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[3, 3], padding='SAME')
         net = tf.contrib.layers.conv2d_transpose(net, 256, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
         net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
-        images = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        images = net[:, :self.settings.image_height, :self.settings.image_width, :]
         return images
 
     def train(self):
@@ -401,21 +405,37 @@ class CrowdNet(Net):
         # Add the forward pass operations to the graph.
         with tf.variable_scope('Generator'):
             generated_images_tensor = self.generator()
-        with tf.variable_scope('Discriminator'):
+            tf.summary.image('Generated Images', generated_images_tensor)
+        with tf.variable_scope('Discriminator') as scope:
             predicted_labels_tensor = self.create_inference_op(images_tensor)
+            scope.reuse_variables()
+            predicted_generated_labels_tensor = self.create_inference_op(generated_images_tensor)
 
         # Add the loss operations to the graph.
         with tf.variable_scope('loss'):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
+            generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
+            tf.summary.scalar('Generated Loss', generated_loss_tensor)
 
         if self.image_summary_on:
             with tf.variable_scope('comparison_summary'):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+        normal_training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+        generated_discriminator_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+            generated_loss_tensor,
+            global_step=None,  # Only increment during main training op.
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+        )
+        generator_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+            tf.negative(generated_loss_tensor),
+            global_step=None,  # Only increment during main training op.
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
+        )
+        training_op = tf.group(normal_training_op, generated_discriminator_training_op, generator_training_op)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
