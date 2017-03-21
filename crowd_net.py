@@ -396,8 +396,11 @@ class CrowdNet(Net):
         net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[3, 3], padding='SAME')
         net = tf.contrib.layers.conv2d_transpose(net, 256, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
         net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
-        net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
-        images = net[:, :self.settings.image_height, :self.settings.image_width, :]
+        net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
+                                                 activation_fn=None)
+        unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
+        mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
+        images = (unscaled_images - mean) / tf.sqrt(variance)
         return images
 
     def train(self):
