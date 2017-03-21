@@ -376,6 +376,15 @@ class CrowdNet(Net):
         """
         tf.reset_default_graph()
 
+    def generator(self):
+        noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+        net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 4], stride=[1, 1], padding='VALID')
+        net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 256, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        images = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        return images
+
     def train(self):
         """
         Adds the training operations and runs the training loop.
@@ -390,7 +399,10 @@ class CrowdNet(Net):
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
-        predicted_labels_tensor = self.create_inference_op(images_tensor)
+        with tf.variable_scope('Generator'):
+            generated_images_tensor = self.generator()
+        with tf.variable_scope('Discriminator'):
+            predicted_labels_tensor = self.create_inference_op(images_tensor)
 
         # Add the loss operations to the graph.
         with tf.variable_scope('loss'):
