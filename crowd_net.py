@@ -288,6 +288,19 @@ class CrowdNet(Net):
         else:
             super().image_comparison_summary(images, labels, predicted_labels, label_differences)
 
+    def attain_variables_to_train(self):
+        """
+        Gets the list of variables to train based on the scopes to train list.
+
+        :return: The list of variables to train.
+        :rtype: list[tf.Variable]
+        """
+        if self.settings.scopes_to_train:
+            return [variable for scope in self.settings.scopes_to_train for variable in
+                    tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator/'+scope)]
+        else:
+            return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+
     def create_training_op(self, value_to_minimize):
         """
         Create and add the training op to the graph.
@@ -297,20 +310,18 @@ class CrowdNet(Net):
         :return: The training op.
         :rtype: tf.Operation
         """
-        if self.settings.scopes_to_train:
-            print('`scopes_to_train` is disabled in this branch. Quitting.')
-            exit()
+        variables_to_train = self.attain_variables_to_train()
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
         training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
             value_to_minimize,
             global_step=self.global_step,
-            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+            var_list=variables_to_train
         )
         if self.alternate_loss_on:
             alternate_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
                 self.alternate_loss,
                 global_step=None,  # Don't increment the global step on each optimizer.
-                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+                var_list=variables_to_train
             )
             training_op = tf.group(training_op, alternate_training_op)
         return training_op
