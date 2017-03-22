@@ -478,7 +478,7 @@ class CrowdNet(Net):
 
         if self.image_summary_on:
             with tf.variable_scope('comparison_summary'):
-                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
+                self.image_comparison_summary(images_tensor, labels_tensor, predicted_true_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
         true_discriminator_training_op = self.create_training_op(
