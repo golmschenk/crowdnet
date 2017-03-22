@@ -35,6 +35,7 @@ class CrowdNet(Net):
         self.predicted_test_labels_person_count = None
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
+        self.before_final = None
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -196,7 +197,7 @@ class CrowdNet(Net):
         :rtype: tf.Tensor
         """
 
-        module1_output = self.terra_module('module1', images, 32, normalization_function=tf.contrib.layers.batch_norm)
+        module1_output = self.terra_module('module1', images, 32)
         module2_output = self.terra_module('module2', module1_output, 64,
                                            normalization_function=tf.contrib.layers.batch_norm)
         module3_output = self.terra_module('module3', module2_output, 64,
@@ -211,6 +212,7 @@ class CrowdNet(Net):
                                            normalization_function=tf.contrib.layers.batch_norm)
         module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True,
                                            normalization_function=tf.contrib.layers.batch_norm)
+        self.before_final = module8_output
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
@@ -430,7 +432,7 @@ class CrowdNet(Net):
         net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
                                                  normalizer_fn=tf.contrib.layers.batch_norm)
         net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
-                                                 activation_fn=None, normalizer_fn=tf.contrib.layers.batch_norm)
+                                                 activation_fn=tf.tanh)
         unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
         mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
         images = (unscaled_images - mean) / tf.sqrt(variance)
@@ -457,21 +459,34 @@ class CrowdNet(Net):
             predicted_labels_tensor = self.create_inference_op(images_tensor)
             scope.reuse_variables()
             predicted_generated_labels_tensor = self.create_inference_op(generated_images_tensor)
+        before_final_tensor = self.before_final
+        with tf.variable_scope('Predictor'):
+            predicted_true_labels_tensor = self.terra_module('module9', before_final_tensor, 1, kernel_size=1,
+                                                             activation_function=None)
 
         # Add the loss operations to the graph.
-        with tf.variable_scope('loss'):
-            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
-            tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
+        with tf.variable_scope('both_loss'):
+            both_loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
+            reduce_mean_both_loss_tensor = tf.reduce_mean(both_loss_tensor)
+            tf.summary.scalar(self.step_summary_name, reduce_mean_both_loss_tensor)
             generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
             tf.summary.scalar('Generated Loss', generated_loss_tensor)
+        with tf.variable_scope('loss'):
+            loss_tensor = self.create_loss_tensor(predicted_true_labels_tensor, labels_tensor)
+            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
 
         if self.image_summary_on:
             with tf.variable_scope('comparison_summary'):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        normal_training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+        both_training_op = self.create_training_op(value_to_minimize=reduce_mean_both_loss_tensor)
+        predictor_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+            reduce_mean_loss_tensor,
+            global_step=None,  # Only increment during main training op.
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
+        )
         generated_discriminator_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
             generated_loss_tensor,
             global_step=None,  # Only increment during main training op.
@@ -482,7 +497,8 @@ class CrowdNet(Net):
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
         )
-        training_op = tf.group(normal_training_op, generated_discriminator_training_op, generator_training_op)
+        training_op = tf.group(both_training_op, generated_discriminator_training_op, generator_training_op,
+                               predictor_training_op)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
