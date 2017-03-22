@@ -465,10 +465,10 @@ class CrowdNet(Net):
                                                              activation_function=None)
 
         # Add the loss operations to the graph.
-        with tf.variable_scope('both_loss'):
-            both_loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            reduce_mean_both_loss_tensor = tf.reduce_mean(both_loss_tensor)
-            tf.summary.scalar(self.step_summary_name, reduce_mean_both_loss_tensor)
+        with tf.variable_scope('true_discriminator_loss'):
+            true_discriminator_loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
+            reduce_mean_true_discriminator_loss_tensor = tf.reduce_mean(true_discriminator_loss_tensor)
+            tf.summary.scalar(self.step_summary_name, reduce_mean_true_discriminator_loss_tensor)
             generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
             tf.summary.scalar('Generated Loss', generated_loss_tensor)
         with tf.variable_scope('loss'):
@@ -481,7 +481,8 @@ class CrowdNet(Net):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        both_training_op = self.create_training_op(value_to_minimize=reduce_mean_both_loss_tensor)
+        true_discriminator_training_op = self.create_training_op(
+            value_to_minimize=reduce_mean_true_discriminator_loss_tensor)
         predictor_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
             reduce_mean_loss_tensor,
             global_step=None,  # Only increment during main training op.
@@ -497,8 +498,10 @@ class CrowdNet(Net):
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
         )
-        training_op = tf.group(both_training_op, generated_discriminator_training_op, generator_training_op,
-                               predictor_training_op)
+        training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
+                               generator_training_op, predictor_training_op)
+        initial_training_op = tf.group(true_discriminator_training_op, predictor_training_op)
+        current_training_op = initial_training_op
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
@@ -533,10 +536,12 @@ class CrowdNet(Net):
                 # Regular training step.
                 start_time = time.time()
                 _, loss, summaries, step = self.session.run(
-                    [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
+                    [current_training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
                     feed_dict=self.default_feed_dictionary
                 )
                 duration = time.time() - start_time
+                if step == 10000:
+                    current_training_op = training_op
 
                 # Information print step.
                 if step % self.settings.print_step_period == 0:
