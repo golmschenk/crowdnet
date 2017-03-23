@@ -467,7 +467,7 @@ class CrowdNet(Net):
         print('Building graph...')
         # Add the forward pass operations to the graph.
         with tf.variable_scope('Generator'):
-            generated_images_tensor = self.generator()
+            generated_images_tensor = self.no_bn_generator()
             tf.summary.image('Generated Images', generated_images_tensor)
         with tf.variable_scope('Discriminator') as scope:
             predicted_labels_tensor = self.create_inference_op(images_tensor)
@@ -560,7 +560,7 @@ class CrowdNet(Net):
                     feed_dict=self.default_feed_dictionary
                 )
                 duration = time.time() - start_time
-                if step == 1:
+                if step == 10000:
                     current_training_op = training_op
 
                 # Information print step.
