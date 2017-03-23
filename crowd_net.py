@@ -327,9 +327,9 @@ class CrowdNet(Net):
         """
         if self.settings.scopes_to_train:
             return [variable for scope in self.settings.scopes_to_train for variable in
-                    tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator/' + scope)]
+                    tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)]
         else:
-            return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+            return None
 
     def create_training_op(self, value_to_minimize):
         """
