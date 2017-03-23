@@ -474,8 +474,8 @@ class CrowdNet(Net):
             predicted_generated_labels_tensor = self.create_inference_op(generated_images_tensor)
         before_final_tensor = self.before_final
         with tf.variable_scope('Predictor'):
-            predicted_true_labels_tensor = self.terra_module('module9', before_final_tensor, 1, kernel_size=1,
-                                                             activation_function=None)
+            scalar = tf.Variable(initial_value=1.0, expected_shape=[1])
+            predicted_true_labels_tensor = tf.multiply(predicted_labels_tensor, scalar)
 
         # Add the loss operations to the graph.
         with tf.variable_scope('true_discriminator_loss'):
@@ -485,6 +485,7 @@ class CrowdNet(Net):
             generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
             tf.summary.scalar('Generated Loss', generated_loss_tensor)
         with tf.variable_scope('loss'):
+            tf.summary.scalar('Multiplier', scalar)
             loss_tensor = self.create_loss_tensor(predicted_true_labels_tensor, labels_tensor)
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
@@ -513,7 +514,7 @@ class CrowdNet(Net):
         )
         training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
                                generator_training_op, predictor_training_op)
-        initial_training_op = tf.group(true_discriminator_training_op, predictor_training_op)
+        initial_training_op = true_discriminator_training_op
         current_training_op = initial_training_op
 
         # Prepare the summary operations.
