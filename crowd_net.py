@@ -36,6 +36,7 @@ class CrowdNet(Net):
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
         self.before_final = None
+        self.optimizer = None
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -495,19 +496,24 @@ class CrowdNet(Net):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_true_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        true_discriminator_training_op = self.create_training_op(
-            value_to_minimize=reduce_mean_true_discriminator_loss_tensor)
-        predictor_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
+        tf.summary.scalar('Learning rate', self.learning_rate_tensor)
+        true_discriminator_training_op = self.optimizer.minimize(
+            reduce_mean_true_discriminator_loss_tensor,
+            global_step=self.global_step,
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+        )
+        predictor_training_op = self.optimizer.minimize(
             reduce_mean_loss_tensor,
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
         )
-        generated_discriminator_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+        generated_discriminator_training_op = self.optimizer.minimize(
             generated_loss_tensor,
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
         )
-        generator_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
+        generator_training_op = self.optimizer.minimize(
             tf.negative(generated_loss_tensor),
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
@@ -554,7 +560,7 @@ class CrowdNet(Net):
                     feed_dict=self.default_feed_dictionary
                 )
                 duration = time.time() - start_time
-                if step == 10000:
+                if step == 1:
                     current_training_op = training_op
 
                 # Information print step.
