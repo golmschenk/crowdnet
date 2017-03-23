@@ -208,10 +208,9 @@ class CrowdNet(Net):
                                            normalization_function=tf.contrib.layers.batch_norm)
         module6_output = self.terra_module('module6', module5_output, 256,
                                            normalization_function=tf.contrib.layers.batch_norm)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True,
+        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7,
                                            normalization_function=tf.contrib.layers.batch_norm)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True,
-                                           normalization_function=tf.contrib.layers.batch_norm)
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
         self.before_final = module8_output
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
