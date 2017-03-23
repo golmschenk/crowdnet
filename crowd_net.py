@@ -183,6 +183,7 @@ class CrowdNet(Net):
         module6_output = self.terra_module('module6', module5_output, 256)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
         module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
+        self.before_final = module8_output
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
@@ -430,6 +431,19 @@ class CrowdNet(Net):
                                                  normalizer_fn=tf.contrib.layers.batch_norm)
         net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
                                                  normalizer_fn=tf.contrib.layers.batch_norm)
+        net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
+                                                 activation_fn=tf.tanh)
+        unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
+        mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
+        images = (unscaled_images - mean) / tf.sqrt(variance)
+        return images
+
+    def no_bn_generator(self):
+        noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+        net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 4], stride=[1, 1], padding='VALID')
+        net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[3, 3], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 256, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
+        net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME')
         net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
                                                  activation_fn=tf.tanh)
         unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
