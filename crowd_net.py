@@ -499,8 +499,10 @@ class CrowdNet(Net):
             true_discriminator_loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             reduce_mean_true_discriminator_loss_tensor = tf.reduce_mean(true_discriminator_loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_true_discriminator_loss_tensor)
-            generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
+            generated_loss_tensor = tf.reduce_mean(predicted_generated_labels_tensor)
             tf.summary.scalar('Generated Loss', generated_loss_tensor)
+            absolute_generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
+            tf.summary.scalar('Absolute generated Loss', absolute_generated_loss_tensor)
         with tf.variable_scope('loss'):
             tf.summary.scalar('Multiplier', scalar)
             loss_tensor = self.create_loss_tensor(predicted_true_labels_tensor, labels_tensor)
@@ -525,7 +527,7 @@ class CrowdNet(Net):
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
         )
         generated_discriminator_training_op = self.optimizer.minimize(
-            generated_loss_tensor,
+            absolute_generated_loss_tensor,
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
         )
