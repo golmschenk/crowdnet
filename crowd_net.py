@@ -23,6 +23,8 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
+        self.generator_function = self.lrelu_generator
+        self.gan_on = True
         self.data = CrowdData()
 
         self.alternate_loss_on = False
@@ -437,6 +439,23 @@ class CrowdNet(Net):
         images = (unscaled_images - mean) / tf.sqrt(variance)
         return images
 
+    def lrelu_generator(self):
+        noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+        net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 4], stride=[1, 1], padding='VALID',
+                                                 normalizer_fn=tf.contrib.layers.batch_norm, activation_fn=leaky_relu)
+        net = tf.contrib.layers.conv2d_transpose(net, 512, kernel_size=[5, 5], stride=[3, 3], padding='SAME',
+                                                 normalizer_fn=tf.contrib.layers.batch_norm, activation_fn=leaky_relu)
+        net = tf.contrib.layers.conv2d_transpose(net, 256, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
+                                                 normalizer_fn=tf.contrib.layers.batch_norm, activation_fn=leaky_relu)
+        net = tf.contrib.layers.conv2d_transpose(net, 128, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
+                                                 normalizer_fn=tf.contrib.layers.batch_norm, activation_fn=leaky_relu)
+        net = tf.contrib.layers.conv2d_transpose(net, 3, kernel_size=[5, 5], stride=[2, 2], padding='SAME',
+                                                 activation_fn=tf.tanh)
+        unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
+        mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
+        images = (unscaled_images - mean) / tf.sqrt(variance)
+        return images
+
     def no_bn_generator(self):
         noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
         net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 4], stride=[1, 1], padding='VALID')
@@ -465,7 +484,7 @@ class CrowdNet(Net):
         print('Building graph...')
         # Add the forward pass operations to the graph.
         with tf.variable_scope('Generator'):
-            generated_images_tensor = self.no_bn_generator()
+            generated_images_tensor = self.generator_function()
             tf.summary.image('Generated Images', generated_images_tensor)
         with tf.variable_scope('Discriminator') as scope:
             predicted_labels_tensor = self.create_inference_op(images_tensor)
@@ -515,8 +534,11 @@ class CrowdNet(Net):
             global_step=None,  # Only increment during main training op.
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
         )
-        training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
-                               generator_training_op, predictor_training_op)
+        if self.gan_on:
+            training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
+                                   generator_training_op, predictor_training_op)
+        else:
+            training_op = true_discriminator_training_op
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
