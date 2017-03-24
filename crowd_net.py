@@ -499,16 +499,11 @@ class CrowdNet(Net):
             true_discriminator_loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             reduce_mean_true_discriminator_loss_tensor = tf.reduce_mean(true_discriminator_loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_true_discriminator_loss_tensor)
-            generated_loss_tensor = tf.reduce_mean(predicted_generated_labels_tensor)
-            tf.summary.scalar('Generated Loss', generated_loss_tensor)
-            absolute_generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
-            tf.summary.scalar('Absolute generated Loss', absolute_generated_loss_tensor)
         with tf.variable_scope('loss'):
             tf.summary.scalar('Multiplier', scalar)
             loss_tensor = self.create_loss_tensor(predicted_true_labels_tensor, labels_tensor)
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
-
         if self.image_summary_on:
             with tf.variable_scope('comparison_summary'):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_true_labels_tensor, loss_tensor)
@@ -516,31 +511,35 @@ class CrowdNet(Net):
         # Add the training operations to the graph.
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
-        true_discriminator_training_op = self.optimizer.minimize(
+        true_discriminator_compute_op = self.optimizer.compute_gradients(
             reduce_mean_true_discriminator_loss_tensor,
-            global_step=self.global_step,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
-        )
-        predictor_training_op = self.optimizer.minimize(
-            reduce_mean_loss_tensor,
-            global_step=None,  # Only increment during main training op.
-            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
-        )
-        generated_discriminator_training_op = self.optimizer.minimize(
-            absolute_generated_loss_tensor,
-            global_step=None,  # Only increment during main training op.
-            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
-        )
-        generator_training_op = self.optimizer.minimize(
-            tf.negative(generated_loss_tensor),
-            global_step=None,  # Only increment during main training op.
-            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
         )
         if self.gan_on:
-            training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
-                                   generator_training_op, predictor_training_op)
+            with tf.variable_scope('Generator_Loss'):
+                generated_loss_tensor = tf.reduce_mean(predicted_generated_labels_tensor)
+                tf.summary.scalar('Generated Loss', generated_loss_tensor)
+                absolute_generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
+                tf.summary.scalar('Absolute generated Loss', absolute_generated_loss_tensor)
+            predictor_compute_op = self.optimizer.compute_gradients(
+                reduce_mean_loss_tensor,
+                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
+            )
+            generated_discriminator_compute_op = self.optimizer.compute_gradients(
+                absolute_generated_loss_tensor,
+                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
+            )
+            generator_compute_op = self.optimizer.compute_gradients(
+                tf.negative(generated_loss_tensor),
+                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
+            )
+            training_op = self.optimizer.apply_gradients([*true_discriminator_compute_op,
+                                                          *generated_discriminator_compute_op,
+                                                          *generator_compute_op,
+                                                          *predictor_compute_op],
+                                                         global_step=self.global_step)
         else:
-            training_op = true_discriminator_training_op
+            training_op = self.optimizer.apply_gradients(true_discriminator_compute_op, global_step=self.global_step)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
