@@ -35,7 +35,6 @@ class CrowdNet(Net):
         self.predicted_test_labels_person_count = None
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
-        self.before_final = None
         self.optimizer = None
 
     def create_loss_tensor(self, predicted_labels, labels):
@@ -184,7 +183,6 @@ class CrowdNet(Net):
         module6_output = self.terra_module('module6', module5_output, 256)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
         module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        self.before_final = module8_output
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
@@ -212,8 +210,8 @@ class CrowdNet(Net):
                                            normalization_function=tf.contrib.layers.batch_norm)
         module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7,
                                            normalization_function=tf.contrib.layers.batch_norm)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        self.before_final = module8_output
+        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True,
+                                           normalization_function=tf.contrib.layers.batch_norm)
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
         return predicted_labels
@@ -473,7 +471,6 @@ class CrowdNet(Net):
             predicted_labels_tensor = self.create_inference_op(images_tensor)
             scope.reuse_variables()
             predicted_generated_labels_tensor = self.create_inference_op(generated_images_tensor)
-        before_final_tensor = self.before_final
         with tf.variable_scope('Predictor'):
             scalar = tf.Variable(initial_value=1.0, expected_shape=[1])
             predicted_true_labels_tensor = tf.multiply(predicted_labels_tensor, scalar)
@@ -520,8 +517,6 @@ class CrowdNet(Net):
         )
         training_op = tf.group(true_discriminator_training_op, generated_discriminator_training_op,
                                generator_training_op, predictor_training_op)
-        initial_training_op = true_discriminator_training_op
-        current_training_op = initial_training_op
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
@@ -556,12 +551,10 @@ class CrowdNet(Net):
                 # Regular training step.
                 start_time = time.time()
                 _, loss, summaries, step = self.session.run(
-                    [current_training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
+                    [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
                     feed_dict=self.default_feed_dictionary
                 )
                 duration = time.time() - start_time
-                if step == 10000:
-                    current_training_op = training_op
 
                 # Information print step.
                 if step % self.settings.print_step_period == 0:
