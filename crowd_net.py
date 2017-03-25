@@ -485,7 +485,6 @@ class CrowdNet(Net):
         # Add the forward pass operations to the graph.
         with tf.variable_scope('Generator'):
             generated_images_tensor = self.generator_function()
-            tf.summary.image('Generated Images', generated_images_tensor)
         with tf.variable_scope('Discriminator') as scope:
             predicted_labels_tensor = self.create_inference_op(images_tensor)
             scope.reuse_variables()
@@ -521,17 +520,22 @@ class CrowdNet(Net):
                 tf.summary.scalar('Generated Loss', generated_loss_tensor)
                 absolute_generated_loss_tensor = tf.reduce_mean(tf.abs(predicted_generated_labels_tensor))
                 tf.summary.scalar('Absolute generated Loss', absolute_generated_loss_tensor)
+                tf.summary.image('Generated Images', generated_images_tensor)
             predictor_compute_op = self.optimizer.compute_gradients(
                 reduce_mean_loss_tensor,
                 var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Predictor')
             )
+            if self.settings.scopes_to_train:
+                variables_to_train = self.attain_variables_to_train()
+            else:
+                variables_to_train = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
             generated_discriminator_compute_op = self.optimizer.compute_gradients(
                 absolute_generated_loss_tensor,
                 var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
             )
             generator_compute_op = self.optimizer.compute_gradients(
                 tf.negative(generated_loss_tensor),
-                var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
+                var_list=variables_to_train
             )
             training_op = self.optimizer.apply_gradients([*true_discriminator_compute_op,
                                                           *generated_discriminator_compute_op,
