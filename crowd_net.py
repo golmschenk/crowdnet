@@ -419,7 +419,8 @@ class CrowdNet(Net):
 
         print('Building graph...')
         # Add the forward pass operations to the graph.
-        predicted_labels_tensor = self.create_inference_op(images_tensor)
+        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d], outputs_collections=tf.GraphKeys.ACTIVATIONS):
+            predicted_labels_tensor = self.create_inference_op(images_tensor)
 
         # Add the loss operations to the graph.
         with tf.variable_scope('loss'):
@@ -433,6 +434,16 @@ class CrowdNet(Net):
 
         # Add the training operations to the graph.
         training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+
+        # Gradient and activation summaries
+        variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        activations = tf.get_collection(tf.GraphKeys.ACTIVATIONS)
+        for variable in variables:
+            gradients = tf.gradients(reduce_mean_loss_tensor, variable)
+            tf.summary.histogram(variable.name, variable)
+            tf.summary.histogram(variable.name + '_gradient', gradients)
+        for activation in activations:
+            tf.summary.histogram(activation.name, activation)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
@@ -462,24 +473,30 @@ class CrowdNet(Net):
 
         print('Starting training...')
         # Preform the training loop.
+        step = 0
         try:
             while not coordinator.should_stop() and not self.stop_signal:
                 # Regular training step.
                 start_time = time.time()
-                _, loss, summaries, step = self.session.run(
-                    [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
-                    feed_dict=self.default_feed_dictionary
-                )
+                # Summary write step.
+                step += 1  # This needs to be replaced.
+                if step % self.settings.summary_step_period == 0:
+                    _, loss, summaries, step = self.session.run(
+                        [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
+                        feed_dict=self.default_feed_dictionary
+                    )
+                    train_writer.add_summary(summaries, step)
+                else:
+                    _, loss, step = self.session.run(
+                        [training_op, reduce_mean_loss_tensor, self.global_step],
+                        feed_dict=self.default_feed_dictionary
+                    )
                 duration = time.time() - start_time
 
                 # Information print step.
                 if step % self.settings.print_step_period == 0:
                     print('Step %d: %s = %.5f (%.3f sec / step)' % (
                         step, self.step_summary_name, loss, duration))
-
-                # Summary write step.
-                if step % self.settings.summary_step_period == 0:
-                    train_writer.add_summary(summaries, step)
 
                 # Validation step.
                 if step % self.settings.validation_step_period == 0:
