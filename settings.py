@@ -12,7 +12,7 @@ class Settings(GoSettings):
         super().__init__()
 
         self.network_name = 'crowd_net'
-        self.inference_op_name = 'gaea'
+        self.inference_op_name = 'experimental'
         self.datasets_json = 'datasets.json'
 
         self.batch_size = 3
