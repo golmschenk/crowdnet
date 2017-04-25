@@ -215,6 +215,38 @@ class CrowdNet(Net):
         predicted_labels = module9_output
         return predicted_labels
 
+    def create_experimental_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+
+        module1_output = self.terra_module('module1', images, 32, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module2_output = self.terra_module('module2', module1_output, 64, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module3_output = self.terra_module('module3', module2_output, 64, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module4_output = self.terra_module('module4', module3_output, 128, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module5_output = self.terra_module('module5', module4_output, 128, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module6_output = self.terra_module('module6', module5_output, 256, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=5,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module8_output = self.terra_module('module8', module7_output, 1000, kernel_size=1,
+                                           normalization_function=tf.contrib.layers.batch_norm)
+        module8_output = self.terra_module('module8', module7_output, 100, kernel_size=1,
+                                           activation_function=tf.tanh)
+        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
+        predicted_labels = module9_output
+        return predicted_labels
+
     def create_gaea_with_final_tanh_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
