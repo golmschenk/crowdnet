@@ -36,6 +36,37 @@ class CrowdNet(Net):
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
 
+    def create_experimental_inference_op(self, images):
+        """
+        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
+
+        :param images: The RGB images tensor.
+        :type images: tf.Tensor
+        :return: The label maps tensor.
+        :rtype: tf.Tensor
+        """
+        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d],
+                                            padding='SAME',
+                                            normalizer_fn=tf.contrib.layers.batch_norm,
+                                            activation_fn=leaky_relu,
+                                            kernel_size=5):
+            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32, name='module1')
+            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64, name='module2')
+            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64, name='module3')
+            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128, name='module4')
+            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128, name='module5')
+            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256, name='module6')
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256, name='module7')
+            module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=1000,
+                                                      kernel_size=1, name='module8')
+            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=100,
+                                                      kernel_size=1, activation_fn=tf.tanh,
+                                                      normalizer_fn=None, name='module9')
+            module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
+                                                       kernel_size=1, activation_fn=None,
+                                                       normalizer_fn=None, name='module10')
+        return module10_output
+
     def create_loss_tensor(self, predicted_labels, labels):
         """
         Create the loss op and add it to the graph.
@@ -213,38 +244,6 @@ class CrowdNet(Net):
         module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
         module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
         predicted_labels = module9_output
-        return predicted_labels
-
-    def create_experimental_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-
-        module1_output = self.terra_module('module1', images, 32, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module2_output = self.terra_module('module2', module1_output, 64, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module3_output = self.terra_module('module3', module2_output, 64, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module4_output = self.terra_module('module4', module3_output, 128, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module5_output = self.terra_module('module5', module4_output, 128, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module6_output = self.terra_module('module6', module5_output, 256, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=5,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module8_output = self.terra_module('module8', module7_output, 1000, kernel_size=1,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module9_output = self.terra_module('module9', module8_output, 100, kernel_size=1,
-                                           activation_function=tf.tanh)
-        module10_output = self.terra_module('module10', module9_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module10_output
         return predicted_labels
 
     def create_gaea_with_final_tanh_inference_op(self, images):
