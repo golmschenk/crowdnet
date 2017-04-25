@@ -244,7 +244,7 @@ class CrowdNet(Net):
         module9_output = self.terra_module('module9', module8_output, 100, kernel_size=1,
                                            activation_function=tf.tanh)
         module10_output = self.terra_module('module10', module9_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
+        predicted_labels = module10_output
         return predicted_labels
 
     def create_gaea_with_final_tanh_inference_op(self, images):
