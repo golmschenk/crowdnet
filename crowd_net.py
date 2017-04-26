@@ -49,7 +49,7 @@ class CrowdNet(Net):
                                             padding='SAME',
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
-                                            kernel_size=5):
+                                            kernel_size=3):
             module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32)
             module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
             module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64)
