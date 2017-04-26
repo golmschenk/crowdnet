@@ -50,22 +50,22 @@ class CrowdNet(Net):
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=5):
-            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32, name='module1')
-            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64, name='module2')
-            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64, name='module3')
-            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128, name='module4')
-            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128, name='module5')
-            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256, name='module6')
-            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256, name='module7')
+            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32)
+            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
+            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64)
+            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128)
+            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
+            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
             with tf.contrib.framework.arg_scope([tf.contrib.layers.batch_norm], scale=True):
                 module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=1000,
-                                                          kernel_size=1, name='module8')
+                                                          kernel_size=1)
             module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=100,
                                                       kernel_size=1, activation_fn=tf.tanh,
-                                                      normalizer_fn=None, name='module9')
+                                                      normalizer_fn=None)
             module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
                                                        kernel_size=1, activation_fn=None,
-                                                       normalizer_fn=None, name='module10')
+                                                       normalizer_fn=None)
         return module10_output
 
     def create_loss_tensor(self, predicted_labels, labels):
