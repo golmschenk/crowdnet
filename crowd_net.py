@@ -454,6 +454,12 @@ class CrowdNet(Net):
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d], outputs_collections=tf.GraphKeys.ACTIVATIONS):
             predicted_labels_tensor = self.create_inference_op(images_tensor)
 
+        # Apply ROI mask.
+        negative_one_mask_locations = tf.equal(labels_tensor, tf.constant(-1.0))
+        labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
+        predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
+                                           predicted_labels_tensor)
+
         # Add the loss operations to the graph.
         with tf.variable_scope('loss'):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
