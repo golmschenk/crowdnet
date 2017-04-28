@@ -455,7 +455,7 @@ class CrowdNet(Net):
             predicted_labels_tensor = self.create_inference_op(images_tensor)
 
         # Apply ROI mask.
-        negative_one_mask_locations = tf.equal(labels_tensor, tf.constant(-1.0))
+        negative_one_mask_locations = tf.less_equal(labels_tensor, tf.constant(-1.0))
         labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
         predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
                                            predicted_labels_tensor)
