@@ -58,7 +58,7 @@ class CrowdNet(Net):
             module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
             module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
             with tf.contrib.framework.arg_scope([tf.contrib.layers.batch_norm], scale=True):
-                module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=1000,
+                module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=100,
                                                           kernel_size=1)
             module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=100,
                                                       kernel_size=1, activation_fn=tf.tanh,

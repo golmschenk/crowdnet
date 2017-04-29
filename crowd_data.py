@@ -65,7 +65,7 @@ class CrowdData(Data):
         else:
             image_file_path = import_file_path[0]
         export_name = os.path.splitext(os.path.basename(image_file_path))[0]
-        self.data_name = export_name.replace('images', 'data_pairs').replace('image', 'data_pair')
+        self.data_name = export_name.replace('images', 'examples').replace('image', 'example')
 
     def import_file(self, file_path):
         """
