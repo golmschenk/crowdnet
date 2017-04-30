@@ -25,12 +25,15 @@ class CrowdNet(Net):
 
         self.data = CrowdData()
 
-        self.alternate_loss_on = False
+        self.histograms_on = False
+        self.alternate_loss_on = True
         self.edge_percentage = 0.0
 
         # Internal variables.
         self.alternate_loss = None
         self.labels_tensor = None
+        self.predicted_person_count_helper = None
+        self.predicted_person_count = None
         self.predicted_test_labels_average_loss = None
         self.predicted_test_labels_person_count = None
         self.predicted_test_labels_relative_miscount = None
@@ -47,25 +50,29 @@ class CrowdNet(Net):
         """
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d],
                                             padding='SAME',
-                                            normalizer_fn=tf.contrib.layers.batch_norm,
+                                            normalizer_fn=None,
                                             activation_fn=leaky_relu,
                                             kernel_size=3):
-            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32)
-            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
-            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64)
-            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128)
-            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
-            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
-            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
+            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=2)
+            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=4)
+            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=4)
+            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=8)
+            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=8)
+            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=16)
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=16)
             with tf.contrib.framework.arg_scope([tf.contrib.layers.batch_norm], scale=True):
-                module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=100,
+                module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10,
                                                           kernel_size=1)
-            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=100,
-                                                      kernel_size=1, activation_fn=tf.tanh,
+            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10,
+                                                      kernel_size=1, activation_fn=leaky_relu,
                                                       normalizer_fn=None)
             module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
                                                        kernel_size=1, activation_fn=None,
                                                        normalizer_fn=None)
+            person_count_module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
+                                                                    kernel_size=1, activation_fn=None,
+                                                                    normalizer_fn=None)
+            self.predicted_person_count_helper = person_count_module10_output
         return module10_output
 
     def create_loss_tensor(self, predicted_labels, labels):
@@ -108,9 +115,8 @@ class CrowdNet(Net):
         :return: The relative person miscount tensor.
         :rtype: tf.Tensor
         """
-        true_person_count_tensor = self.mean_person_count_for_labels(labels, name='mean_person_count')
-        predicted_person_count_tensor = self.mean_person_count_for_labels(predicted_labels,
-                                                                          name='predicted_mean_person_count')
+        true_person_count_tensor = self.mean_person_count_for_labels(labels, name='person_count')
+        predicted_person_count_tensor = self.predicted_person_count
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor,
                                         name='person_miscount')
         relative_person_miscount_tensor = tf.divide(person_miscount_tensor, tf.add(true_person_count_tensor, 0.01),
@@ -138,191 +144,6 @@ class CrowdNet(Net):
         """
         mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, axis=[1, 2]), name=name)
         return mean_person_count_tensor
-
-    def create_patchwise_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        with tf.name_scope('conv1'):
-            w_conv = weight_variable([3, 3, self.settings.image_depth, 32])
-            b_conv = bias_variable([32])
-
-            h_conv = leaky_relu(conv2d(images, w_conv) + b_conv)
-
-        with tf.name_scope('conv2'):
-            w_conv = weight_variable([3, 3, 32, 64])
-            b_conv = bias_variable([64])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-        with tf.name_scope('conv3'):
-            w_conv = weight_variable([3, 3, 64, 64])
-            b_conv = bias_variable([64])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-
-        with tf.name_scope('conv4'):
-            w_conv = weight_variable([3, 3, 64, 128])
-            b_conv = bias_variable([128])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
-
-        with tf.name_scope('conv5'):
-            w_conv = weight_variable([3, 3, 128, 128])
-            b_conv = bias_variable([128])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
-
-        with tf.name_scope('conv6'):
-            w_conv = weight_variable([3, 3, 128, 256])
-            b_conv = bias_variable([256])
-
-            h_conv = leaky_relu(conv2d(h_conv, w_conv) + b_conv)
-            h_conv = tf.nn.dropout(h_conv, self.dropout_keep_probability_tensor)
-
-        with tf.name_scope('conv7'):
-            w_conv = weight_variable([7, 7, 256, 1])
-            b_conv = bias_variable([1])
-
-            h_conv = conv2d(h_conv, w_conv) + b_conv
-
-        predicted_labels = h_conv
-        return predicted_labels
-
-    def create_gaea_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-
-        module1_output = self.terra_module('module1', images, 32)
-        module2_output = self.terra_module('module2', module1_output, 64)
-        module3_output = self.terra_module('module3', module2_output, 64)
-        module4_output = self.terra_module('module4', module3_output, 128)
-        module5_output = self.terra_module('module5', module4_output, 128)
-        module6_output = self.terra_module('module6', module5_output, 256)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
-        return predicted_labels
-
-    def create_bn_gaea_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-
-        module1_output = self.terra_module('module1', images, 32,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module2_output = self.terra_module('module2', module1_output, 64,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module3_output = self.terra_module('module3', module2_output, 64,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module4_output = self.terra_module('module4', module3_output, 128,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module5_output = self.terra_module('module5', module4_output, 128,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module6_output = self.terra_module('module6', module5_output, 256,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True,
-                                           normalization_function=tf.contrib.layers.batch_norm)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
-        return predicted_labels
-
-    def create_gaea_with_final_tanh_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-
-        module1_output = self.terra_module('module1', images, 32)
-        module2_output = self.terra_module('module2', module1_output, 64)
-        module3_output = self.terra_module('module3', module2_output, 64)
-        module4_output = self.terra_module('module4', module3_output, 128)
-        module5_output = self.terra_module('module5', module4_output, 128)
-        module6_output = self.terra_module('module6', module5_output, 256)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True,
-                                           activation_function=tf.nn.tanh)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
-        return predicted_labels
-
-    def create_gaea_with_depth_split_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        depth = tf.expand_dims(images[:, :, :, 3], axis=3)
-        depth_module1_output = self.terra_module('depth_module1', depth, 4)
-        depth_module2_output = self.terra_module('depth_module2', depth_module1_output, 8)
-        depth_module3_output = self.terra_module('depth_module3', depth_module2_output, 16)
-        depth_module4_output = self.terra_module('depth_module4', depth_module3_output, 32)
-        depth_module5_attention = self.terra_module('depth_module5', depth_module4_output, 128,
-                                                    activation_function=tf.nn.tanh)
-
-        module1_output = self.terra_module('module1', images[:, :, :, :3], 32)
-        module2_output = self.terra_module('module2', module1_output, 64)
-        module3_output = self.terra_module('module3', module2_output, 64)
-        module4_output = self.terra_module('module4', module3_output, 128)
-        module5_output = self.terra_module('module5', module4_output, 128)
-        module5_output_depth_attention = tf.multiply(module5_output, depth_module5_attention)
-        module6_output = self.terra_module('module6', module5_output_depth_attention, 256)
-        module7_output = self.terra_module('module7', module6_output, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
-        return predicted_labels
-
-    def create_gaea_with_depth_skip_inference_op(self, images):
-        """
-        Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
-
-        :param images: The RGB images tensor.
-        :type images: tf.Tensor
-        :return: The label maps tensor.
-        :rtype: tf.Tensor
-        """
-        depth = tf.expand_dims(images[:, :, :, 3], axis=3)
-        module1_output = self.terra_module('module1', images, 32)
-        module2_output = self.terra_module('module2', module1_output, 64)
-        module3_output = self.terra_module('module3', module2_output, 64)
-        module3_output_with_depth = tf.concat([module3_output, depth], axis=3)
-        module4_output = self.terra_module('module4', module3_output_with_depth, 128)
-        module5_output = self.terra_module('module5', module4_output, 128)
-        module6_output = self.terra_module('module6', module5_output, 256)
-        module6_output_with_depth = tf.concat([module6_output, depth], axis=3)
-        module7_output = self.terra_module('module7', module6_output_with_depth, 256, kernel_size=7, dropout_on=True)
-        module8_output = self.terra_module('module8', module7_output, 10, kernel_size=1, dropout_on=True)
-        module9_output = self.terra_module('module9', module8_output, 1, kernel_size=1, activation_function=None)
-        predicted_labels = module9_output
-        return predicted_labels
 
     def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
         """
@@ -360,17 +181,11 @@ class CrowdNet(Net):
         """
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
         variables_to_train = self.attain_variables_to_train()
-        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
-                                                                                 global_step=self.global_step,
-                                                                                 var_list=variables_to_train)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
+        grads_and_vars = optimizer.compute_gradients(value_to_minimize, var_list=variables_to_train)
         if self.alternate_loss_on:
-            variables_to_train = self.attain_variables_to_train()
-            alternate_training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(
-                self.alternate_loss,
-                global_step=None,  # Don't increment the global step on each optimizer.
-                var_list=variables_to_train
-            )
-            training_op = tf.group(training_op, alternate_training_op)
+            grads_and_vars += optimizer.compute_gradients(self.alternate_loss, var_list=variables_to_train)
+        training_op = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
         return training_op
 
     def create_input_tensors(self):
@@ -459,6 +274,10 @@ class CrowdNet(Net):
         labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
         predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
                                            predicted_labels_tensor)
+        self.predicted_person_count = self.mean_person_count_for_labels(
+            tf.where(negative_one_mask_locations, tf.zeros_like(self.predicted_person_count_helper),
+                     self.predicted_person_count_helper)
+        )
 
         # Add the loss operations to the graph.
         with tf.variable_scope('loss'):
@@ -474,14 +293,16 @@ class CrowdNet(Net):
         training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
 
         # Gradient and activation summaries
-        variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        activations = tf.get_collection(tf.GraphKeys.ACTIVATIONS)
-        for variable in variables:
-            gradients = tf.gradients(reduce_mean_loss_tensor, variable)
-            tf.summary.histogram(variable.name, variable)
-            tf.summary.histogram(variable.name + '_gradient', gradients)
-        for activation in activations:
-            tf.summary.histogram(activation.name, activation)
+        if self.histograms_on:
+            variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            activations = tf.get_collection(tf.GraphKeys.ACTIVATIONS)
+            for variable in variables:
+                gradients = tf.gradients(reduce_mean_loss_tensor, variable)
+                tf.summary.histogram(variable.name, variable)
+                if gradients != [None]:
+                    tf.summary.histogram(variable.name + '_gradient', gradients)
+            for activation in activations:
+                tf.summary.histogram(activation.name, activation)
 
         # Prepare the summary operations.
         summaries_op = tf.summary.merge_all()
