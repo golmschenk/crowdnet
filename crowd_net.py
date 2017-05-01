@@ -53,13 +53,13 @@ class CrowdNet(Net):
                                             normalizer_fn=None,
                                             activation_fn=leaky_relu,
                                             kernel_size=3):
-            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=2)
-            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=4)
-            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=4)
-            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=8)
-            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=8)
-            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=16)
-            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=16)
+            module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32)
+            module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
+            module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=64)
+            module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128)
+            module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
+            module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
             with tf.contrib.framework.arg_scope([tf.contrib.layers.batch_norm], scale=True):
                 module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10,
                                                           kernel_size=1)
@@ -181,11 +181,11 @@ class CrowdNet(Net):
         """
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
         variables_to_train = self.attain_variables_to_train()
-        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
-        grads_and_vars = optimizer.compute_gradients(value_to_minimize, var_list=variables_to_train)
         if self.alternate_loss_on:
-            grads_and_vars += optimizer.compute_gradients(self.alternate_loss, var_list=variables_to_train)
-        training_op = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
+            value_to_minimize = tf.add(value_to_minimize, tf.multiply(tf.constant(2.0), self.alternate_loss))
+        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
+                                                                                 global_step=self.global_step,
+                                                                                 var_list=variables_to_train)
         return training_op
 
     def create_input_tensors(self):
@@ -283,6 +283,7 @@ class CrowdNet(Net):
         with tf.variable_scope('loss'):
             loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
             reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
+            reduce_sum_loss_tensor = tf.reduce_sum(loss_tensor)
             tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
 
         if self.image_summary_on:
@@ -290,14 +291,14 @@ class CrowdNet(Net):
                 self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
 
         # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=reduce_mean_loss_tensor)
+        training_op = self.create_training_op(value_to_minimize=reduce_sum_loss_tensor)
 
         # Gradient and activation summaries
         if self.histograms_on:
             variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             activations = tf.get_collection(tf.GraphKeys.ACTIVATIONS)
             for variable in variables:
-                gradients = tf.gradients(reduce_mean_loss_tensor, variable)
+                gradients = tf.gradients(reduce_sum_loss_tensor, variable)
                 tf.summary.histogram(variable.name, variable)
                 if gradients != [None]:
                     tf.summary.histogram(variable.name + '_gradient', gradients)
