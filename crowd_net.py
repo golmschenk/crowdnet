@@ -39,6 +39,12 @@ class CrowdNet(Net):
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
 
+        self.global_step = tf.contrib.framework.get_or_create_global_step()
+        self.learning_rate_tensor = tf.train.exponential_decay(self.settings.initial_learning_rate,
+                                                               self.global_step,
+                                                               self.settings.learning_rate_decay_steps,
+                                                               self.settings.learning_rate_decay_rate)
+
     def create_experimental_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
@@ -66,14 +72,39 @@ class CrowdNet(Net):
             module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10,
                                                       kernel_size=1, activation_fn=leaky_relu,
                                                       normalizer_fn=None)
-            module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
-                                                       kernel_size=1, activation_fn=None,
-                                                       normalizer_fn=None)
-            person_count_module10_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
-                                                                    kernel_size=1, activation_fn=None,
-                                                                    normalizer_fn=None)
-            self.predicted_person_count_helper = person_count_module10_output
-        return module10_output
+            person_density_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
+                                                             kernel_size=1, activation_fn=None,
+                                                             normalizer_fn=None)
+            person_count_map_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
+                                                               kernel_size=1, activation_fn=None,
+                                                               normalizer_fn=None)
+        return person_density_output, person_count_map_output
+
+    def create_loss_tensors(self, labels_tensor, predicted_labels_tensor, predicted_counts_tensor):
+
+        differences_tensor = predicted_labels_tensor - labels_tensor
+        tf.summary.scalar('Mean difference', tf.reduce_mean(differences_tensor))
+        absolute_differences_tensor = tf.abs(differences_tensor)
+        density_error_tensor = self.example_mean_pixel_sum(absolute_differences_tensor)
+
+        true_person_count_tensor = self.example_mean_pixel_sum(labels_tensor, name='person_count')
+        count_error_tensor = tf.abs(true_person_count_tensor - predicted_counts_tensor, name='person_miscount')
+
+        # Create Summaries.
+        relative_person_miscount_tensor = tf.divide(count_error_tensor, tf.add(true_person_count_tensor, 0.01),
+                                                    name='mean_relative_person_miscount')
+        signed_relative_person_miscount_tensor = tf.divide(tf.subtract(predicted_counts_tensor,
+                                                                       true_person_count_tensor),
+                                                           tf.add(true_person_count_tensor, 0.01),
+                                                           name='signed_relative_person_miscount')
+        tf.summary.scalar('Density Error', density_error_tensor)
+        tf.summary.scalar('Count Error', count_error_tensor)
+        tf.summary.scalar('Relative Count Error', relative_person_miscount_tensor)
+        tf.summary.scalar('Signed Relative Count Error', signed_relative_person_miscount_tensor)
+        tf.summary.scalar('True Count', true_person_count_tensor)
+        tf.summary.scalar('Predicted Count', predicted_counts_tensor)
+
+        return density_error_tensor, count_error_tensor
 
     def create_loss_tensor(self, predicted_labels, labels):
         """
@@ -104,7 +135,7 @@ class CrowdNet(Net):
             self.alternate_loss = self.session.graph.get_tensor_by_name('loss/person_miscount:0')
         return absolute_differences_tensor
 
-    def create_person_count_summaries(self, labels, predicted_labels):
+    def create_person_count_summaries(self, labels, predicted_labels, predicted_counts):
         """
         Creates the summaries for the counts of people.
 
@@ -115,7 +146,7 @@ class CrowdNet(Net):
         :return: The relative person miscount tensor.
         :rtype: tf.Tensor
         """
-        true_person_count_tensor = self.mean_person_count_for_labels(labels, name='person_count')
+        true_person_count_tensor = self.example_mean_pixel_sum(labels, name='person_count')
         predicted_person_count_tensor = self.predicted_person_count
         person_miscount_tensor = tf.abs(true_person_count_tensor - predicted_person_count_tensor,
                                         name='person_miscount')
@@ -133,22 +164,22 @@ class CrowdNet(Net):
         return relative_person_miscount_tensor
 
     @staticmethod
-    def mean_person_count_for_labels(labels_tensor, name=None):
+    def example_mean_pixel_sum(tensor, name=None):
         """
         Sums the labels per image and takes the mean over the images.
 
-        :param labels_tensor: The person density labels tensor to process.
-        :type labels_tensor: tf.Tensor
+        :param tensor: The person density labels tensor to process.
+        :type tensor: tf.Tensor
         :return: The mean count tensor.
         :rtype: tf.Tensor
         """
-        mean_person_count_tensor = tf.reduce_mean(tf.reduce_sum(labels_tensor, axis=[1, 2]), name=name)
-        return mean_person_count_tensor
+        example_mean_pixel_sum_tensor = tf.reduce_mean(tf.reduce_sum(tensor, axis=[1, 2, 3]), name=name)
+        return example_mean_pixel_sum_tensor
 
-    def image_comparison_summary(self, images, labels, predicted_labels, label_differences):
+    def image_comparison_summary(self, images, labels, predicted_labels):
         """
         Combines the image, label, and difference tensors together into a presentable image. Then adds the
-        image summary op to the graph. Handles images that include depth maps as well.
+        image summary op to the graph.
 
         :param images: The original image.
         :type images: tf.Tensor
@@ -156,19 +187,12 @@ class CrowdNet(Net):
         :type labels: tf.Tensor
         :param predicted_labels: The tensor containing the predicted labels.
         :type predicted_labels: tf.Tensor
-        :param label_differences: The tensor containing the difference between the actual and predicted labels.
-        :type label_differences: tf.Tensor
         """
-        if self.settings.image_depth == 4:
-            concatenated_labels = tf.concat(axis=1, values=[labels, predicted_labels, label_differences])
-            concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
-            display_images = tf.divide(images[:, :, :, :3], tf.reduce_max(tf.abs(images[:, :, :, :3])))
-            depth_image = tf.expand_dims(images[:, :, :, 3], -1)
-            depth_heat_map = self.convert_to_heat_map_rgb(depth_image)
-            comparison_image = tf.concat(axis=1, values=[display_images, concatenated_heat_maps, depth_heat_map])
-            tf.summary.image('comparison', comparison_image)
-        else:
-            super().image_comparison_summary(images, labels, predicted_labels, label_differences)
+        concatenated_labels = tf.concat(axis=1, values=[labels, predicted_labels])
+        concatenated_heat_maps = self.convert_to_heat_map_rgb(concatenated_labels)
+        display_images = tf.div(images, tf.reduce_max(tf.abs(images)))
+        comparison_image = tf.concat(axis=1, values=[display_images, concatenated_heat_maps])
+        tf.summary.image('Comparison', comparison_image)
 
     def create_training_op(self, value_to_minimize):
         """
@@ -181,8 +205,6 @@ class CrowdNet(Net):
         """
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
         variables_to_train = self.attain_variables_to_train()
-        if self.alternate_loss_on:
-            value_to_minimize = tf.add(value_to_minimize, tf.multiply(tf.constant(2.0), self.alternate_loss))
         training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
                                                                                  global_step=self.global_step,
                                                                                  var_list=variables_to_train)
@@ -252,7 +274,75 @@ class CrowdNet(Net):
         """
         tf.reset_default_graph()
 
+    def apply_roi_mask(self, labels_tensor, predicted_labels_tensor, predicted_count_map_tensor):
+        negative_one_mask_locations = tf.less_equal(labels_tensor, tf.constant(-1.0))
+        masked_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
+        masked_predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
+                                                  predicted_labels_tensor)
+        masked_predicted_count_map_tensor = tf.where(negative_one_mask_locations,
+                                                     tf.zeros_like(predicted_count_map_tensor),
+                                                     predicted_count_map_tensor)
+        return masked_labels_tensor, masked_predicted_labels_tensor, masked_predicted_count_map_tensor
+
+    def create_network(self, type='train'):
+        with tf.name_scope('inputs'):
+            images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(
+                data_type=type,
+                batch_size=self.settings.batch_size
+            )
+
+        reuse = False
+        if type == 'validation':
+            reuse = True
+        with tf.variable_scope('inference', reuse=reuse), tf.name_scope(type):
+            predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+
+            masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
+            labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor = masked_tensors
+
+            predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+
+        density_error_tensor, count_error_tensor = self.create_loss_tensors(labels_tensor,
+                                                                            predicted_labels_tensor,
+                                                                            predicted_counts_tensor)
+
+        if self.image_summary_on:
+            self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
+
+        return density_error_tensor, count_error_tensor
+
     def train(self):
+        print('Building graph...')
+        train_density_error_tensor, train_count_error_tensor = self.create_network(type='train')
+        self.create_network(type='validation')
+
+        loss_tensor = tf.add(train_density_error_tensor, tf.multiply(tf.constant(2.0), train_count_error_tensor))
+        training_op = self.create_training_op(loss_tensor)
+
+        checkpoint_directory = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                            datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+
+        print('Starting training...')
+        train_summary_hook = tf.train.SummarySaverHook(save_steps=10,
+                                                       output_dir=os.path.join(checkpoint_directory, 'train'),
+                                                       summary_op=tf.summary.merge(
+                                                           tf.get_collection(tf.GraphKeys.SUMMARIES,
+                                                                             scope='train')))
+        validation_summary_hook = tf.train.SummarySaverHook(save_steps=10,
+                                                            output_dir=os.path.join(checkpoint_directory, 'validation'),
+                                                            summary_op=tf.summary.merge(
+                                                                tf.get_collection(tf.GraphKeys.SUMMARIES,
+                                                                                  scope='validation')))
+
+        checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_directory, save_steps=100,
+                                                             saver=tf.train.Saver())
+        with tf.train.MonitoredSession(
+                hooks=[train_summary_hook, validation_summary_hook, checkpoint_saver_hook]) as session:
+            while True:
+                _, loss, step = session.run([training_op, loss_tensor, self.global_step])
+                print('Step: {} - Loss: {}'.format(step, loss))
+
+    def old_train(self):
         """
         Adds the training operations and runs the training loop.
         """
@@ -274,7 +364,7 @@ class CrowdNet(Net):
         labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
         predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
                                            predicted_labels_tensor)
-        self.predicted_person_count = self.mean_person_count_for_labels(
+        self.predicted_person_count = self.example_mean_pixel_sum(
             tf.where(negative_one_mask_locations, tf.zeros_like(self.predicted_person_count_helper),
                      self.predicted_person_count_helper)
         )
