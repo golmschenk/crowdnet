@@ -291,10 +291,7 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        reuse = False
-        if type == 'validation':
-            reuse = True
-        with tf.variable_scope('inference', reuse=reuse), tf.name_scope(type):
+        with tf.variable_scope('inference'), tf.name_scope(type):
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
@@ -312,35 +309,36 @@ class CrowdNet(Net):
         return density_error_tensor, count_error_tensor
 
     def train(self):
-        print('Building graph...')
+        print('Building train graph...')
         train_density_error_tensor, train_count_error_tensor = self.create_network(type='train')
-        self.create_network(type='validation')
-
         loss_tensor = tf.add(train_density_error_tensor, tf.multiply(tf.constant(2.0), train_count_error_tensor))
         training_op = self.create_training_op(loss_tensor)
-
         checkpoint_directory = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                             datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
 
-        print('Starting training...')
-        train_summary_hook = tf.train.SummarySaverHook(save_steps=10,
-                                                       output_dir=os.path.join(checkpoint_directory, 'train'),
-                                                       summary_op=tf.summary.merge(
-                                                           tf.get_collection(tf.GraphKeys.SUMMARIES,
-                                                                             scope='train')))
-        validation_summary_hook = tf.train.SummarySaverHook(save_steps=10,
-                                                            output_dir=os.path.join(checkpoint_directory, 'validation'),
-                                                            summary_op=tf.summary.merge(
-                                                                tf.get_collection(tf.GraphKeys.SUMMARIES,
-                                                                                  scope='validation')))
+        print('Building validation graph...')
+        validation_graph = tf.Graph()
+        with validation_graph.as_default(), tf.device('/cpu:0'):
+            self.create_network(type='validation')
+            validation_summaries = tf.summary.merge_all()
+            validation_saver = tf.train.Saver()
+            validation_summary_writer = tf.summary.FileWriter(checkpoint_directory + '_validation')
+            validation_session = tf.train.MonitoredSession()
 
-        checkpoint_saver_hook = tf.train.CheckpointSaverHook(checkpoint_directory, save_steps=100,
-                                                             saver=tf.train.Saver())
-        with tf.train.MonitoredSession(
-                hooks=[train_summary_hook, validation_summary_hook, checkpoint_saver_hook]) as session:
+        print('Starting training...')
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory + '_train', save_checkpoint_secs=100) as session:
             while True:
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
                 print('Step: {} - Loss: {}'.format(step, loss))
+                if step % self.settings.validation_step_period == 0:
+                    latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
+                    if latest_checkpoint_path:
+                        print('Running validation summaries...')
+                        validation_saver.restore(validation_session, latest_checkpoint_path)
+                        validation_summary_writer.add_summary(validation_session.run(validation_summaries),
+                                                              global_step=step)
+
+
 
     def old_train(self):
         """
