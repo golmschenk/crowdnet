@@ -324,159 +324,21 @@ class CrowdNet(Net):
             validation_saver = tf.train.Saver()
             validation_summary_writer = tf.summary.FileWriter(checkpoint_directory + '_validation')
             validation_session = tf.train.MonitoredSession()
+            latest_validated_checkpoint_path = None
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory + '_train', save_checkpoint_secs=100) as session:
             while True:
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
                 print('Step: {} - Loss: {}'.format(step, loss))
-                if step % self.settings.validation_step_period == 0:
-                    latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
-                    if latest_checkpoint_path:
-                        print('Running validation summaries...')
-                        validation_saver.restore(validation_session, latest_checkpoint_path)
-                        validation_summary_writer.add_summary(validation_session.run(validation_summaries),
-                                                              global_step=step)
-
-
-
-    def old_train(self):
-        """
-        Adds the training operations and runs the training loop.
-        """
-        # Prepare session.
-        self.session = tf.Session()
-
-        print('Preparing data...')
-        # Setup the inputs.
-        with tf.variable_scope('Input'):
-            images_tensor, labels_tensor = self.create_input_tensors()
-
-        print('Building graph...')
-        # Add the forward pass operations to the graph.
-        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d], outputs_collections=tf.GraphKeys.ACTIVATIONS):
-            predicted_labels_tensor = self.create_inference_op(images_tensor)
-
-        # Apply ROI mask.
-        negative_one_mask_locations = tf.less_equal(labels_tensor, tf.constant(-1.0))
-        labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(labels_tensor), labels_tensor)
-        predicted_labels_tensor = tf.where(negative_one_mask_locations, tf.zeros_like(predicted_labels_tensor),
-                                           predicted_labels_tensor)
-        self.predicted_person_count = self.example_mean_pixel_sum(
-            tf.where(negative_one_mask_locations, tf.zeros_like(self.predicted_person_count_helper),
-                     self.predicted_person_count_helper)
-        )
-
-        # Add the loss operations to the graph.
-        with tf.variable_scope('loss'):
-            loss_tensor = self.create_loss_tensor(predicted_labels_tensor, labels_tensor)
-            reduce_mean_loss_tensor = tf.reduce_mean(loss_tensor)
-            reduce_sum_loss_tensor = tf.reduce_sum(loss_tensor)
-            tf.summary.scalar(self.step_summary_name, reduce_mean_loss_tensor)
-
-        if self.image_summary_on:
-            with tf.variable_scope('comparison_summary'):
-                self.image_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor, loss_tensor)
-
-        # Add the training operations to the graph.
-        training_op = self.create_training_op(value_to_minimize=reduce_sum_loss_tensor)
-
-        # Gradient and activation summaries
-        if self.histograms_on:
-            variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            activations = tf.get_collection(tf.GraphKeys.ACTIVATIONS)
-            for variable in variables:
-                gradients = tf.gradients(reduce_sum_loss_tensor, variable)
-                tf.summary.histogram(variable.name, variable)
-                if gradients != [None]:
-                    tf.summary.histogram(variable.name + '_gradient', gradients)
-            for activation in activations:
-                tf.summary.histogram(activation.name, activation)
-
-        # Prepare the summary operations.
-        summaries_op = tf.summary.merge_all()
-        summary_path = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
-                                    datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        self.log_source_files(summary_path + '_source')
-        train_writer = tf.summary.FileWriter(summary_path + '_train', self.session.graph)
-        validation_writer = tf.summary.FileWriter(summary_path + '_validation', self.session.graph)
-
-        # The op for initializing the variables.
-        initialize_op = tf.global_variables_initializer()
-
-        # Prepare saver.
-        self.saver = tf.train.Saver(max_to_keep=self.settings.number_of_models_to_keep)
-
-        print('Initializing graph...')
-        # Initialize the variables.
-        self.session.run(initialize_op)
-
-        # Restore from saved model if passed.
-        if self.settings.restore_model_file_path:
-            self.model_restore()
-
-        # Start input enqueue threads.
-        coordinator = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=self.session, coord=coordinator)
-
-        print('Starting training...')
-        # Preform the training loop.
-        step = 0
-        try:
-            while not coordinator.should_stop() and not self.stop_signal:
-                # Regular training step.
-                start_time = time.time()
-                # Summary write step.
-                step += 1  # This needs to be replaced.
-                if step % self.settings.summary_step_period == 0:
-                    _, loss, summaries, step = self.session.run(
-                        [training_op, reduce_mean_loss_tensor, summaries_op, self.global_step],
-                        feed_dict=self.default_feed_dictionary
-                    )
-                    train_writer.add_summary(summaries, step)
-                else:
-                    _, loss, step = self.session.run(
-                        [training_op, reduce_mean_loss_tensor, self.global_step],
-                        feed_dict=self.default_feed_dictionary
-                    )
-                duration = time.time() - start_time
-
-                # Information print step.
-                if step % self.settings.print_step_period == 0:
-                    print('Step %d: %s = %.5f (%.3f sec / step)' % (
-                        step, self.step_summary_name, loss, duration))
-
-                # Validation step.
-                if step % self.settings.validation_step_period == 0:
-                    start_time = time.time()
-                    loss, summaries = self.session.run(
-                        [reduce_mean_loss_tensor, summaries_op],
-                        feed_dict={**self.default_feed_dictionary,
-                                   self.dropout_keep_probability_tensor: 1.0,
-                                   self.dataset_selector_tensor: 'validation'}
-                    )
-                    duration = time.time() - start_time
-                    validation_writer.add_summary(summaries, step)
-                    print('Validation step %d: %s = %.5g (%.3f sec / step)' % (step, self.step_summary_name,
-                                                                               loss, duration))
-
-                if step % self.settings.model_auto_save_step_period == 0 and step != 0:
-                    self.save_model()
-
-                # Handle interface messages from the user.
-                self.interface_handler()
-        except tf.errors.OutOfRangeError as error:
-            if self.global_step == 0:
-                print('Data not found.')
-            else:
-                raise error
-        finally:
-            # When done, ask the threads to stop.
-            coordinator.request_stop()
-
-        # Wait for threads to finish.
-        coordinator.join(threads)
-        self.session.close()
+                # Run validation if there's a new checkpoint to validate.
+                latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
+                if latest_checkpoint_path != latest_validated_checkpoint_path:
+                    print('Running validation summaries...')
+                    validation_saver.restore(validation_session, latest_checkpoint_path)
+                    validation_summary_writer.add_summary(validation_session.run(validation_summaries),
+                                                          global_step=step)
+                    latest_validated_checkpoint_path = latest_checkpoint_path
 
 
 if __name__ == '__main__':
