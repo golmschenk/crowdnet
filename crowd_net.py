@@ -185,7 +185,7 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        with tf.variable_scope('inference'), tf.name_scope(run_type):
+        with tf.variable_scope('inference'):
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
