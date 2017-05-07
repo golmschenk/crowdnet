@@ -219,7 +219,7 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory + '_train',
-                                               save_checkpoint_secs=100) as session:
+                                               save_checkpoint_secs=300) as session:
             while True:
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
                 print('Step: {} - Loss: {:.4f}'.format(step, loss))
