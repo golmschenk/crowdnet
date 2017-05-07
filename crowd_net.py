@@ -4,6 +4,7 @@ Code related to the CrowdNet.
 import datetime
 import tensorflow as tf
 import os
+import time
 
 from gonet.net import Net
 from gonet.interface import Interface
@@ -221,8 +222,10 @@ class CrowdNet(Net):
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory + '_train',
                                                save_checkpoint_secs=300) as session:
             while True:
+                start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
-                print('Step: {} - Loss: {:.4f}'.format(step, loss))
+                step_time = time.time() - start_step_time()
+                print('Step: {} - Loss: {:.4f} - Step Time: {:.3f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
                 latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
                 if latest_checkpoint_path != latest_validated_checkpoint_path:
