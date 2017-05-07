@@ -210,8 +210,12 @@ class CrowdNet(Net):
         train_density_error_tensor, train_count_error_tensor = self.create_network(run_type='train')
         loss_tensor = tf.add(train_density_error_tensor, tf.multiply(tf.constant(2.0), train_count_error_tensor))
         training_op = self.create_training_op(loss_tensor)
-        checkpoint_directory = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+        checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                             datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        if self.settings.restore_checkpoint_directory:
+            restorer = tf.train.Saver()
+        else:
+            restorer = None
 
         print('Building validation graph...')
         validation_graph = tf.Graph()
@@ -219,22 +223,23 @@ class CrowdNet(Net):
             self.create_network(run_type='validation')
             validation_summaries = tf.summary.merge_all()
             validation_saver = tf.train.Saver()
-            validation_summary_writer = tf.summary.FileWriter(checkpoint_directory + '_validation')
+            validation_summary_writer = tf.summary.FileWriter(checkpoint_directory_basename + '_validation')
             validation_session = tf.train.MonitoredSession()
             latest_validated_checkpoint_path = None
 
         print('Starting training...')
-        with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory + '_train',
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
                                                save_checkpoint_secs=600) as session:
-            if self.settings.restore_model_file_path:
-                self.model_restore()
+            if self.settings.restore_checkpoint_directory:
+                print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
+                restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
             while not session.should_stop():
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
                 step_time = time.time() - start_step_time
                 print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
-                latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
+                latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory_basename + '_train')
                 if latest_checkpoint_path != latest_validated_checkpoint_path:
                     print('Running validation summaries...')
                     validation_saver.restore(validation_session, latest_checkpoint_path)
