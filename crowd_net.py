@@ -4,6 +4,7 @@ Code related to the CrowdNet.
 import datetime
 import tensorflow as tf
 import os
+import numpy as np
 import time
 
 from gonet.net import Net
@@ -29,6 +30,7 @@ class CrowdNet(Net):
         self.edge_percentage = 0.0
 
         # Internal variables.
+        self.lookup_dictionary = {}
         self.alternate_loss = None
         self.labels_tensor = None
         self.predicted_person_count_helper = None
@@ -198,6 +200,9 @@ class CrowdNet(Net):
         if self.image_summary_on:
             self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
+        self.lookup_dictionary['labels_tensor'] = labels_tensor
+        self.lookup_dictionary['predicted_counts_tensor'] = predicted_counts_tensor
+
         return density_error_tensor, count_error_tensor
 
     def train(self):
@@ -223,11 +228,11 @@ class CrowdNet(Net):
                                                save_checkpoint_secs=600) as session:
             if self.settings.restore_model_file_path:
                 self.model_restore()
-            while True:
+            while not session.should_stop():
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
                 step_time = time.time() - start_step_time
-                print('Step: {} - Loss: {:.4f} - Step Time: {:.3f}'.format(step, loss, step_time))
+                print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
                 latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
                 if latest_checkpoint_path != latest_validated_checkpoint_path:
@@ -236,6 +241,32 @@ class CrowdNet(Net):
                     validation_summary_writer.add_summary(validation_session.run(validation_summaries),
                                                           global_step=step)
                     latest_validated_checkpoint_path = latest_checkpoint_path
+
+    def test(self):
+        print('Building testing graph...')
+        self.settings.batch_size = 1
+        self.create_network(run_type='test')
+        labels_tensor = self.lookup_dictionary['labels_tensor']
+        predicted_counts_tensor = self.lookup_dictionary['predicted_counts_tensor']
+        total_count = 0
+        total_predicted_count = 0
+        total_count_error = 0
+        number_of_examples = 0
+        print('Running test...')
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.settings.restore_checkpoint_directory,
+                                               save_checkpoint_secs=None, save_summaries_steps=None) as session:
+            while not session.should_stop():
+                label, predicted_count = session.run([labels_tensor, predicted_counts_tensor])
+                count = np.sum(label)
+                total_count += count
+                total_predicted_count += predicted_count
+                total_count_error += np.abs(count - predicted_count)
+                number_of_examples += 1
+                print('{} examples processed'.format(number_of_examples), end='\r')
+        print('Total count: {}'.format(total_count))
+        print('Total predicted count: {}'.format(total_predicted_count))
+        print('Total count error: {}'.format(total_count_error))
+        print('Average count error: {}'.format(total_count_error / number_of_examples))
 
 
 if __name__ == '__main__':
