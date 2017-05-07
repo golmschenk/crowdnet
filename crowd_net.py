@@ -224,7 +224,7 @@ class CrowdNet(Net):
             while True:
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
-                step_time = time.time() - start_step_time()
+                step_time = time.time() - start_step_time
                 print('Step: {} - Loss: {:.4f} - Step Time: {:.3f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
                 latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory + '_train')
