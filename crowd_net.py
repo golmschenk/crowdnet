@@ -239,6 +239,7 @@ class CrowdNet(Net):
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                                      datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        self.log_source_files(checkpoint_directory_basename + '_source')
         if self.settings.restore_checkpoint_directory:
             restorer = tf.train.Saver()
         else:
