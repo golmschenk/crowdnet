@@ -229,7 +229,7 @@ class CrowdNet(Net):
                                             activation_fn=leaky_relu,
                                             kernel_size=5):
             noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
-            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[5, 4], stride=1, padding='VALID')
+            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 5], stride=1, padding='VALID')
             net = tf.contrib.layers.conv2d_transpose(net, 512, stride=3)
             net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
             net = tf.contrib.layers.conv2d_transpose(net, 128, stride=2)
