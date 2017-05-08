@@ -83,7 +83,7 @@ class CrowdNet(Net):
                                                                normalizer_fn=None)
         return person_density_output, person_count_map_output
 
-    def create_loss_tensors(self, labels_tensor, predicted_labels_tensor, predicted_counts_tensor):
+    def create_error_tensors(self, labels_tensor, predicted_labels_tensor, predicted_counts_tensor):
 
         differences_tensor = tf.subtract(predicted_labels_tensor, labels_tensor)
         tf.summary.scalar('Mean difference', tf.reduce_mean(differences_tensor))
@@ -150,6 +150,7 @@ class CrowdNet(Net):
         :rtype: tf.Operation
         """
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
+        tf.summary.scalar('Loss', value_to_minimize)
         variables_to_train = self.attain_variables_to_train()
         training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
                                                                                  global_step=self.global_step,
@@ -194,9 +195,9 @@ class CrowdNet(Net):
 
             predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
 
-        density_error_tensor, count_error_tensor = self.create_loss_tensors(labels_tensor,
-                                                                            predicted_labels_tensor,
-                                                                            predicted_counts_tensor)
+        density_error_tensor, count_error_tensor = self.create_error_tensors(labels_tensor,
+                                                                             predicted_labels_tensor,
+                                                                             predicted_counts_tensor)
 
         if self.image_summary_on:
             self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
@@ -214,7 +215,7 @@ class CrowdNet(Net):
                              name='Loss')
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
-                                            datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+                                                     datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
         if self.settings.restore_checkpoint_directory:
             restorer = tf.train.Saver()
         else:
