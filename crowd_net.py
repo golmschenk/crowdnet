@@ -234,9 +234,8 @@ class CrowdNet(Net):
             net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
             net = tf.contrib.layers.conv2d_transpose(net, 128, stride=2)
             net = tf.contrib.layers.conv2d_transpose(net, 3, stride=2, activation_fn=tf.tanh, normalizer_fn=None)
-            unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
-            mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
-            images_tensor = (unscaled_images - mean) / tf.sqrt(variance)
+            mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
+            images_tensor = (net - mean) / tf.sqrt(variance)
         return images_tensor
 
     def create_generated_network(self):
