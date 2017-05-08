@@ -23,6 +23,7 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
+        self.density_to_count_loss_ratio = 20.0
         self.data = CrowdData()
 
         self.histograms_on = False
@@ -208,7 +209,8 @@ class CrowdNet(Net):
     def train(self):
         print('Building train graph...')
         train_density_error_tensor, train_count_error_tensor = self.create_network(run_type='train')
-        loss_tensor = tf.add(train_density_error_tensor, tf.multiply(tf.constant(2.0), train_count_error_tensor),
+        loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), train_density_error_tensor),
+                             train_count_error_tensor,
                              name='Loss')
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
