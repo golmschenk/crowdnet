@@ -240,7 +240,7 @@ class CrowdNet(Net):
         return images_tensor
 
     def create_generated_network(self):
-        with tf.name_scope('generator'):
+        with tf.variable_scope('generator'):
             images_tensor = self.unlabeled_generator()
             tf.summary.image('Generated Images', images_tensor)
 
@@ -298,6 +298,65 @@ class CrowdNet(Net):
                                                           global_step=step)
                     latest_validated_checkpoint_path = latest_checkpoint_path
 
+    def train_unlabeled_gan(self):
+        print('Building train graph...')
+        with tf.name_scope('True'):
+            true_density_error_tensor, true_count_error_tensor = self.create_network(run_type='train')
+        with tf.name_scope('Generated'):
+            generated_predicted_density_tensor, generated_predicted_counts_tensor = self.create_generated_network()
+        true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
+                                  true_count_error_tensor, name='Loss')
+        generated_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                   generated_predicted_density_tensor),
+                                       generated_predicted_counts_tensor, name='Loss')
+        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
+        discriminator_compute_op = optimizer.compute_gradients(
+            tf.add(true_loss_tensor, generated_loss_tensor),
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
+        )
+        generator_compute_op = optimizer.compute_gradients(
+            tf.negative(generated_loss_tensor),
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+        )
+        training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
+                                                global_step=self.global_step)
+        checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                                     datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        if self.settings.restore_checkpoint_directory:
+            restorer = tf.train.Saver()
+        else:
+            restorer = None
+
+        print('Building validation graph...')
+        validation_graph = tf.Graph()
+        with validation_graph.as_default(), tf.device('/cpu:0'):
+            self.create_network(run_type='validation')
+            validation_summaries = tf.summary.merge_all()
+            validation_saver = tf.train.Saver()
+            validation_summary_writer = tf.summary.FileWriter(checkpoint_directory_basename + '_validation')
+            validation_session = tf.train.MonitoredSession()
+            latest_validated_checkpoint_path = None
+
+        print('Starting training...')
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
+                                               save_checkpoint_secs=900) as session:
+            if self.settings.restore_checkpoint_directory:
+                print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
+                restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
+            while not session.should_stop():
+                start_step_time = time.time()
+                _, loss, step = session.run([training_op, true_loss_tensor, self.global_step])
+                step_time = time.time() - start_step_time
+                print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
+                # Run validation if there's a new checkpoint to validate.
+                latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory_basename + '_train')
+                if latest_checkpoint_path != latest_validated_checkpoint_path:
+                    print('Running validation summaries...')
+                    validation_saver.restore(validation_session, latest_checkpoint_path)
+                    validation_summary_writer.add_summary(validation_session.run(validation_summaries),
+                                                          global_step=step)
+                    latest_validated_checkpoint_path = latest_checkpoint_path
+
     def test(self):
         """
         Runs the testing of the network. 
@@ -329,5 +388,5 @@ class CrowdNet(Net):
 
 
 if __name__ == '__main__':
-    interface = Interface(network_class=CrowdNet)
-    interface.run()
+    crowd_net = CrowdNet()
+    crowd_net.train_unlabeled_gan()
