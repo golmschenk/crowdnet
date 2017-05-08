@@ -84,7 +84,19 @@ class CrowdNet(Net):
         return person_density_output, person_count_map_output
 
     def create_error_tensors(self, labels_tensor, predicted_labels_tensor, predicted_counts_tensor):
-
+        """
+        Creates the error tensors from the crowd prediction results.
+        
+        :param labels_tensor: The true density labels.
+        :type labels_tensor: tf.Tensor
+        :param predicted_labels_tensor: The predicted density labels.
+        :type predicted_labels_tensor: tf.Tensor
+        :param predicted_counts_tensor: The total predicted counts for an image (may be different than sum of predicted 
+                                        density).
+        :type predicted_counts_tensor: tf.Tensor
+        :return: The error in the densities and the error in the person counts. 
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
         differences_tensor = tf.subtract(predicted_labels_tensor, labels_tensor)
         tf.summary.scalar('Mean difference', tf.reduce_mean(differences_tensor))
         absolute_differences_tensor = tf.abs(differences_tensor)
@@ -181,6 +193,14 @@ class CrowdNet(Net):
         return masked_labels_tensor, masked_predicted_labels_tensor, masked_predicted_count_map_tensor
 
     def create_network(self, run_type='train'):
+        """
+        Create the pieces of the network from input to error.
+        
+        :param run_type: The running type of this network instance (training, validation, etc).
+        :type run_type: string
+        :return: The density errors and the person count errors. 
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
         with tf.name_scope('inputs'):
             images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(
                 data_type=run_type,
@@ -208,6 +228,9 @@ class CrowdNet(Net):
         return density_error_tensor, count_error_tensor
 
     def train(self):
+        """
+        Runs the training of the network. 
+        """
         print('Building train graph...')
         train_density_error_tensor, train_count_error_tensor = self.create_network(run_type='train')
         loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), train_density_error_tensor),
@@ -252,6 +275,9 @@ class CrowdNet(Net):
                     latest_validated_checkpoint_path = latest_checkpoint_path
 
     def test(self):
+        """
+        Runs the testing of the network. 
+        """
         print('Building testing graph...')
         self.settings.batch_size = 1
         self.create_network(run_type='test')
