@@ -59,7 +59,7 @@ class CrowdNet(Net):
         """
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d],
                                             padding='SAME',
-                                            normalizer_fn=None,
+                                            normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=3):
             module1_output = tf.contrib.layers.conv2d(inputs=images, num_outputs=32)
@@ -69,18 +69,13 @@ class CrowdNet(Net):
             module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
             module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
             module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
-            with tf.contrib.framework.arg_scope([tf.contrib.layers.batch_norm], scale=True):
-                module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10,
-                                                          kernel_size=1)
-            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10,
-                                                      kernel_size=1, activation_fn=leaky_relu,
+            module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10, kernel_size=1)
+            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10, kernel_size=1,
                                                       normalizer_fn=None)
-            person_density_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
-                                                             kernel_size=1, activation_fn=None,
-                                                             normalizer_fn=None)
-            person_count_map_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1,
-                                                               kernel_size=1, activation_fn=None,
-                                                               normalizer_fn=None)
+            person_density_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1, kernel_size=1,
+                                                             activation_fn=None, normalizer_fn=None)
+            person_count_map_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1, kernel_size=1,
+                                                               activation_fn=None, normalizer_fn=None)
         return person_density_output, person_count_map_output
 
     def create_error_tensors(self, labels_tensor, predicted_labels_tensor, predicted_counts_tensor):
@@ -219,13 +214,42 @@ class CrowdNet(Net):
                                                                              predicted_labels_tensor,
                                                                              predicted_counts_tensor)
 
-        if self.image_summary_on:
-            self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
+        self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
         self.lookup_dictionary['labels_tensor'] = labels_tensor
         self.lookup_dictionary['predicted_counts_tensor'] = predicted_counts_tensor
 
         return density_error_tensor, count_error_tensor
+
+    def unlabeled_generator(self):
+        assert self.settings.image_height is 144 and self.settings.image_width is 180
+        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
+                                            padding='SAME',
+                                            normalizer_fn=tf.contrib.layers.batch_norm,
+                                            activation_fn=leaky_relu,
+                                            kernel_size=5):
+            noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[5, 4], stride=1, padding='VALID')
+            net = tf.contrib.layers.conv2d_transpose(net, 512, stride=3)
+            net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
+            net = tf.contrib.layers.conv2d_transpose(net, 128, stride=2)
+            net = tf.contrib.layers.conv2d_transpose(net, 3, stride=2, activation_fn=tf.tanh, normalizer_fn=None)
+            unscaled_images = net[:, :self.settings.image_height, :self.settings.image_width, :]
+            mean, variance = tf.nn.moments(unscaled_images, axes=[1, 2, 3], keep_dims=True)
+            images_tensor = (unscaled_images - mean) / tf.sqrt(variance)
+        return images_tensor
+
+    def create_generated_network(self):
+        with tf.name_scope('generator'):
+            images_tensor = self.unlabeled_generator()
+            tf.summary.image('Generated Images', images_tensor)
+
+        with tf.variable_scope('inference', reuse=True):
+            predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+            predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+            predicted_total_density_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+
+        return predicted_total_density_tensor, predicted_counts_tensor
 
     def train(self):
         """
