@@ -306,16 +306,19 @@ class CrowdNet(Net):
             generated_predicted_density_tensor, generated_predicted_counts_tensor = self.create_generated_network()
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor, name='Loss')
-        generated_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                   generated_predicted_density_tensor),
-                                       generated_predicted_counts_tensor, name='Loss')
+        discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                        generated_predicted_density_tensor)),
+                                                     tf.abs(generated_predicted_counts_tensor), name='Loss')
+        generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                               generated_predicted_density_tensor),
+                                                   generated_predicted_counts_tensor), name='Loss')
         optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
-            tf.add(true_loss_tensor, generated_loss_tensor),
+            tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         )
         generator_compute_op = optimizer.compute_gradients(
-            tf.negative(generated_loss_tensor),
+            generator_loss_tensor,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         )
         training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
