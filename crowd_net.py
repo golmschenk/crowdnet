@@ -337,12 +337,13 @@ class CrowdNet(Net):
         print('Building validation graph...')
         validation_graph = tf.Graph()
         with validation_graph.as_default(), tf.device('/cpu:0'):
-            self.create_network(run_type='validation')
-            validation_summaries = tf.summary.merge_all()
-            validation_saver = tf.train.Saver()
-            validation_summary_writer = tf.summary.FileWriter(checkpoint_directory_basename + '_validation')
-            validation_session = tf.train.MonitoredSession()
-            latest_validated_checkpoint_path = None
+            with tf.name_scope('True'):
+                self.create_network(run_type='validation')
+                validation_summaries = tf.summary.merge_all()
+                validation_saver = tf.train.Saver()
+                validation_summary_writer = tf.summary.FileWriter(checkpoint_directory_basename + '_validation')
+                validation_session = tf.train.MonitoredSession()
+                latest_validated_checkpoint_path = None
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
