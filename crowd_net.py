@@ -267,7 +267,7 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
-                                               save_checkpoint_secs=180) as session:
+                                               save_checkpoint_secs=900) as session:
             if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
