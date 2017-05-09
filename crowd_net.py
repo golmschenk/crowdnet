@@ -223,6 +223,9 @@ class CrowdNet(Net):
         return density_error_tensor, count_error_tensor
 
     def get_checkpoint_directory_basename(self):
+        if self.settings.restore_mode == 'transfer':
+            return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
         if self.settings.restore_checkpoint_directory:
             self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory.replace('_train',
                                                                                                             '')
