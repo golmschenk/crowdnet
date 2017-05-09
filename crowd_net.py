@@ -229,7 +229,9 @@ class CrowdNet(Net):
 
     def get_checkpoint_directory_basename(self):
         if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
-            return self.settings.restore_checkpoint_directory
+            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
+        elif self.settings.run_mode == 'test':
+            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory + '_train')
         else:
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
@@ -296,7 +298,7 @@ class CrowdNet(Net):
         number_of_examples = 0
         total_density_count_error = 0
         print('Running test...')
-        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.settings.restore_checkpoint_directory,
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.get_checkpoint_directory_basename(),
                                                save_checkpoint_secs=None, save_summaries_steps=None) as session:
             while not session.should_stop():
                 label, predicted_count, predicted_labels = session.run([labels_tensor, predicted_counts_tensor, predicted_labels_tensor])
