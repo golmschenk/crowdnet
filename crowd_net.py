@@ -340,7 +340,7 @@ class CrowdNet(Net):
                                                 global_step=self.global_step)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         if self.settings.restore_mode == 'transfer':
-            restorer = tf.train.Saver()
+            restorer = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
         else:
             restorer = None
 
