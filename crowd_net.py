@@ -217,9 +217,22 @@ class CrowdNet(Net):
         self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
         self.lookup_dictionary['labels_tensor'] = labels_tensor
+        self.lookup_dictionary['predicted_labels_tensor'] = predicted_labels_tensor
         self.lookup_dictionary['predicted_counts_tensor'] = predicted_counts_tensor
 
         return density_error_tensor, count_error_tensor
+
+    def get_checkpoint_directory_basename(self):
+        if self.settings.restore_checkpoint_directory:
+            self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory.replace('_train',
+                                                                                                            '')
+        if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
+            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
+        elif self.settings.run_mode == 'test':
+            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory + '_train')
+        else:
+            return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
 
     def unlabeled_generator(self):
         assert self.settings.image_height is 144 and self.settings.image_width is 180
@@ -257,11 +270,9 @@ class CrowdNet(Net):
         print('Building train graph...')
         train_density_error_tensor, train_count_error_tensor = self.create_network(run_type='train')
         loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), train_density_error_tensor),
-                             train_count_error_tensor,
-                             name='Loss')
+                             train_count_error_tensor)
         training_op = self.create_training_op(loss_tensor)
-        checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
-                                                     datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         self.log_source_files(checkpoint_directory_basename + '_source')
         if self.settings.restore_checkpoint_directory:
             restorer = tf.train.Saver()
@@ -280,8 +291,8 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
-                                               save_checkpoint_secs=900) as session:
-            if self.settings.restore_checkpoint_directory:
+                                               save_checkpoint_secs=180) as session:
+            if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
             while not session.should_stop():
@@ -373,26 +384,32 @@ class CrowdNet(Net):
         self.settings.batch_size = 1
         self.create_network(run_type='test')
         labels_tensor = self.lookup_dictionary['labels_tensor']
+        predicted_labels_tensor = self.lookup_dictionary['predicted_labels_tensor']
         predicted_counts_tensor = self.lookup_dictionary['predicted_counts_tensor']
         total_count = 0
         total_predicted_count = 0
         total_count_error = 0
         number_of_examples = 0
+        total_density_count_error = 0
         print('Running test...')
-        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.settings.restore_checkpoint_directory,
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.get_checkpoint_directory_basename(),
                                                save_checkpoint_secs=None, save_summaries_steps=None) as session:
             while not session.should_stop():
-                label, predicted_count = session.run([labels_tensor, predicted_counts_tensor])
+                label, predicted_count, predicted_labels = session.run([labels_tensor, predicted_counts_tensor, predicted_labels_tensor])
                 count = np.sum(label)
+                predicted_density_count = np.sum(predicted_labels)
                 total_count += count
                 total_predicted_count += predicted_count
                 total_count_error += np.abs(count - predicted_count)
+                total_density_count_error += np.abs(count - predicted_density_count)
                 number_of_examples += 1
                 print('{} examples processed'.format(number_of_examples), end='\r')
         print('Total count: {}'.format(total_count))
         print('Total predicted count: {}'.format(total_predicted_count))
         print('Total count error: {}'.format(total_count_error))
+        print('Total density count error: {}'.format(total_density_count_error))
         print('Average count error: {}'.format(total_count_error / number_of_examples))
+        print('Average density count error: {}'.format(total_density_count_error / number_of_examples))
 
 
 if __name__ == '__main__':
