@@ -323,9 +323,10 @@ class CrowdNet(Net):
         generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                generated_predicted_density_tensor),
                                                    generated_predicted_counts_tensor))
-        tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
-        tf.summary.scalar('Generated Discriminator Loss', true_loss_tensor)
-        tf.summary.scalar('Generator Loss', true_loss_tensor)
+        with tf.name_scope('Loss'):
+            tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
+            tf.summary.scalar('Generated Discriminator Loss', true_loss_tensor)
+            tf.summary.scalar('Generator Loss', true_loss_tensor)
         optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
             tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
