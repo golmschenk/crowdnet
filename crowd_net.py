@@ -273,7 +273,6 @@ class CrowdNet(Net):
                              train_count_error_tensor)
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
-        self.log_source_files(checkpoint_directory_basename + '_source')
         if self.settings.restore_checkpoint_directory:
             restorer = tf.train.Saver()
         else:
@@ -295,6 +294,7 @@ class CrowdNet(Net):
             if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
+            self.log_source_files(checkpoint_directory_basename + '_source')
             while not session.should_stop():
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
@@ -338,7 +338,6 @@ class CrowdNet(Net):
         training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
                                                 global_step=self.global_step)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
-        self.log_source_files(checkpoint_directory_basename + '_source')
         if self.settings.restore_mode == 'transfer':
             restorer = tf.train.Saver()
         else:
@@ -361,6 +360,7 @@ class CrowdNet(Net):
             if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
+            self.log_source_files(checkpoint_directory_basename + '_source')
             while not session.should_stop():
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, true_loss_tensor, self.global_step])
