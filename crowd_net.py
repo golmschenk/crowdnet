@@ -249,8 +249,8 @@ class CrowdNet(Net):
                              train_count_error_tensor)
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
-        if self.settings.restore_checkpoint_directory:
-            restorer = tf.train.Saver()
+        if self.settings.restore_mode == 'transfer':
+            restorer = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
         else:
             restorer = None
 
