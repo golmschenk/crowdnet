@@ -228,9 +228,12 @@ class CrowdNet(Net):
         return density_error_tensor, count_error_tensor
 
     def get_checkpoint_directory_basename(self):
+        if self.settings.restore_checkpoint_directory:
+            self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory.replace('_train',
+                                                                                                            '')
         if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
             return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
-        elif self.settings.run_mode == 'test':
+        elif self.settings.run_mode == 'test' or self.settings.restore_mode == 'transfer':
             return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory + '_train')
         else:
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
@@ -264,8 +267,8 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
-                                               save_checkpoint_secs=900) as session:
-            if self.settings.restore_checkpoint_directory:
+                                               save_checkpoint_secs=180) as session:
+            if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
             while not session.should_stop():
