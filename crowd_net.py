@@ -337,10 +337,9 @@ class CrowdNet(Net):
         )
         training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
                                                 global_step=self.global_step)
-        checkpoint_directory_basename = os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
-                                                     datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+        checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         self.log_source_files(checkpoint_directory_basename + '_source')
-        if self.settings.restore_checkpoint_directory:
+        if self.settings.restore_mode == 'transfer':
             restorer = tf.train.Saver()
         else:
             restorer = None
