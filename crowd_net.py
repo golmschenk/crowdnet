@@ -231,6 +231,12 @@ class CrowdNet(Net):
         if self.settings.restore_checkpoint_directory:
             self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory.replace('_train',
                                                                                                             '')
+        if self.settings.restore_mode == 'transfer':
+            self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory + '_train'
+            self.settings.restore_checkpoint_directory = os.path.join(self.settings.logs_directory,
+                                                                      self.settings.restore_checkpoint_directory)
+            return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
+                                datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
         if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
             return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
         elif self.settings.run_mode == 'test':
