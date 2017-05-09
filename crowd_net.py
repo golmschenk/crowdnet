@@ -68,12 +68,9 @@ class CrowdNet(Net):
             module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128)
             module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
             module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
-            module6_dropout = tf.contrib.layers.dropout(module6_output)
-            module7_output = tf.contrib.layers.conv2d(inputs=module6_dropout, num_outputs=256)
-            module7_dropout = tf.contrib.layers.dropout(module7_output)
-            module8_output = tf.contrib.layers.conv2d(inputs=module7_dropout, num_outputs=10, kernel_size=1)
-            module8_dropout = tf.contrib.layers.dropout(module8_output)
-            module9_output = tf.contrib.layers.conv2d(inputs=module8_dropout, num_outputs=10, kernel_size=1,
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
+            module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10, kernel_size=1)
+            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10, kernel_size=1,
                                                       normalizer_fn=None)
             person_density_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1, kernel_size=1,
                                                              activation_fn=None, normalizer_fn=None)
@@ -205,14 +202,7 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        if run_type == 'train':
-            dropout_keep_probability = 0.5
-        else:
-            dropout_keep_probability = 1.0
-        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
-                                                           keep_prob=dropout_keep_probability)
-
-        with tf.variable_scope('inference'), dropout_arg_scope:
+        with tf.variable_scope('inference'):
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
@@ -224,8 +214,7 @@ class CrowdNet(Net):
                                                                              predicted_labels_tensor,
                                                                              predicted_counts_tensor)
 
-        if self.image_summary_on:
-            self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
+        self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
         self.lookup_dictionary['labels_tensor'] = labels_tensor
         self.lookup_dictionary['predicted_labels_tensor'] = predicted_labels_tensor
@@ -237,12 +226,6 @@ class CrowdNet(Net):
         if self.settings.restore_checkpoint_directory:
             self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory.replace('_train',
                                                                                                             '')
-        if self.settings.restore_mode == 'transfer':
-            self.settings.restore_checkpoint_directory = self.settings.restore_checkpoint_directory + '_train'
-            self.settings.restore_checkpoint_directory = os.path.join(self.settings.logs_directory,
-                                                                      self.settings.restore_checkpoint_directory)
-            return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
-                                datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
         if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
             return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
         elif self.settings.run_mode == 'test':
@@ -250,6 +233,35 @@ class CrowdNet(Net):
         else:
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
+
+    def unlabeled_generator(self):
+        assert self.settings.image_height is 144 and self.settings.image_width is 180
+        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
+                                            padding='SAME',
+                                            normalizer_fn=tf.contrib.layers.batch_norm,
+                                            activation_fn=leaky_relu,
+                                            kernel_size=5):
+            noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 5], stride=1, padding='VALID')
+            net = tf.contrib.layers.conv2d_transpose(net, 512, stride=3)
+            net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
+            net = tf.contrib.layers.conv2d_transpose(net, 128, stride=2)
+            net = tf.contrib.layers.conv2d_transpose(net, 3, stride=2, activation_fn=tf.tanh, normalizer_fn=None)
+            mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
+            images_tensor = (net - mean) / tf.sqrt(variance)
+        return images_tensor
+
+    def create_generated_network(self):
+        with tf.variable_scope('generator'):
+            images_tensor = self.unlabeled_generator()
+            tf.summary.image('Generated Images', images_tensor)
+
+        with tf.variable_scope('inference', reuse=True):
+            predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+            predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+            predicted_total_density_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+
+        return predicted_total_density_tensor, predicted_counts_tensor
 
     def train(self):
         """
@@ -261,8 +273,8 @@ class CrowdNet(Net):
                              train_count_error_tensor)
         training_op = self.create_training_op(loss_tensor)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
-        if self.settings.restore_mode == 'transfer':
-            restorer = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
+        if self.settings.restore_checkpoint_directory:
+            restorer = tf.train.Saver()
         else:
             restorer = None
 
@@ -278,7 +290,7 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
-                                               save_checkpoint_secs=900) as session:
+                                               save_checkpoint_secs=180) as session:
             if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
@@ -286,6 +298,72 @@ class CrowdNet(Net):
             while not session.should_stop():
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, loss_tensor, self.global_step])
+                step_time = time.time() - start_step_time
+                print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
+                # Run validation if there's a new checkpoint to validate.
+                latest_checkpoint_path = tf.train.latest_checkpoint(checkpoint_directory_basename + '_train')
+                if latest_checkpoint_path != latest_validated_checkpoint_path:
+                    print('Running validation summaries...')
+                    validation_saver.restore(validation_session, latest_checkpoint_path)
+                    validation_summary_writer.add_summary(validation_session.run(validation_summaries),
+                                                          global_step=step)
+                    latest_validated_checkpoint_path = latest_checkpoint_path
+
+    def train_unlabeled_gan(self):
+        print('Building train graph...')
+        with tf.name_scope('True'):
+            true_density_error_tensor, true_count_error_tensor = self.create_network(run_type='train')
+        with tf.name_scope('Generated'):
+            generated_predicted_density_tensor, generated_predicted_counts_tensor = self.create_generated_network()
+        true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
+                                  true_count_error_tensor)
+        discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                        generated_predicted_density_tensor)),
+                                                     tf.abs(generated_predicted_counts_tensor))
+        generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                               generated_predicted_density_tensor),
+                                                   generated_predicted_counts_tensor))
+        tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
+        tf.summary.scalar('Generated Discriminator Loss', true_loss_tensor)
+        tf.summary.scalar('Generator Loss', true_loss_tensor)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
+        discriminator_compute_op = optimizer.compute_gradients(
+            tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
+        )
+        generator_compute_op = optimizer.compute_gradients(
+            generator_loss_tensor,
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+        )
+        training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
+                                                global_step=self.global_step)
+        checkpoint_directory_basename = self.get_checkpoint_directory_basename()
+        if self.settings.restore_mode == 'transfer':
+            restorer = tf.train.Saver()
+        else:
+            restorer = None
+
+        print('Building validation graph...')
+        validation_graph = tf.Graph()
+        with validation_graph.as_default(), tf.device('/cpu:0'):
+            with tf.name_scope('True'):
+                self.create_network(run_type='validation')
+                validation_summaries = tf.summary.merge_all()
+                validation_saver = tf.train.Saver()
+                validation_summary_writer = tf.summary.FileWriter(checkpoint_directory_basename + '_validation')
+                validation_session = tf.train.MonitoredSession()
+                latest_validated_checkpoint_path = None
+
+        print('Starting training...')
+        with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
+                                               save_checkpoint_secs=900) as session:
+            if self.settings.restore_mode == 'transfer':
+                print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
+                restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
+            self.log_source_files(checkpoint_directory_basename + '_source')
+            while not session.should_stop():
+                start_step_time = time.time()
+                _, loss, step = session.run([training_op, true_loss_tensor, self.global_step])
                 step_time = time.time() - start_step_time
                 print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
@@ -334,5 +412,5 @@ class CrowdNet(Net):
 
 
 if __name__ == '__main__':
-    interface = Interface(network_class=CrowdNet)
-    interface.run()
+    crowd_net = CrowdNet()
+    crowd_net.train_unlabeled_gan()
