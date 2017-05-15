@@ -286,10 +286,8 @@ class CrowdNet(Net):
 
         with tf.variable_scope('inference', reuse=True):
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
-            predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
-            predicted_total_density_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
 
-        return predicted_total_density_tensor, predicted_counts_tensor
+        return predicted_labels_tensor, predicted_count_maps_tensor
 
     def train(self):
         """
@@ -342,11 +340,14 @@ class CrowdNet(Net):
         with tf.name_scope('True'):
             true_density_error_tensor, true_count_error_tensor = self.create_network(run_type='train')
         with tf.name_scope('Generated'):
-            generated_predicted_density_tensor, generated_predicted_counts_tensor = self.create_generated_network()
+            generated_predicted_labels_tensor, generated_predicted_count_maps_tensor = self.create_generated_network()
+            generated_predicted_counts_tensor = self.example_mean_pixel_sum(generated_predicted_count_maps_tensor)
+            generated_predicted_density_tensor = self.example_mean_pixel_sum(generated_predicted_labels_tensor)
+            generated_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(generated_predicted_labels_tensor))
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
         discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                        generated_predicted_density_tensor)),
+                                                                        generated_predicted_absolute_tensor)),
                                                      tf.abs(generated_predicted_counts_tensor))
         generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                generated_predicted_density_tensor),
