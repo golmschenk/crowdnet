@@ -240,6 +240,28 @@ class CrowdNet(Net):
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
 
+    def no_stride_unlabeled_generator(self):
+        with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
+                                            padding='SAME',
+                                            normalizer_fn=tf.contrib.layers.batch_norm,
+                                            activation_fn=leaky_relu,
+                                            kernel_size=3):
+            noise = tf.random_uniform([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
+                                       1])
+            net = tf.contrib.layers.conv2d_transpose(noise, 10, kernel_size=1)
+            net = tf.contrib.layers.conv2d_transpose(net, 10, kernel_size=1)
+            net = tf.contrib.layers.conv2d_transpose(net, 256)
+            net = tf.contrib.layers.conv2d_transpose(net, 256)
+            net = tf.contrib.layers.conv2d_transpose(net, 128)
+            net = tf.contrib.layers.conv2d_transpose(net, 128)
+            net = tf.contrib.layers.conv2d_transpose(net, 64)
+            net = tf.contrib.layers.conv2d_transpose(net, 64)
+            net = tf.contrib.layers.conv2d_transpose(net, 32)
+            net = tf.contrib.layers.conv2d_transpose(net, 3, activation_fn=tf.tanh, normalizer_fn=None)
+            mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
+            images_tensor = (net - mean) / tf.sqrt(variance)
+        return images_tensor
+
     def unlabeled_generator(self):
         assert self.settings.image_height is 144 and self.settings.image_width is 180
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
