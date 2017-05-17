@@ -246,8 +246,8 @@ class CrowdNet(Net):
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=3):
-            noise = tf.random_uniform([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
-                                       1])
+            noise = tf.random_normal([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
+                                      1])
             net = tf.contrib.layers.conv2d_transpose(noise, 10, kernel_size=1)
             net = tf.contrib.layers.conv2d_transpose(net, 10, kernel_size=1)
             net = tf.contrib.layers.conv2d_transpose(net, 256)
@@ -269,7 +269,7 @@ class CrowdNet(Net):
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=5):
-            noise = tf.random_uniform([self.settings.batch_size, 1, 1, 50])
+            noise = tf.random_normal([self.settings.batch_size, 1, 1, 50])
             net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 5], stride=1, padding='VALID')
             net = tf.contrib.layers.conv2d_transpose(net, 512, stride=3)
             net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
