@@ -356,6 +356,9 @@ class CrowdNet(Net):
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
             tf.summary.scalar('Generated Discriminator Loss', discriminator_generated_loss_tensor)
             tf.summary.scalar('Generator Loss', generator_loss_tensor)
+            tf.summary.scalar('Percentage Discriminator Loss From Generated',
+                              discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
+                                                                     true_loss_tensor))
         optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
             tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
@@ -424,7 +427,8 @@ class CrowdNet(Net):
         with tf.train.MonitoredTrainingSession(checkpoint_dir=self.get_checkpoint_directory_basename(),
                                                save_checkpoint_secs=None, save_summaries_steps=None) as session:
             while not session.should_stop():
-                label, predicted_count, predicted_labels = session.run([labels_tensor, predicted_counts_tensor, predicted_labels_tensor])
+                label, predicted_count, predicted_labels = session.run(
+                    [labels_tensor, predicted_counts_tensor, predicted_labels_tensor])
                 count = np.sum(label)
                 predicted_density_count = np.sum(predicted_labels)
                 total_count += count
