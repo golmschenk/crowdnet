@@ -240,7 +240,7 @@ class CrowdNet(Net):
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
 
-    def no_stride_unlabeled_generator(self):
+    def unlabeled_generator(self):
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
                                             padding='SAME',
                                             normalizer_fn=tf.contrib.layers.batch_norm,
@@ -262,7 +262,7 @@ class CrowdNet(Net):
             images_tensor = (net - mean) / tf.sqrt(variance)
         return images_tensor
 
-    def unlabeled_generator(self):
+    def strided_unlabeled_generator(self):
         assert self.settings.image_height is 144 and self.settings.image_width is 180
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
                                             padding='SAME',
