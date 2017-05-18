@@ -138,6 +138,21 @@ class CrowdData(Data):
         )
         return image, label
 
+    def augment(self, image, label):
+        """
+        Augments the data in various ways.
+
+        :param image: The image to be augmented.
+        :type image: tf.Tensor
+        :param label: The label to be augmented
+        :type label: tf.Tensor
+        :return: The augmented image and label
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        image, label = self.randomly_flip_horizontally(image, label)
+
+        return image, label
+
 
 if __name__ == '__main__':
     data = CrowdData()
