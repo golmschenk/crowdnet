@@ -68,9 +68,12 @@ class CrowdNet(Net):
             module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=128)
             module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=128)
             module6_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=256)
-            module7_output = tf.contrib.layers.conv2d(inputs=module6_output, num_outputs=256)
-            module8_output = tf.contrib.layers.conv2d(inputs=module7_output, num_outputs=10, kernel_size=1)
-            module9_output = tf.contrib.layers.conv2d(inputs=module8_output, num_outputs=10, kernel_size=1,
+            module6_dropout = tf.contrib.layers.dropout(module6_output)
+            module7_output = tf.contrib.layers.conv2d(inputs=module6_dropout, num_outputs=256)
+            module7_dropout = tf.contrib.layers.dropout(module7_output)
+            module8_output = tf.contrib.layers.conv2d(inputs=module7_dropout, num_outputs=10, kernel_size=1)
+            module8_dropout = tf.contrib.layers.dropout(module8_output)
+            module9_output = tf.contrib.layers.conv2d(inputs=module8_dropout, num_outputs=10, kernel_size=1,
                                                       normalizer_fn=None)
             person_density_output = tf.contrib.layers.conv2d(inputs=module9_output, num_outputs=1, kernel_size=1,
                                                              activation_fn=None, normalizer_fn=None)
@@ -202,7 +205,14 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        with tf.variable_scope('inference'):
+        if run_type == 'train':
+            dropout_keep_probability = 0.5
+        else:
+            dropout_keep_probability = 1.0
+        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+                                                           keep_prob=dropout_keep_probability)
+
+        with tf.variable_scope('inference'), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
