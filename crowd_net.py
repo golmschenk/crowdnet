@@ -382,7 +382,7 @@ class CrowdNet(Net):
         both_training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
                                                      global_step=self.global_step)
         discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op, global_step=self.global_step)
-        discriminator_variables = tf.get_collection(tf.GraphKeys.VARIABLES, scope='inference')
+        discriminator_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         clip_ops = []
         for variable in discriminator_variables:
             if 'weights:' in variable.name:
