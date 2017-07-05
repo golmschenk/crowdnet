@@ -23,12 +23,13 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
-        self.density_to_count_loss_ratio = 20.0
+        self.density_to_count_loss_ratio = 5.0
         self.data = CrowdData()
 
         self.histograms_on = False
         self.alternate_loss_on = True
         self.edge_percentage = 0.0
+        self.generator_train_step_period = 10
 
         # Internal variables.
         self.lookup_dictionary = {}
@@ -369,7 +370,7 @@ class CrowdNet(Net):
             tf.summary.scalar('Percentage Discriminator Loss From Generated',
                               discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
                                                                      true_loss_tensor))
-        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
+        optimizer = tf.train.RMSPropOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
             tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
@@ -378,8 +379,15 @@ class CrowdNet(Net):
             generator_loss_tensor,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         )
-        training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
-                                                global_step=self.global_step)
+        both_training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
+                                                     global_step=self.global_step)
+        discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op, global_step=self.global_step)
+        discriminator_variables = tf.get_collection(tf.GraphKeys.VARIABLES, scope='inference')
+        clip_ops = []
+        for variable in discriminator_variables:
+            if 'weights:' in variable.name:
+                clip_ops.append(tf.clip_by_value(variable, -1.0, 1.0))
+        clip_weights_op = tf.group(*clip_ops)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         if self.settings.restore_mode == 'transfer':
             restorer = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
@@ -404,9 +412,15 @@ class CrowdNet(Net):
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
             self.log_source_files(checkpoint_directory_basename + '_source')
+            step = 0
             while not session.should_stop():
+                if step % self.generator_train_step_period == 0:
+                    training_op = both_training_op
+                else:
+                    training_op = discriminator_training_op
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, true_loss_tensor, self.global_step])
+                session.run([clip_weights_op])
                 step_time = time.time() - start_step_time
                 print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
