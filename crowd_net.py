@@ -26,6 +26,7 @@ class CrowdNet(Net):
         self.density_to_count_loss_ratio = 5.0
         self.data = CrowdData()
 
+        self.clip_value = 1.0
         self.histograms_on = False
         self.alternate_loss_on = True
         self.edge_percentage = 0.0
@@ -252,11 +253,8 @@ class CrowdNet(Net):
             noise = tf.random_normal([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
                                       50])
             net = tf.contrib.layers.conv2d_transpose(noise, 256)
-            #net = tf.contrib.layers.conv2d_transpose(net, 256)
             net = tf.contrib.layers.conv2d_transpose(net, 128)
-            #net = tf.contrib.layers.conv2d_transpose(net, 128)
             net = tf.contrib.layers.conv2d_transpose(net, 64)
-            #net = tf.contrib.layers.conv2d_transpose(net, 64)
             net = tf.contrib.layers.conv2d_transpose(net, 32)
             net = tf.contrib.layers.conv2d_transpose(net, 3, activation_fn=tf.tanh, normalizer_fn=None)
             mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
@@ -365,18 +363,24 @@ class CrowdNet(Net):
             tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         )
+        discriminator_gradients = [tf.reshape(pair[0], [-1]) for pair in discriminator_compute_op
+                                   if 'weights:' in pair[1].name]
+        tf.summary.scalar('Discriminator Mean Gradient', tf.reduce_mean(tf.concat(discriminator_gradients, axis=0)))
         generator_compute_op = optimizer.compute_gradients(
             generator_loss_tensor,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         )
-        both_training_op = optimizer.apply_gradients(discriminator_compute_op + generator_compute_op,
+        generator_gradients = [tf.reshape(pair[0], [-1]) for pair in generator_compute_op
+                                   if 'weights:' in pair[1].name]
+        tf.summary.scalar('Generator Mean Gradient', tf.reduce_mean(tf.concat(generator_gradients, axis=0)))
+        both_training_op = optimizer.apply_gradients(generator_compute_op + generator_compute_op,
                                                      global_step=self.global_step)
         discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op, global_step=self.global_step)
         discriminator_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         clip_ops = []
         for variable in discriminator_variables:
             if 'weights:' in variable.name:
-                clip_ops.append(tf.clip_by_value(variable, -1.0, 1.0))
+                clip_ops.append(tf.clip_by_value(variable, -self.clip_value, self.clip_value))
         clip_weights_op = tf.group(*clip_ops)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         if self.settings.restore_mode == 'transfer':
