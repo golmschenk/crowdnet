@@ -252,7 +252,7 @@ class CrowdNet(Net):
                                             kernel_size=3):
             noise = tf.random_normal([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
                                       50])
-            net = tf.contrib.layers.conv2d_transpose(noise, 256)
+            net = tf.contrib.layers.conv2d_transpose(noise, 256, normalizer_fn=None)
             net = tf.contrib.layers.conv2d_transpose(net, 128)
             net = tf.contrib.layers.conv2d_transpose(net, 64)
             net = tf.contrib.layers.conv2d_transpose(net, 32)
