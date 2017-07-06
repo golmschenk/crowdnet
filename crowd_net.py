@@ -262,17 +262,17 @@ class CrowdNet(Net):
         return images_tensor
 
     def strided_unlabeled_generator(self):
-        assert self.settings.image_height is 144 and self.settings.image_width is 180
+        assert self.settings.image_height is 72 and self.settings.image_width is 90
         with tf.contrib.framework.arg_scope([tf.contrib.layers.conv2d, tf.contrib.layers.conv2d_transpose],
                                             padding='SAME',
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=5):
             noise = tf.random_normal([self.settings.batch_size, 1, 1, 50])
-            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 5], stride=1, padding='VALID')
+            net = tf.contrib.layers.conv2d_transpose(noise, 1024, kernel_size=[4, 5], stride=1, padding='VALID',
+                                                     normalizer_fn=None)
             net = tf.contrib.layers.conv2d_transpose(net, 512, stride=3)
             net = tf.contrib.layers.conv2d_transpose(net, 256, stride=3)
-            net = tf.contrib.layers.conv2d_transpose(net, 128, stride=2)
             net = tf.contrib.layers.conv2d_transpose(net, 3, stride=2, activation_fn=tf.tanh, normalizer_fn=None)
             mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
             images_tensor = (net - mean) / tf.sqrt(variance)
