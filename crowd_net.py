@@ -365,14 +365,15 @@ class CrowdNet(Net):
         )
         discriminator_gradients = [tf.reshape(pair[0], [-1]) for pair in discriminator_compute_op
                                    if 'weights:' in pair[1].name]
-        tf.summary.scalar('Discriminator Mean Gradient', tf.reduce_mean(tf.concat(discriminator_gradients, axis=0)))
+        tf.summary.scalar('Discriminator mean gradient', tf.reduce_mean(tf.abs(tf.concat(discriminator_gradients,
+                                                                                         axis=0))))
         generator_compute_op = optimizer.compute_gradients(
             generator_loss_tensor,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         )
         generator_gradients = [tf.reshape(pair[0], [-1]) for pair in generator_compute_op
                                    if 'weights:' in pair[1].name]
-        tf.summary.scalar('Generator Mean Gradient', tf.reduce_mean(tf.concat(generator_gradients, axis=0)))
+        tf.summary.scalar('Generator mean gradient', tf.reduce_mean(tf.abs(tf.concat(generator_gradients, axis=0))))
         both_training_op = optimizer.apply_gradients(generator_compute_op + generator_compute_op,
                                                      global_step=self.global_step)
         discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op, global_step=self.global_step)
