@@ -155,9 +155,9 @@ class CrowdNet(Net):
         tf.summary.scalar('Learning rate', self.learning_rate_tensor)
         tf.summary.scalar('Loss', value_to_minimize)
         variables_to_train = self.attain_variables_to_train()
-        training_op = tf.train.AdamOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
-                                                                                 global_step=self.global_step,
-                                                                                 var_list=variables_to_train)
+        training_op = tf.train.RMSPropOptimizer(self.learning_rate_tensor).minimize(value_to_minimize,
+                                                                                    global_step=self.global_step,
+                                                                                    var_list=variables_to_train)
         return training_op
 
     @staticmethod
@@ -328,7 +328,7 @@ class CrowdNet(Net):
 
         print('Starting training...')
         with tf.train.MonitoredTrainingSession(checkpoint_dir=checkpoint_directory_basename + '_train',
-                                               save_checkpoint_secs=180) as session:
+                                               save_checkpoint_secs=900) as session:
             if self.settings.restore_mode == 'transfer':
                 print('Restoring from {}...'.format(self.settings.restore_checkpoint_directory))
                 restorer.restore(session, tf.train.latest_checkpoint(self.settings.restore_checkpoint_directory))
