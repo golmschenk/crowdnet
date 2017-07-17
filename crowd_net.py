@@ -8,7 +8,6 @@ import numpy as np
 import time
 
 from gonet.net import Net
-from gonet.interface import Interface
 from gonet.convenience import leaky_relu
 
 from crowd_data import CrowdData
@@ -218,11 +217,25 @@ class CrowdNet(Net):
                                                                              predicted_labels_tensor,
                                                                              predicted_counts_tensor)
 
+        with tf.variable_scope('predictor'):
+            labels_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=predicted_labels_tensor.dtype, shape=[]))
+            predictor_predicted_labels_tensor = tf.multiply(predicted_labels_tensor, labels_multiplier)
+            counts_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=predicted_labels_tensor.dtype, shape=[]))
+            predictor_predicted_counts_tensor = tf.multiply(predicted_counts_tensor, counts_multiplier)
+        with tf.name_scope('Predictor'):
+            predictor_density_error_tensor, predictor_count_error_tensor = self.create_error_tensors(
+                labels_tensor,
+                predictor_predicted_labels_tensor,
+                predictor_predicted_counts_tensor
+            )
+
         self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
         self.lookup_dictionary['labels_tensor'] = labels_tensor
         self.lookup_dictionary['predicted_labels_tensor'] = predicted_labels_tensor
         self.lookup_dictionary['predicted_counts_tensor'] = predicted_counts_tensor
+        self.lookup_dictionary['predictor_density_error_tensor'] = predictor_density_error_tensor
+        self.lookup_dictionary['predictor_count_error_tensor'] = predictor_count_error_tensor
 
         return density_error_tensor, count_error_tensor
 
@@ -345,6 +358,9 @@ class CrowdNet(Net):
             generated_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(generated_predicted_labels_tensor))
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
+        predictor_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                   self.lookup_dictionary['predictor_density_error_tensor']),
+                                       self.lookup_dictionary['predictor_count_error_tensor'])
         discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                         generated_predicted_absolute_tensor)),
                                                      tf.abs(generated_predicted_counts_tensor))
@@ -367,16 +383,21 @@ class CrowdNet(Net):
                                    if 'weights:' in pair[1].name]
         tf.summary.scalar('Discriminator mean gradient', tf.reduce_mean(tf.abs(tf.concat(discriminator_gradients,
                                                                                          axis=0))))
+        predictor_compute_op = optimizer.compute_gradients(
+            predictor_loss_tensor,
+            var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='True/predictor')
+        )
         generator_compute_op = optimizer.compute_gradients(
             generator_loss_tensor,
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
         )
         generator_gradients = [tf.reshape(pair[0], [-1]) for pair in generator_compute_op
-                                   if 'weights:' in pair[1].name]
+                               if 'weights:' in pair[1].name]
         tf.summary.scalar('Generator mean gradient', tf.reduce_mean(tf.abs(tf.concat(generator_gradients, axis=0))))
-        both_training_op = optimizer.apply_gradients(generator_compute_op + generator_compute_op,
-                                                     global_step=self.global_step)
-        discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op, global_step=self.global_step)
+        both_training_op = optimizer.apply_gradients(
+            generator_compute_op + discriminator_compute_op + predictor_compute_op, global_step=self.global_step)
+        discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op + predictor_compute_op,
+                                                              global_step=self.global_step)
         discriminator_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         clip_ops = []
         for variable in discriminator_variables:
