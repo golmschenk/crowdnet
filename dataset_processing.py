@@ -15,9 +15,8 @@ def minify_dataset(data_directory, dataset_json_filename):
         tfrecords_processor = TFRecordsProcessor()
         for filename in filenames:
             images_numpy, labels_numpy = tfrecords_processor.read_to_numpy(os.path.join(data_directory, filename))
-            middle_index = labels_numpy.shape[0] // 2
-            mini_dataset_images.append(images_numpy[middle_index])
-            mini_dataset_labels.append(labels_numpy[middle_index])
+            mini_dataset_images.append(np.random.choice(images_numpy))
+            mini_dataset_labels.append(np.random.choice(labels_numpy))
         mini_dataset_images_numpy = np.stack(mini_dataset_images)
         mini_dataset_labels_numpy = np.stack(mini_dataset_labels)
         tfrecords_processor.write_from_numpy(os.path.join(data_directory, 'mini_dataset'),
@@ -25,3 +24,5 @@ def minify_dataset(data_directory, dataset_json_filename):
                                              images=mini_dataset_images_numpy,
                                              label_shape=mini_dataset_labels_numpy.shape[1:],
                                              labels=mini_dataset_labels_numpy)
+
+minify_dataset('../storage/data', 'world_expo_datasets.json')
