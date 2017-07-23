@@ -15,8 +15,9 @@ def minify_dataset(data_directory, dataset_json_filename):
         tfrecords_processor = TFRecordsProcessor()
         for filename in filenames:
             images_numpy, labels_numpy = tfrecords_processor.read_to_numpy(os.path.join(data_directory, filename))
-            mini_dataset_images.append(np.random.choice(images_numpy))
-            mini_dataset_labels.append(np.random.choice(labels_numpy))
+            random_index = np.random.choice(labels_numpy.shape[0])
+            mini_dataset_images.append(images_numpy[random_index])
+            mini_dataset_labels.append(labels_numpy[random_index])
         mini_dataset_images_numpy = np.stack(mini_dataset_images)
         mini_dataset_labels_numpy = np.stack(mini_dataset_labels)
         tfrecords_processor.write_from_numpy(os.path.join(data_directory, 'mini_dataset'),
