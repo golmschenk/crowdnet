@@ -48,6 +48,8 @@ class CrowdNet(Net):
                                                                self.settings.learning_rate_decay_steps,
                                                                self.settings.learning_rate_decay_rate)
 
+        self.average_train_count = self.data.get_average_person_count()
+
     @staticmethod
     def create_experimental_inference_op(images):
         """

@@ -1,11 +1,14 @@
 """
 Code for managing the crowd data.
 """
+import json
+
 import numpy as np
 import tensorflow as tf
 import os
 
 from gonet.data import Data
+from gonet.tfrecords_processor import TFRecordsProcessor
 
 from settings import Settings
 
@@ -152,6 +155,20 @@ class CrowdData(Data):
         image, label = self.randomly_flip_horizontally(image, label)
 
         return image, label
+
+    def get_average_person_count(self):
+        with open(self.settings.datasets_json) as json_file:
+            json_dict = json.load(json_file)
+        train_file_list = json_dict['train']
+        tfrecords_processor = TFRecordsProcessor()
+        total_person_count = 0.0
+        total_image_count = 0
+        for train_file in train_file_list:
+            _, train_labels = tfrecords_processor.read_to_numpy(train_file)
+            total_image_count += train_labels.shape[0]
+            total_person_count += np.sum(train_labels)
+        average_person_count = total_person_count / total_image_count
+        return average_person_count
 
 
 if __name__ == '__main__':
