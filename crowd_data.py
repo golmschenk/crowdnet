@@ -164,12 +164,42 @@ class CrowdData(Data):
         total_person_count = 0.0
         total_image_count = 0
         for train_file in train_file_list:
-            _, train_labels = tfrecords_processor.read_to_numpy(train_file)
+            train_file_path = os.path.join(self.settings.data_directory, train_file)
+            _, train_labels = tfrecords_processor.read_to_numpy(train_file_path)
             total_image_count += train_labels.shape[0]
             total_person_count += np.sum(train_labels)
         average_person_count = total_person_count / total_image_count
         return average_person_count
 
+    def create_input_tensors_for_dataset(self, data_type, batch_size):
+        """
+        Prepares the data inputs.
+
+        :param data_type: The type of data file (usually train, validation, or test).
+        :type data_type: str
+        :param batch_size: The size of the batches
+        :type batch_size: int
+        :return: The images and depths inputs.
+        :rtype: (tf.Tensor, tf.Tensor)
+        """
+        file_name_queue = self.attain_file_name_queue(data_type)
+        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
+        image, label = self.preaugmentation_preprocess(image, label)
+        if data_type or ['train', 'unlabeled']:
+            image, label = self.augment(image, label)
+        image, label = self.postaugmentation_preprocess(image, label)
+
+        if data_type in ['test', 'deploy']:
+            images, labels = tf.train.batch(
+                [image, label], batch_size=batch_size, num_threads=1, capacity=500 + 3 * batch_size
+            )
+        else:
+            images, labels = tf.train.shuffle_batch(
+                [image, label], batch_size=batch_size, num_threads=4,
+                capacity=500 + 3 * batch_size, min_after_dequeue=500
+            )
+
+        return images, labels
 
 if __name__ == '__main__':
     data = CrowdData()

@@ -22,7 +22,7 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
-        self.density_to_count_loss_ratio = 5.0
+        self.density_to_count_loss_ratio = 1.0
         self.data = CrowdData()
 
         self.clip_value = 1.0
@@ -200,14 +200,14 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        if run_type == 'train':
-            dropout_keep_probability = 0.5
-        else:
-            dropout_keep_probability = 1.0
-        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
-                                                           keep_prob=dropout_keep_probability)
+        # if run_type == 'train':
+        #     dropout_keep_probability = 0.5
+        # else:
+        #     dropout_keep_probability = 1.0
+        # dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+        #                                                    keep_prob=dropout_keep_probability)
 
-        with tf.variable_scope('inference'), dropout_arg_scope:
+        with tf.variable_scope('inference'):  #, dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
@@ -303,6 +303,17 @@ class CrowdNet(Net):
 
         return predicted_labels_tensor, predicted_count_maps_tensor
 
+    def create_unlabeled_inference_network(self):
+        with tf.name_scope('unlabeled_inputs'):
+            images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(
+                data_type='unlabeled',
+                batch_size=self.settings.batch_size
+            )
+        with tf.variable_scope('inference', reuse=True):
+            predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+
+        return predicted_labels_tensor, predicted_count_maps_tensor
+
     def train(self):
         """
         Runs the training of the network. 
@@ -358,27 +369,34 @@ class CrowdNet(Net):
             generated_predicted_counts_tensor = self.example_mean_pixel_sum(generated_predicted_count_maps_tensor)
             generated_predicted_density_tensor = self.example_mean_pixel_sum(generated_predicted_labels_tensor)
             generated_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(generated_predicted_labels_tensor))
+            generator_to_average = tf.abs(tf.subtract(generated_predicted_counts_tensor, self.average_train_count))
+            generator_to_negative_average = tf.abs(tf.add(generated_predicted_counts_tensor, self.average_train_count))
+        with tf.name_scope('Unlabeled'):
+            unlabeled_predicted_labels_tensor, unlabeled_predicted_count_maps_tensor = self.create_unlabeled_inference_network()
+            unlabeled_predicted_counts_tensor = self.example_mean_pixel_sum(unlabeled_predicted_count_maps_tensor)
+            unlabeled_predicted_density_tensor = self.example_mean_pixel_sum(unlabeled_predicted_labels_tensor)
+            unlabeled_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(unlabeled_predicted_labels_tensor))
+            unlabeled_to_average = tf.abs(tf.subtract(unlabeled_predicted_counts_tensor, self.average_train_count))
+
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
         predictor_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                    self.lookup_dictionary['predictor_density_error_tensor']),
                                        self.lookup_dictionary['predictor_count_error_tensor'])
-        discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                        generated_predicted_absolute_tensor)),
-                                                     tf.abs(generated_predicted_counts_tensor))
-        generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                               generated_predicted_density_tensor),
-                                                   generated_predicted_counts_tensor))
+        discriminator_generated_loss_tensor = generator_to_negative_average
+        discriminator_unlabeled_loss_tensor = unlabeled_to_average
+        generator_loss_tensor = generator_to_negative_average
         with tf.name_scope('Loss'):
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
             tf.summary.scalar('Generated Discriminator Loss', discriminator_generated_loss_tensor)
+            tf.summary.scalar('Unlabeled Discriminator Loss', discriminator_unlabeled_loss_tensor)
             tf.summary.scalar('Generator Loss', generator_loss_tensor)
             tf.summary.scalar('Percentage Discriminator Loss From Generated',
                               discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
                                                                      true_loss_tensor))
         optimizer = tf.train.RMSPropOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
-            tf.add(true_loss_tensor, discriminator_generated_loss_tensor),
+            tf.add_n([true_loss_tensor, discriminator_generated_loss_tensor, discriminator_unlabeled_loss_tensor]),
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         )
         discriminator_gradients = [tf.reshape(pair[0], [-1]) for pair in discriminator_compute_op
