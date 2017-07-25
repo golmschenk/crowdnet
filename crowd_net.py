@@ -399,7 +399,7 @@ class CrowdNet(Net):
                                                                      true_loss_tensor))
             tf.summary.scalar('Percentage Discriminator Loss From Unlabeled',
                               discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
-                                                                      +
+                                                                     discriminator_unlabeled_loss_tensor +
                                                                      true_loss_tensor))
         optimizer = tf.train.RMSPropOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
