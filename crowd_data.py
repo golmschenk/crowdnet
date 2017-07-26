@@ -167,7 +167,7 @@ class CrowdData(Data):
             train_file_path = os.path.join(self.settings.data_directory, train_file)
             _, train_labels = tfrecords_processor.read_to_numpy(train_file_path)
             total_image_count += train_labels.shape[0]
-            total_person_count += np.sum(train_labels)
+            total_person_count += np.sum(np.maximum(train_labels, 0))
         average_person_count = total_person_count / total_image_count
         return average_person_count
 
