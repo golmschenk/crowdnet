@@ -385,7 +385,7 @@ class CrowdNet(Net):
                                        self.lookup_dictionary['predictor_count_error_tensor'])
         discriminator_generated_loss_tensor = generator_to_negative_average
         discriminator_unlabeled_loss_tensor = unlabeled_to_average
-        generator_loss_tensor = generator_to_negative_average
+        generator_loss_tensor = generator_to_average
         with tf.name_scope('Loss'):
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
             tf.summary.scalar('Average Train Count', true_loss_tensor)
