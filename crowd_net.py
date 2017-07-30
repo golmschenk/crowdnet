@@ -68,6 +68,7 @@ class CrowdNet(Net):
             module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
             module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=128)
             module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=256)
+            module4_output = tf.contrib.layers.dropout(inputs=module4_output)
             module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=10, kernel_size=1)
             person_density_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=1, kernel_size=1,
                                                              activation_fn=None, normalizer_fn=None)
