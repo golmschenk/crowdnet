@@ -207,7 +207,7 @@ class CrowdNet(Net):
         # dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
         #                                                    keep_prob=dropout_keep_probability)
 
-        with tf.variable_scope('inference'):  #, dropout_arg_scope:
+        with tf.variable_scope('inference'):  # , dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
@@ -371,31 +371,42 @@ class CrowdNet(Net):
             generated_predicted_labels_tensor, generated_predicted_count_maps_tensor = self.create_generated_network()
             generated_predicted_counts_tensor = self.example_mean_pixel_sum(generated_predicted_count_maps_tensor)
             generated_predicted_density_tensor = self.example_mean_pixel_sum(generated_predicted_labels_tensor)
-            generated_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(generated_predicted_labels_tensor))
-            generator_to_average = tf.abs(tf.subtract(generated_predicted_counts_tensor, self.average_train_count))
-            generator_to_negative_average = tf.abs(tf.add(generated_predicted_counts_tensor, self.average_train_count))
+            generator_counts_to_negative_average = tf.abs(
+                tf.add(generated_predicted_counts_tensor, self.average_train_count))
+            generator_labels_to_negative_average = tf.abs(
+                tf.add(generated_predicted_density_tensor, self.average_train_count))
         with tf.name_scope('Unlabeled'):
             unlabeled_predicted_labels_tensor, unlabeled_predicted_count_maps_tensor = self.create_unlabeled_inference_network()
             unlabeled_predicted_counts_tensor = self.example_mean_pixel_sum(unlabeled_predicted_count_maps_tensor)
             unlabeled_predicted_density_tensor = self.example_mean_pixel_sum(unlabeled_predicted_labels_tensor)
-            unlabeled_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(unlabeled_predicted_labels_tensor))
-            unlabeled_to_average = tf.abs(tf.subtract(unlabeled_predicted_counts_tensor, self.average_train_count))
+            unlabeled_counts_to_average = tf.abs(
+                tf.subtract(unlabeled_predicted_counts_tensor, self.average_train_count))
+            unlabeled_labels_to_average = tf.abs(
+                tf.subtract(unlabeled_predicted_density_tensor, self.average_train_count))
 
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
         predictor_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                    self.lookup_dictionary['predictor_density_error_tensor']),
                                        self.lookup_dictionary['predictor_count_error_tensor'])
-        discriminator_generated_loss_tensor = generator_to_negative_average
-        discriminator_unlabeled_loss_tensor = unlabeled_to_average
-        generator_loss_tensor = generator_to_average
+        discriminator_generated_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                 generator_labels_to_negative_average),
+                                                     generator_counts_to_negative_average)
+        discriminator_unlabeled_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                 unlabeled_labels_to_average),
+                                                     unlabeled_counts_to_average)
+        generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                               generated_predicted_density_tensor),
+                                                   generated_predicted_counts_tensor))
         with tf.name_scope('Loss'):
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
             tf.summary.scalar('Average Train Count', self.average_train_count)
             tf.summary.scalar('Generated Discriminator Loss', discriminator_generated_loss_tensor)
-            tf.summary.scalar('Generated Predicted', generated_predicted_counts_tensor)
+            tf.summary.scalar('Generated Predicted Count', generated_predicted_counts_tensor)
+            tf.summary.scalar('Generated Predicted Density', generated_predicted_density_tensor)
             tf.summary.scalar('Unlabeled Discriminator Loss', discriminator_unlabeled_loss_tensor)
-            tf.summary.scalar('Unlabeled Predicted', unlabeled_predicted_counts_tensor)
+            tf.summary.scalar('Unlabeled Predicted Count', unlabeled_predicted_counts_tensor)
+            tf.summary.scalar('Unlabeled Predicted Density', unlabeled_predicted_density_tensor)
             tf.summary.scalar('Generator Loss', generator_loss_tensor)
             tf.summary.scalar('Percentage Discriminator Loss From Generated',
                               discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
