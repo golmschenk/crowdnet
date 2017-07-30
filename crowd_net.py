@@ -200,14 +200,14 @@ class CrowdNet(Net):
                 batch_size=self.settings.batch_size
             )
 
-        # if run_type == 'train':
-        #     dropout_keep_probability = 0.5
-        # else:
-        #     dropout_keep_probability = 1.0
-        # dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
-        #                                                    keep_prob=dropout_keep_probability)
+        if run_type == 'train':
+            dropout_keep_probability = 0.5
+        else:
+            dropout_keep_probability = 1.0
+        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+                                                           keep_prob=dropout_keep_probability)
 
-        with tf.variable_scope('inference'):  # , dropout_arg_scope:
+        with tf.variable_scope('inference'), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
