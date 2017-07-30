@@ -297,8 +297,9 @@ class CrowdNet(Net):
         with tf.variable_scope('generator'):
             images_tensor = self.unlabeled_generator()
             tf.summary.image('Generated Images', images_tensor)
-
-        with tf.variable_scope('inference', reuse=True):
+        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+                                                           keep_prob=0.5)
+        with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
         return predicted_labels_tensor, predicted_count_maps_tensor
@@ -309,7 +310,9 @@ class CrowdNet(Net):
                 data_type='unlabeled',
                 batch_size=self.settings.batch_size
             )
-        with tf.variable_scope('inference', reuse=True):
+        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+                                                           keep_prob=0.5)
+        with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
         return predicted_labels_tensor, predicted_count_maps_tensor
