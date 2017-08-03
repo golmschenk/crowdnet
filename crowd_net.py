@@ -371,6 +371,7 @@ class CrowdNet(Net):
             generated_predicted_labels_tensor, generated_predicted_count_maps_tensor = self.create_generated_network()
             generated_predicted_counts_tensor = self.example_mean_pixel_sum(generated_predicted_count_maps_tensor)
             generated_predicted_density_tensor = self.example_mean_pixel_sum(generated_predicted_labels_tensor)
+            generated_predicted_absolute_tensor = self.example_mean_pixel_sum(tf.abs(generated_predicted_labels_tensor))
             generator_counts_to_negative_average = tf.abs(
                 tf.add(generated_predicted_counts_tensor, self.average_train_count))
             generator_labels_to_negative_average = tf.abs(
@@ -389,12 +390,12 @@ class CrowdNet(Net):
         predictor_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                    self.lookup_dictionary['predictor_density_error_tensor']),
                                        self.lookup_dictionary['predictor_count_error_tensor'])
-        discriminator_generated_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                 generator_labels_to_negative_average),
-                                                     generator_counts_to_negative_average)
         discriminator_unlabeled_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                  unlabeled_labels_to_average),
                                                      unlabeled_counts_to_average)
+        discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                        generated_predicted_absolute_tensor)),
+                                                     tf.abs(generated_predicted_counts_tensor))
         generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                generated_predicted_density_tensor),
                                                    generated_predicted_counts_tensor))
