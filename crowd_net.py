@@ -315,6 +315,9 @@ class CrowdNet(Net):
         with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
 
+        masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
+        labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor = masked_tensors
+
         return predicted_labels_tensor, predicted_count_maps_tensor
 
     def train(self):
