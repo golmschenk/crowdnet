@@ -30,6 +30,7 @@ class CrowdNet(Net):
         self.alternate_loss_on = True
         self.edge_percentage = 0.0
         self.generator_train_step_period = 10
+        self.border_size = 5
 
         # Internal variables.
         self.lookup_dictionary = {}
@@ -266,7 +267,8 @@ class CrowdNet(Net):
                                             normalizer_fn=tf.contrib.layers.batch_norm,
                                             activation_fn=leaky_relu,
                                             kernel_size=3):
-            noise = tf.random_normal([self.settings.batch_size, self.settings.image_height, self.settings.image_width,
+            noise = tf.random_normal([self.settings.batch_size, self.settings.image_height + (self.border_size * 2),
+                                      self.settings.image_width + (self.border_size * 2),
                                       50])
             net = tf.contrib.layers.conv2d_transpose(noise, 256, normalizer_fn=None)
             net = tf.contrib.layers.conv2d_transpose(net, 128)
@@ -275,7 +277,7 @@ class CrowdNet(Net):
             net = tf.contrib.layers.conv2d_transpose(net, 3, activation_fn=tf.tanh, normalizer_fn=None)
             mean, variance = tf.nn.moments(net, axes=[1, 2, 3], keep_dims=True)
             images_tensor = (net - mean) / tf.sqrt(variance)
-        return images_tensor
+        return images_tensor[:, self.border_size:-self.border_size, self.border_size:-self.border_size, :]
 
     def strided_unlabeled_generator(self):
         assert self.settings.image_height is 72 and self.settings.image_width is 90
