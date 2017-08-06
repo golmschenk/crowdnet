@@ -199,6 +199,7 @@ class CrowdNet(Net):
                 data_type=run_type,
                 batch_size=self.settings.batch_size
             )
+            self.lookup_dictionary['labeled_images_tensor'] = images_tensor
 
         if run_type == 'train':
             dropout_keep_probability = 0.5
@@ -297,6 +298,7 @@ class CrowdNet(Net):
         with tf.variable_scope('generator'):
             images_tensor = self.unlabeled_generator()
             tf.summary.image('Generated Images', images_tensor)
+            self.lookup_dictionary['generated_images_tensor'] = images_tensor
         dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
                                                            keep_prob=0.5)
         with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
@@ -310,6 +312,7 @@ class CrowdNet(Net):
                 data_type='unlabeled',
                 batch_size=self.settings.batch_size
             )
+            self.lookup_dictionary['unlabeled_images_tensor'] = images_tensor
         dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
                                                            keep_prob=0.5)
         with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
@@ -420,9 +423,24 @@ class CrowdNet(Net):
                               discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
                                                                      discriminator_unlabeled_loss_tensor +
                                                                      true_loss_tensor))
+        input_penalty_epsilons = tf.random_uniform([3])
+        input_penalty_epsilons = tf.divide(input_penalty_epsilons, tf.reduce_sum(input_penalty_epsilons))
+        penalty_examples = tf.add_n([tf.multiply(self.lookup_dictionary['labeled_images_tensor'],
+                                                 input_penalty_epsilons[0]),
+                                     tf.multiply(self.lookup_dictionary['unlabeled_images_tensor'],
+                                                 input_penalty_epsilons[1]),
+                                     tf.multiply(self.lookup_dictionary['generated_images_tensor'],
+                                                 input_penalty_epsilons[2])])
+        dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
+                                                           keep_prob=0.5)
+        with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
+            penalty_tensor_list = self.create_experimental_inference_op(penalty_examples)
+        penalty_gradients = tf.gradients([*penalty_tensor_list], penalty_examples)
+        gradient_penalty = 10.0 * tf.square(tf.norm(penalty_gradients, ord=2) - 1.0)
         optimizer = tf.train.RMSPropOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
-            tf.add_n([true_loss_tensor, discriminator_generated_loss_tensor, discriminator_unlabeled_loss_tensor]),
+            tf.add_n([true_loss_tensor, discriminator_generated_loss_tensor, discriminator_unlabeled_loss_tensor,
+                      gradient_penalty]),
             var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
         )
         discriminator_gradients = [tf.reshape(pair[0], [-1]) for pair in discriminator_compute_op
@@ -444,12 +462,12 @@ class CrowdNet(Net):
             generator_compute_op + discriminator_compute_op + predictor_compute_op, global_step=self.global_step)
         discriminator_training_op = optimizer.apply_gradients(discriminator_compute_op + predictor_compute_op,
                                                               global_step=self.global_step)
-        discriminator_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
-        clip_ops = []
-        for variable in discriminator_variables:
-            if 'weights:' in variable.name:
-                clip_ops.append(tf.clip_by_value(variable, -self.clip_value, self.clip_value))
-        clip_weights_op = tf.group(*clip_ops)
+        #discriminator_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='inference')
+        #clip_ops = []
+        #for variable in discriminator_variables:
+        #    if 'weights:' in variable.name:
+        #        clip_ops.append(tf.clip_by_value(variable, -self.clip_value, self.clip_value))
+        #clip_weights_op = tf.group(*clip_ops)
         checkpoint_directory_basename = self.get_checkpoint_directory_basename()
         if self.settings.restore_mode == 'transfer':
             restorer = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
@@ -482,7 +500,7 @@ class CrowdNet(Net):
                     training_op = discriminator_training_op
                 start_step_time = time.time()
                 _, loss, step = session.run([training_op, true_loss_tensor, self.global_step])
-                session.run([clip_weights_op])
+                #session.run([clip_weights_op])
                 step_time = time.time() - start_step_time
                 print('Step: {} - Loss: {:.4f} - Step Time: {:.1f}'.format(step, loss, step_time))
                 # Run validation if there's a new checkpoint to validate.
