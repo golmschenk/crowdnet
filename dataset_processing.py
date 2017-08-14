@@ -2,28 +2,41 @@
 Code for manipulating the dataset.
 """
 import os
+import random
+
 import numpy as np
 from gonet.tfrecords_processor import TFRecordsProcessor
 import json
+import copy
 
-def minify_dataset(data_directory, dataset_json_filename):
+def minify_dataset(data_directory, dataset_json_filename, dataset_name, number_of_cameras=None, images_per_camera=1):
     with open(dataset_json_filename) as dataset_json_file:
         mini_dataset_images = []
         mini_dataset_labels = []
         dataset_json = json.load(dataset_json_file)
+        new_dataset_json = copy.deepcopy(dataset_json)
         filenames = dataset_json['train']
+        if number_of_cameras:
+            random.shuffle(filenames)
+            filenames = filenames[:number_of_cameras]
         tfrecords_processor = TFRecordsProcessor()
         for filename in filenames:
             images_numpy, labels_numpy = tfrecords_processor.read_to_numpy(os.path.join(data_directory, filename))
-            random_index = np.random.choice(labels_numpy.shape[0])
-            mini_dataset_images.append(images_numpy[random_index])
-            mini_dataset_labels.append(labels_numpy[random_index])
+            random_indexes = np.random.choice(labels_numpy.shape[0], images_per_camera, replace=False)
+            for index in random_indexes:
+                mini_dataset_images.append(images_numpy[index])
+                mini_dataset_labels.append(labels_numpy[index])
         mini_dataset_images_numpy = np.stack(mini_dataset_images)
         mini_dataset_labels_numpy = np.stack(mini_dataset_labels)
-        tfrecords_processor.write_from_numpy(os.path.join(data_directory, 'mini_dataset'),
+        new_train_tfrecords_file_name = dataset_name + '.tfrecords'
+        tfrecords_processor.write_from_numpy(os.path.join(data_directory, new_train_tfrecords_file_name),
                                              image_shape=mini_dataset_images_numpy.shape[1:],
                                              images=mini_dataset_images_numpy,
                                              label_shape=mini_dataset_labels_numpy.shape[1:],
                                              labels=mini_dataset_labels_numpy)
+        new_dataset_json['train'] = [new_train_tfrecords_file_name]
+        new_dataset_json['unlabeled'] = filenames
+        with open(os.path.join(data_directory, dataset_name, '.json'), 'w') as new_dataset_json_file:
+            json.dump(new_dataset_json, new_dataset_json_file)
 
-minify_dataset('../storage/data', 'world_expo_datasets.json')
+minify_dataset('../storage/data', 'world_expo_datasets.json', '1_camera', number_of_cameras=1)
