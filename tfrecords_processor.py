@@ -1,7 +1,7 @@
 """
 Code for dealing with reading and interacting with TFRecords outside of the main network.
 """
-
+import json
 import os
 import numpy as np
 import tensorflow as tf
@@ -243,6 +243,28 @@ class TFRecordsProcessor:
         self.write_from_numpy(quadrant_4_file_name, images_quadrant_4.shape[1:], images_quadrant_4,
                               labels_quadrant_4.shape[1:], labels_quadrant_4)
 
+    def convert_file_to_pytorch_dataset_format(self, file_name):
+        images, labels = self.read_to_numpy(file_name)
+        roi = labels[0] >= 0
+        new_labels = np.maximum(labels, 0)
+        np.save(os.path.splitext(file_name)[0] + '_images.npy', images)
+        np.save(os.path.splitext(file_name)[0] + '_labels.npy', new_labels)
+        np.save(os.path.splitext(file_name)[0] + '_roi.npy', roi)
+
+    def convert_dataset_to_pytorch_dataset_format(self, dataset_directory, dataset_json_file_name, new_dataset_json_file_name):
+        with open(dataset_json_file_name) as json_file:
+            json_dict = json.load(json_file)
+        new_json_dict = {}
+        for data_type, tfrecords_file_names in json_dict.items():
+            new_json_dict[data_type] = []
+            for tfrecords_file_name in tfrecords_file_names:
+                new_file_path_base = os.path.join(dataset_directory, tfrecords_file_name)
+                self.convert_file_to_pytorch_dataset_format(new_file_path_base)
+                new_json_dict[data_type].append(os.path.splitext(tfrecords_file_name)[0])
+        with open(os.path.join(dataset_directory, new_dataset_json_file_name), 'w') as new_json_file:
+            json.dump(new_json_dict, new_json_file)
+
+
 
 def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
@@ -254,3 +276,7 @@ def _int64_feature(value):
 
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+if __name__ == '__main__':
+    tfp = TFRecordsProcessor()
+    tfp.convert_dataset_to_pytorch_dataset_format('data', 'datasets.json', 'new_dataset.json')
