@@ -196,7 +196,7 @@ class CrowdNet(Net):
         :rtype: (tf.Tensor, tf.Tensor)
         """
         with tf.name_scope('inputs'):
-            images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(
+            images_tensor, labels_tensor, guesses_tensor = self.data.create_input_tensors_for_dataset(
                 data_type=run_type,
                 batch_size=self.settings.batch_size
             )
@@ -310,11 +310,12 @@ class CrowdNet(Net):
 
     def create_unlabeled_inference_network(self):
         with tf.name_scope('unlabeled_inputs'):
-            images_tensor, labels_tensor = self.data.create_input_tensors_for_dataset(
+            images_tensor, labels_tensor, guesses_tensor = self.data.create_input_tensors_for_dataset(
                 data_type='unlabeled',
                 batch_size=self.settings.batch_size
             )
             self.lookup_dictionary['unlabeled_images_tensor'] = images_tensor
+            self.lookup_dictionary['guesses'] = guesses_tensor
         dropout_arg_scope = tf.contrib.framework.arg_scope([tf.contrib.layers.dropout],
                                                            keep_prob=0.5)
         with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
@@ -386,12 +387,14 @@ class CrowdNet(Net):
                 tf.add(generated_predicted_density_tensor, self.average_train_count))
         with tf.name_scope('Unlabeled'):
             unlabeled_predicted_labels_tensor, unlabeled_predicted_count_maps_tensor = self.create_unlabeled_inference_network()
+            unlabeled_counts = tf.reduce_sum(unlabeled_predicted_count_maps_tensor, axis=[1, 2, 3])
+            unlabeled_density_sums = tf.reduce_sum(unlabeled_predicted_labels_tensor, axis=[1, 2, 3])
             unlabeled_predicted_counts_tensor = self.example_mean_pixel_sum(unlabeled_predicted_count_maps_tensor)
             unlabeled_predicted_density_tensor = self.example_mean_pixel_sum(unlabeled_predicted_labels_tensor)
-            unlabeled_counts_to_average = tf.abs(
-                tf.subtract(unlabeled_predicted_counts_tensor, self.average_train_count))
-            unlabeled_labels_to_average = tf.abs(
-                tf.subtract(unlabeled_predicted_density_tensor, self.average_train_count))
+            unlabeled_counts_to_guess = tf.reduce_mean(tf.abs(
+                tf.subtract(unlabeled_counts, self.lookup_dictionary['guesses'])))
+            unlabeled_labels_to_guess = tf.reduce_mean(tf.abs(
+                tf.subtract(unlabeled_density_sums, self.lookup_dictionary['guesses'])))
 
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
@@ -399,8 +402,8 @@ class CrowdNet(Net):
                                                    self.lookup_dictionary['predictor_density_error_tensor']),
                                        self.lookup_dictionary['predictor_count_error_tensor'])
         discriminator_unlabeled_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                 unlabeled_labels_to_average),
-                                                     unlabeled_counts_to_average)
+                                                                 unlabeled_labels_to_guess),
+                                                     unlabeled_counts_to_guess)
         discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                         generated_predicted_absolute_tensor)),
                                                      tf.abs(generated_predicted_counts_tensor))

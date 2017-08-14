@@ -8,7 +8,7 @@ import tensorflow as tf
 import os
 
 from gonet.data import Data
-from gonet.tfrecords_processor import TFRecordsProcessor
+from tfrecords_processor import TFRecordsProcessor
 
 from settings import Settings
 
@@ -180,26 +180,45 @@ class CrowdData(Data):
         :param batch_size: The size of the batches
         :type batch_size: int
         :return: The images and depths inputs.
-        :rtype: (tf.Tensor, tf.Tensor)
+        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
         """
         file_name_queue = self.attain_file_name_queue(data_type)
-        image, label = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
+        image, label, label_guess = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
         image, label = self.preaugmentation_preprocess(image, label)
         if data_type or ['train', 'unlabeled']:
             image, label = self.augment(image, label)
         image, label = self.postaugmentation_preprocess(image, label)
 
         if data_type in ['test', 'deploy']:
-            images, labels = tf.train.batch(
-                [image, label], batch_size=batch_size, num_threads=1, capacity=500 + 3 * batch_size
+            images, labels, label_guesses = tf.train.batch(
+                [image, label, label_guess], batch_size=batch_size, num_threads=1, capacity=500 + 3 * batch_size
             )
         else:
-            images, labels = tf.train.shuffle_batch(
-                [image, label], batch_size=batch_size, num_threads=4,
+            images, labels, label_guesses = tf.train.shuffle_batch(
+                [image, label, label_guess], batch_size=batch_size, num_threads=4,
                 capacity=500 + 3 * batch_size, min_after_dequeue=500
             )
 
-        return images, labels
+        return images, labels, label_guesses
+
+    @staticmethod
+    def read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=None):
+        """
+        A definition of how TF should read a single example proto from the file record.
+
+        :param file_name_queue: The file name queue to be read.
+        :type file_name_queue: tf.QueueBase
+        :param data_type: The dataset type being used in.
+        :type data_type: str
+        :return: The read file data including the image data and label data.
+        :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
+        """
+        go_tfrecords_reader = TFRecordsProcessor()
+        image, label, label_guess = go_tfrecords_reader.create_image_and_label_inputs_from_file_name_queue(file_name_queue,
+                                                                                                           data_type=data_type)
+        image = tf.cast(image, tf.float32)
+
+        return image, label, label_guess
 
 if __name__ == '__main__':
     data = CrowdData()

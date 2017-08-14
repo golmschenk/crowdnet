@@ -11,9 +11,9 @@ class Settings(GoSettings):
     def __init__(self):
         super().__init__()
 
-        self.network_name = 'crowd_net'
+        self.network_name = '1 Camera GAN'
         self.inference_op_name = 'experimental'
-        self.datasets_json = 'datasets.json'
+        self.datasets_json = '../storage/data/1_camera.json'
 
         self.batch_size = 20
         self.initial_learning_rate = 0.001
