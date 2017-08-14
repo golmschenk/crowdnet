@@ -425,7 +425,7 @@ class CrowdNet(Net):
                                                                      discriminator_unlabeled_loss_tensor +
                                                                      true_loss_tensor))
             tf.summary.scalar('Percentage Discriminator Loss From Unlabeled',
-                              discriminator_generated_loss_tensor / (discriminator_generated_loss_tensor +
+                              discriminator_unlabeled_loss_tensor / (discriminator_generated_loss_tensor +
                                                                      discriminator_unlabeled_loss_tensor +
                                                                      true_loss_tensor))
         input_penalty_epsilons = tf.random_uniform([3])
@@ -442,7 +442,7 @@ class CrowdNet(Net):
             penalty_tensor_list = self.create_experimental_inference_op(penalty_examples)
         penalty_gradients = tf.gradients([*penalty_tensor_list], penalty_examples)
         gradient_penalty = 10.0 * tf.square(tf.norm(penalty_gradients, ord=2) - 1.0)
-        optimizer = tf.train.RMSPropOptimizer(self.learning_rate_tensor)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate_tensor)
         discriminator_compute_op = optimizer.compute_gradients(
             tf.add_n([true_loss_tensor, discriminator_generated_loss_tensor, discriminator_unlabeled_loss_tensor,
                       gradient_penalty]),
