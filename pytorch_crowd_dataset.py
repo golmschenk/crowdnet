@@ -7,6 +7,7 @@ from collections import namedtuple
 import os
 
 import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -42,6 +43,8 @@ class CrowdDataset(Dataset):
             start_index = total_count
             self.entries.append(CrowdDatasetEntry(file_name, example_count, start_index))
             total_count += example_count
+        self.total_example_count = total_count
+        self.transform = transform
 
     def __getitem__(self, index):
         """
@@ -59,12 +62,21 @@ class CrowdDataset(Dataset):
             assert example is not None
         except AssertionError:
             raise IndexError('Index {} out of range for dataset {}.'.format(index, self))
+        if self.transform:
+            example = self.transform(example)
         return example
+
+    def __len__(self):
+        return self.total_example_count
 
 
 class CrowdExample:
     """
     A class to represent a single example of the dataset.
+
+    :type image: np.ndarray | torch.Tensor
+    :type label: np.ndarray | torch.Tensor
+    :type roi: np.ndarray | torch.Tensor
     """
     def __init__(self, root_directory, file_name, index):
         """

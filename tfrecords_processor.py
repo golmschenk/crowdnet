@@ -279,4 +279,4 @@ def _bytes_feature(value):
 
 if __name__ == '__main__':
     tfp = TFRecordsProcessor()
-    tfp.convert_dataset_to_pytorch_dataset_format('data', 'datasets.json', 'new_dataset.json')
+    tfp.convert_dataset_to_pytorch_dataset_format('../storage/data', 'world_expo_datasets.json', 'world_expo_dataset.json')
