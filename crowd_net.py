@@ -22,6 +22,7 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
+        self.feature_matching_parameter = 1.0
         self.density_to_count_loss_ratio = 1.0
         self.data = CrowdData()
 
@@ -42,6 +43,8 @@ class CrowdNet(Net):
         self.predicted_test_labels_person_count = None
         self.predicted_test_labels_relative_miscount = None
         self.true_labels = None
+        self.current_data = None
+        self.middle_layer_outputs = {}
 
         self.global_step = tf.contrib.framework.get_or_create_global_step()
         self.learning_rate_tensor = tf.train.exponential_decay(self.settings.initial_learning_rate,
@@ -51,8 +54,7 @@ class CrowdNet(Net):
 
         self.average_train_count = self.data.get_average_person_count()
 
-    @staticmethod
-    def create_experimental_inference_op(images):
+    def create_experimental_inference_op(self, images):
         """
         Performs a forward pass estimating label maps from RGB images using a patchwise graph setup.
 
@@ -70,6 +72,8 @@ class CrowdNet(Net):
             module2_output = tf.contrib.layers.conv2d(inputs=module1_output, num_outputs=64)
             module3_output = tf.contrib.layers.conv2d(inputs=module2_output, num_outputs=128)
             module4_output = tf.contrib.layers.conv2d(inputs=module3_output, num_outputs=256)
+            if self.current_data:
+                self.middle_layer_outputs[self.current_data] = module4_output
             module5_output = tf.contrib.layers.conv2d(inputs=module4_output, num_outputs=10, kernel_size=1)
             person_density_output = tf.contrib.layers.conv2d(inputs=module5_output, num_outputs=1, kernel_size=1,
                                                              activation_fn=None, normalizer_fn=None)
@@ -226,6 +230,8 @@ class CrowdNet(Net):
             predictor_predicted_labels_tensor = tf.multiply(predicted_labels_tensor, labels_multiplier)
             counts_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=predicted_labels_tensor.dtype, shape=[]))
             predictor_predicted_counts_tensor = tf.multiply(predicted_counts_tensor, counts_multiplier)
+            self.lookup_dictionary['labels_multiplier'] = labels_multiplier
+            self.lookup_dictionary['counts_multiplier'] = counts_multiplier
         with tf.name_scope('Predictor'):
             predictor_density_error_tensor, predictor_count_error_tensor = self.create_error_tensors(
                 labels_tensor,
@@ -377,6 +383,7 @@ class CrowdNet(Net):
         with tf.name_scope('True'):
             true_density_error_tensor, true_count_error_tensor = self.create_network(run_type='train')
         with tf.name_scope('Generated'):
+            self.current_data = 'Unlabeled'
             generated_predicted_labels_tensor, generated_predicted_count_maps_tensor = self.create_generated_network()
             generated_predicted_counts_tensor = self.example_mean_pixel_sum(generated_predicted_count_maps_tensor)
             generated_predicted_density_tensor = self.example_mean_pixel_sum(generated_predicted_labels_tensor)
@@ -386,6 +393,7 @@ class CrowdNet(Net):
             generator_labels_to_negative_average = tf.abs(
                 tf.add(generated_predicted_density_tensor, self.average_train_count))
         with tf.name_scope('Unlabeled'):
+            self.current_data = 'Generated'
             unlabeled_predicted_labels_tensor, unlabeled_predicted_count_maps_tensor = self.create_unlabeled_inference_network()
             unlabeled_counts = tf.reduce_sum(unlabeled_predicted_count_maps_tensor, axis=[1, 2, 3])
             unlabeled_density_sums = tf.reduce_sum(unlabeled_predicted_labels_tensor, axis=[1, 2, 3])
@@ -407,11 +415,22 @@ class CrowdNet(Net):
         discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                         generated_predicted_absolute_tensor)),
                                                      tf.abs(generated_predicted_counts_tensor))
-        generator_loss_tensor = tf.negative(tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                               generated_predicted_density_tensor),
-                                                   generated_predicted_counts_tensor))
+        feature_matching_loss = tf.reduce_mean(tf.abs(tf.reduce_mean(self.middle_layer_outputs['Generated'], axis=0) -
+                                                      tf.reduce_mean(self.middle_layer_outputs['Unlabeled'], axis=0)))
+        generator_loss_tensor = tf.negative(tf.add_n([tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                  generated_predicted_density_tensor),
+                                                      generated_predicted_counts_tensor,
+                                                      tf.multiply(tf.constant(self.feature_matching_parameter *
+                                                                              self.settings.image_height *
+                                                                              self.settings.image_width),
+                                                                  feature_matching_loss)
+                                                      ]))
         with tf.name_scope('Loss'):
+            tf.summary.scalar('Labels Multiplier', self.lookup_dictionary['labels_multiplier'])
+            tf.summary.scalar('Counts Multiplier', self.lookup_dictionary['counts_multiplier'])
+            tf.summary.scalar('Feature Matching Loss Ratio', feature_matching_loss / generator_loss_tensor)
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
+            tf.summary.scalar('Average Train Count', self.average_train_count)
             tf.summary.scalar('Average Train Count', self.average_train_count)
             tf.summary.scalar('Generated Discriminator Loss', discriminator_generated_loss_tensor)
             tf.summary.scalar('Generated Predicted Count', generated_predicted_counts_tensor)
