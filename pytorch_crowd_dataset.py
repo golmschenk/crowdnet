@@ -7,11 +7,11 @@ from collections import namedtuple
 import os
 
 import numpy as np
-import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 
 CrowdDatasetEntry = namedtuple('CrowdDatasetEntry', ['file_name', 'example_count', 'start_index'])
+CrowdExample = namedtuple('CrowdExample', ['image', 'label', 'roi'])
 
 
 class CrowdDataset(Dataset):
@@ -56,7 +56,7 @@ class CrowdDataset(Dataset):
         example = None
         for entry in self.entries:
             if index < entry.start_index + entry.example_count:
-                example = CrowdExample(self.root_directory, entry.file_name, index - entry.start_index)
+                example = self.load_example(entry.file_name, index - entry.start_index)
                 break
         try:
             assert example is not None
@@ -69,24 +69,16 @@ class CrowdDataset(Dataset):
     def __len__(self):
         return self.total_example_count
 
-
-class CrowdExample:
-    """
-    A class to represent a single example of the dataset.
-
-    :type image: np.ndarray | torch.Tensor
-    :type label: np.ndarray | torch.Tensor
-    :type roi: np.ndarray | torch.Tensor
-    """
-    def __init__(self, root_directory, file_name, index):
+    def load_example(self, file_name, index):
         """
-        :param root_directory: The path to the root directory of the dataset.
-        :type root_directory: str
+        Loads an example from it's respective files.
+
         :param file_name: The base file name for the data.
         :type file_name: str
         :param index: The index of the example within the base file.
         :type index: int
         """
-        self.image = np.load(os.path.join(root_directory, file_name + '_images.npy'), mmap_mode='r')[index]
-        self.label = np.load(os.path.join(root_directory, file_name + '_labels.npy'), mmap_mode='r')[index]
-        self.roi = np.load(os.path.join(root_directory, file_name + '_roi.npy'), mmap_mode='r')
+        image = np.load(os.path.join(self.root_directory, file_name + '_images.npy'), mmap_mode='r')[index]
+        label = np.load(os.path.join(self.root_directory, file_name + '_labels.npy'), mmap_mode='r')[index]
+        roi = np.load(os.path.join(self.root_directory, file_name + '_roi.npy'), mmap_mode='r')
+        return CrowdExample(image=image, label=label, roi=roi)

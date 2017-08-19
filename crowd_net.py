@@ -22,7 +22,7 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
-        self.feature_matching_parameter = 1.0
+        self.feature_matching_parameter = 100.0
         self.density_to_count_loss_ratio = 1.0
         self.data = CrowdData()
 
@@ -417,18 +417,18 @@ class CrowdNet(Net):
                                                      tf.abs(generated_predicted_counts_tensor))
         feature_matching_loss = tf.reduce_mean(tf.abs(tf.reduce_mean(self.middle_layer_outputs['Generated'], axis=0) -
                                                       tf.reduce_mean(self.middle_layer_outputs['Unlabeled'], axis=0)))
+        scaled_feature_matching_loss = tf.multiply(
+            tf.constant(-self.feature_matching_parameter * self.settings.image_height * self.settings.image_width, dtype=tf.float32),
+            feature_matching_loss)
         generator_loss_tensor = tf.negative(tf.add_n([tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                   generated_predicted_density_tensor),
                                                       generated_predicted_counts_tensor,
-                                                      tf.multiply(tf.constant(self.feature_matching_parameter *
-                                                                              self.settings.image_height *
-                                                                              self.settings.image_width),
-                                                                  feature_matching_loss)
+                                                      scaled_feature_matching_loss
                                                       ]))
         with tf.name_scope('Loss'):
             tf.summary.scalar('Labels Multiplier', self.lookup_dictionary['labels_multiplier'])
             tf.summary.scalar('Counts Multiplier', self.lookup_dictionary['counts_multiplier'])
-            tf.summary.scalar('Feature Matching Loss Ratio', feature_matching_loss / generator_loss_tensor)
+            tf.summary.scalar('Feature Matching Loss Ratio', scaled_feature_matching_loss / generator_loss_tensor)
             tf.summary.scalar('True Discriminator Loss', true_loss_tensor)
             tf.summary.scalar('Average Train Count', self.average_train_count)
             tf.summary.scalar('Average Train Count', self.average_train_count)
