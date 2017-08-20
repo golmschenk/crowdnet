@@ -62,5 +62,5 @@ class NormalizeImage:
     Normalizes a uint8 image to range -1 to 1.
     """
     def __call__(self, example):
-        image = (example.image.astype(np.float32) / (255 / 2) - 1)
+        image = (example.image.astype(np.float32) / (255 / 2)) - 1
         return CrowdExample(image=image, label=example.label, roi=example.roi)

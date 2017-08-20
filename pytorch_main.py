@@ -13,6 +13,7 @@ import torchvision
 from tensorboard import SummaryWriter
 
 import transforms
+import viewer
 from pytorch_crowd_dataset import CrowdDataset
 
 run_name = 'Basic CNN'
@@ -30,7 +31,11 @@ train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, 
 validation_dataset = CrowdDataset('data', 'new_dataset.json', 'validation', transform=validation_transform)
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=4, shuffle=True, num_workers=2)
 
-class CNN(Module):
+
+class DensityCNN(Module):
+    """
+    Basic CNN that produces only a density map.
+    """
     def __init__(self):
         super().__init__()
         self.conv1 = Conv2d(3, 32, kernel_size=3, padding=1)
@@ -58,7 +63,7 @@ class CNN(Module):
         x = leaky_relu(self.conv6(x))
         return x
 
-net = CNN()
+net = DensityCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
@@ -80,6 +85,7 @@ for epoch in range(10):
 
         running_loss += loss.data[0]
         if step % 100 == 0 and step != 0:
+            summary_writer.add_image('Comparison', viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels))
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, running_loss / 100))
             summary_writer.add_scalar('Loss', running_loss / 100, global_step=step)
             running_loss = 0.0
