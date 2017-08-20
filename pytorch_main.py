@@ -68,7 +68,6 @@ criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
 step = 0
-start_time = datetime.datetime.now()
 log_path_name = os.path.join('logs', run_name + ' ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
 summary_writer = SummaryWriter(log_path_name)
 print('Starting training...')
@@ -84,8 +83,8 @@ for epoch in range(10):
         optimizer.zero_grad()
 
         running_loss += loss.data[0]
-        if step % 100 == 0 and step != 0:
-            summary_writer.add_image('Comparison', viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels))
+        if step % 10 == 0 and step != 0:
+            summary_writer.add_image('Comparison', viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels), global_step=step)
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, running_loss / 100))
             summary_writer.add_scalar('Loss', running_loss / 100, global_step=step)
             running_loss = 0.0
