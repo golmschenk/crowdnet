@@ -2,6 +2,8 @@
 Code for assisting in viewing the results.
 """
 
+import matplotlib
+matplotlib.use('AGG')
 import matplotlib.cm
 import numpy as np
 import torch

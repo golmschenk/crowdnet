@@ -11,7 +11,7 @@ import random
 from pytorch_crowd_dataset import CrowdExample
 
 
-class NumpyArrayToTorchTensor:
+class NumpyArraysToTorchTensors:
     """
     Converts from NumPy arrays of an example to Torch tensors.
     """
@@ -20,7 +20,7 @@ class NumpyArrayToTorchTensor:
         image = image.transpose((2, 0, 1))
         image = torch.from_numpy(image)
         label = torch.from_numpy(label)
-        roi = torch.from_numpy(roi.astype(np.uint8))
+        roi = torch.from_numpy(roi.astype(np.float32))
         return CrowdExample(image=image, label=label, roi=roi)
 
 
@@ -57,7 +57,7 @@ class RandomHorizontalFlip:
             return example
 
 
-class NormalizeImage:
+class NegativeOneToOneNormalizeImage:
     """
     Normalizes a uint8 image to range -1 to 1.
     """

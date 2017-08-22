@@ -16,15 +16,15 @@ import transforms
 import viewer
 from pytorch_crowd_dataset import CrowdDataset
 
-run_name = 'Basic CNN'
+run_name = 'Density CNN'
 
 train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
                                                   transforms.RandomHorizontalFlip(),
-                                                  transforms.NormalizeImage(),
-                                                  transforms.NumpyArrayToTorchTensor()])
+                                                  transforms.NegativeOneToOneNormalizeImage(),
+                                                  transforms.NumpyArraysToTorchTensors()])
 validation_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
-                                                       transforms.NormalizeImage(),
-                                                       transforms.NumpyArrayToTorchTensor()])
+                                                       transforms.NegativeOneToOneNormalizeImage(),
+                                                       transforms.NumpyArraysToTorchTensors()])
 
 train_dataset = CrowdDataset('data', 'new_dataset.json', 'train', transform=train_transform)
 train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
@@ -55,6 +55,14 @@ class DensityCNN(Module):
         return super().__call__(*args, **kwargs)
 
     def forward(self, x):
+        """
+        The forward pass of the network.
+
+        :param x: The input images.
+        :type x: torch.autograd.Variable
+        :return: The predicted density labels.
+        :rtype: torch.autograd.Variable
+        """
         x = leaky_relu(self.conv1(x))
         x = leaky_relu(self.conv2(x))
         x = leaky_relu(self.conv3(x))
@@ -71,20 +79,22 @@ step = 0
 log_path_name = os.path.join('logs', run_name + ' ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
 summary_writer = SummaryWriter(log_path_name)
 print('Starting training...')
-for epoch in range(10):
+for epoch in range(100):
     running_loss = 0.0
     for examples in train_dataset_loader:
-        images, labels, _ = examples
-        images, labels = Variable(images), Variable(labels)
+        images, labels, roi = examples
+        images, labels, roi = Variable(images), Variable(labels), Variable(roi)
         predicted_labels = net(images).squeeze(dim=1)
+        predicted_labels = predicted_labels * roi
         loss = criterion(predicted_labels, labels)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
         running_loss += loss.data[0]
-        if step % 10 == 0 and step != 0:
-            summary_writer.add_image('Comparison', viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels), global_step=step)
+        if step % 100 == 0 and step != 0:
+            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
+            summary_writer.add_image('Comparison', comparison_image, global_step=step)
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, running_loss / 100))
             summary_writer.add_scalar('Loss', running_loss / 100, global_step=step)
             running_loss = 0.0
