@@ -75,12 +75,16 @@ net = DensityCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
+summary_step_period = 100
+
 step = 0
-log_path_name = os.path.join('logs', run_name + ' ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
-summary_writer = SummaryWriter(log_path_name)
+running_loss = 0
+running_example_count = 0
+log_path_name = os.path.join('logs', run_name + ' {} ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
+summary_writer = SummaryWriter(log_path_name.format('train'))
+validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')
-for epoch in range(100):
-    running_loss = 0.0
+for epoch in range(summary_step_period):
     for examples in train_dataset_loader:
         images, labels, roi = examples
         images, labels, roi = Variable(images), Variable(labels), Variable(roi)
@@ -90,14 +94,28 @@ for epoch in range(100):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-
         running_loss += loss.data[0]
-        if step % 100 == 0 and step != 0:
+        running_example_count += images.size()[0]
+        if step % summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, running_loss / 100))
-            summary_writer.add_scalar('Loss', running_loss / 100, global_step=step)
-            running_loss = 0.0
+            mean_loss = running_loss / running_example_count
+            print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
+            summary_writer.add_scalar('Loss', mean_loss, global_step=step)
+            running_loss = 0
+            running_example_count = 0
+            validation_running_loss = 0
+            for validation_examples in train_dataset_loader:
+                images, labels, roi = validation_examples
+                images, labels, roi = Variable(images), Variable(labels), Variable(roi)
+                predicted_labels = net(images).squeeze(dim=1)
+                predicted_labels = predicted_labels * roi
+                validation_loss = criterion(predicted_labels, labels)
+                validation_running_loss += validation_loss.data[0]
+            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
+            validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
+            validation_mean_loss = validation_running_loss / len(validation_dataset)
+            validation_summary_writer.add_scalar('Loss', validation_mean_loss, global_step=step)
         step += 1
 
 print('Finished Training')
