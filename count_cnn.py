@@ -2,7 +2,6 @@
 Main code for a training session.
 """
 import os
-
 import datetime
 from torch.autograd import Variable
 from torch.nn import Module, Conv2d, L1Loss
@@ -16,7 +15,7 @@ import transforms
 import viewer
 from pytorch_crowd_dataset import CrowdDataset
 
-run_name = 'Density CNN'
+run_name = 'Count CNN'
 
 train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
                                                   transforms.RandomHorizontalFlip(),
@@ -32,7 +31,7 @@ validation_dataset = CrowdDataset('data', 'new_dataset.json', 'validation', tran
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=4, shuffle=True, num_workers=2)
 
 
-class DensityCNN(Module):
+class CountCNN(Module):
     """
     Basic CNN that produces only a density map.
     """
@@ -71,7 +70,7 @@ class DensityCNN(Module):
         x = leaky_relu(self.conv6(x))
         return x
 
-net = DensityCNN()
+net = CountCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
@@ -90,7 +89,7 @@ for epoch in range(summary_step_period):
         images, labels, roi = Variable(images), Variable(labels), Variable(roi)
         predicted_labels = net(images).squeeze(dim=1)
         predicted_labels = predicted_labels * roi
-        loss = criterion(predicted_labels, labels)
+        loss = criterion(predicted_labels.sum(), labels.sum())
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
