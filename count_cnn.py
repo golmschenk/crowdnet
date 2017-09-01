@@ -89,7 +89,7 @@ for epoch in range(summary_step_period):
         images, labels, roi = Variable(images), Variable(labels), Variable(roi)
         predicted_labels = net(images).squeeze(dim=1)
         predicted_labels = predicted_labels * roi
-        loss = criterion(predicted_labels.sum(), labels.sum())
+        loss = criterion(predicted_labels.sum(1).sum(1), labels.sum(1).sum(1))
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -109,12 +109,12 @@ for epoch in range(summary_step_period):
                 images, labels, roi = Variable(images), Variable(labels), Variable(roi)
                 predicted_labels = net(images).squeeze(dim=1)
                 predicted_labels = predicted_labels * roi
-                validation_loss = criterion(predicted_labels, labels)
+                validation_loss = criterion(predicted_labels.sum(1).sum(1), labels.sum(1).sum(1))
                 validation_running_loss += validation_loss.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
             validation_mean_loss = validation_running_loss / len(validation_dataset)
-            validation_summary_writer.add_scalar('Loss', validation_mean_loss, global_step=step)
+            validation_summary_writer.add_scalar('Count Loss', validation_mean_loss, global_step=step)
         step += 1
 
 print('Finished Training')

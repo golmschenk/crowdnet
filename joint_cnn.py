@@ -15,7 +15,7 @@ import transforms
 import viewer
 from pytorch_crowd_dataset import CrowdDataset
 
-run_name = 'Density CNN'
+run_name = 'Joint CNN'
 
 train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
                                                   transforms.RandomHorizontalFlip(),
@@ -31,7 +31,7 @@ validation_dataset = CrowdDataset('data', 'new_dataset.json', 'validation', tran
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=4, shuffle=True, num_workers=2)
 
 
-class DensityCNN(Module):
+class JointCNN(Module):
     """
     Basic CNN that produces only a density map.
     """
@@ -42,7 +42,8 @@ class DensityCNN(Module):
         self.conv3 = Conv2d(self.conv2.out_channels, 128, kernel_size=3, padding=1)
         self.conv4 = Conv2d(self.conv3.out_channels, 256, kernel_size=3, padding=1)
         self.conv5 = Conv2d(self.conv4.out_channels, 10, kernel_size=3, padding=1)
-        self.conv6 = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
+        self.count_conv = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
+        self.density_conv = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
 
     def __call__(self, *args, **kwargs):
         """
@@ -67,10 +68,11 @@ class DensityCNN(Module):
         x = leaky_relu(self.conv3(x))
         x = leaky_relu(self.conv4(x))
         x = leaky_relu(self.conv5(x))
-        x = leaky_relu(self.conv6(x))
-        return x
+        x_count = leaky_relu(self.count_conv(x))
+        x_density = leaky_relu(self.density_conv(x))
+        return x_density, x_count
 
-net = DensityCNN()
+net = JointCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
@@ -87,34 +89,44 @@ for epoch in range(summary_step_period):
     for examples in train_dataset_loader:
         images, labels, roi = examples
         images, labels, roi = Variable(images), Variable(labels), Variable(roi)
-        predicted_labels = net(images).squeeze(dim=1)
-        predicted_labels = predicted_labels * roi
-        loss = criterion(predicted_labels, labels)
+        predicted_density_maps, predicted_count_maps = net(images)
+        predicted_density_maps, predicted_count_maps = predicted_density_maps.squeeze(dim=1), predicted_count_maps.squeeze(dim=1)
+        predicted_density_maps = predicted_density_maps * roi
+        predicted_count_maps = predicted_count_maps * roi
+        density_loss = criterion(predicted_density_maps, labels)
+        count_loss = criterion(predicted_count_maps.sum(1).sum(1), labels.sum(1).sum(1))
+        loss = density_loss + count_loss
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         running_loss += loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
-            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
+            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_density_maps)
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             mean_loss = running_loss / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
             summary_writer.add_scalar('Loss', mean_loss, global_step=step)
             running_loss = 0
             running_example_count = 0
-            validation_running_loss = 0
+            validation_density_running_loss = 0
+            validation_count_running_loss = 0
             for validation_examples in train_dataset_loader:
                 images, labels, roi = validation_examples
                 images, labels, roi = Variable(images), Variable(labels), Variable(roi)
-                predicted_labels = net(images).squeeze(dim=1)
-                predicted_labels = predicted_labels * roi
-                validation_loss = criterion(predicted_labels, labels)
-                validation_running_loss += validation_loss.data[0]
-            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_labels)
+                predicted_density_maps, predicted_count_maps = net(images).squeeze(dim=1)
+                predicted_density_maps = predicted_density_maps * roi
+                predicted_count_maps = predicted_count_maps * roi
+                density_loss = criterion(predicted_density_maps, labels)
+                count_loss = criterion(predicted_count_maps.sum(1).sum(1), labels.sum(1).sum(1))
+                validation_density_running_loss += density_loss.data[0]
+                validation_count_running_loss += count_loss.data[0]
+            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_density_maps)
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            validation_mean_loss = validation_running_loss / len(validation_dataset)
-            validation_summary_writer.add_scalar('Density Loss', validation_mean_loss, global_step=step)
+            validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
+            validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)
+            validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
+            validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
 
 print('Finished Training')

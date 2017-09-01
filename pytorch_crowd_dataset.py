@@ -38,7 +38,7 @@ class CrowdDataset(Dataset):
             json_dict = json.load(dataset_json_file)
         total_count = 0
         for file_name in json_dict[data_type]:
-            example_array = np.load(os.path.join(root_directory, file_name + '_images.npy'))
+            example_array = np.load(os.path.join(root_directory, file_name + '_images.npy'), mmap_mode='r')
             example_count = example_array.shape[0]
             start_index = total_count
             self.entries.append(CrowdDatasetEntry(file_name, example_count, start_index))
