@@ -22,7 +22,7 @@ class CrowdNet(Net):
     def __init__(self, *args, **kwargs):
         super().__init__(settings=Settings(), *args, **kwargs)
 
-        self.feature_matching_parameter = 100.0
+        self.feature_matching_parameter = 10000.0
         self.density_to_count_loss_ratio = 1.0
         self.data = CrowdData()
 
@@ -215,6 +215,8 @@ class CrowdNet(Net):
 
         with tf.variable_scope('inference'), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+            self.lookup_dictionary['true_predicted_labels'] = predicted_labels_tensor
+            self.lookup_dictionary['true_predicted_count_maps'] = predicted_count_maps_tensor
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
             labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor = masked_tensors
@@ -326,6 +328,8 @@ class CrowdNet(Net):
                                                            keep_prob=0.5)
         with tf.variable_scope('inference', reuse=True), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
+            self.lookup_dictionary['unlabeled_predicted_labels'] = predicted_labels_tensor
+            self.lookup_dictionary['unlabeled_predicted_count_maps'] = predicted_count_maps_tensor
 
         masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
         labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor = masked_tensors
@@ -381,6 +385,7 @@ class CrowdNet(Net):
     def train_unlabeled_gan(self):
         print('Building train graph...')
         with tf.name_scope('True'):
+            self.current_data = 'True'
             true_density_error_tensor, true_count_error_tensor = self.create_network(run_type='train')
         with tf.name_scope('Generated'):
             self.current_data = 'Unlabeled'
@@ -399,10 +404,18 @@ class CrowdNet(Net):
             unlabeled_density_sums = tf.reduce_sum(unlabeled_predicted_labels_tensor, axis=[1, 2, 3])
             unlabeled_predicted_counts_tensor = self.example_mean_pixel_sum(unlabeled_predicted_count_maps_tensor)
             unlabeled_predicted_density_tensor = self.example_mean_pixel_sum(unlabeled_predicted_labels_tensor)
-            unlabeled_counts_to_guess = tf.reduce_mean(tf.abs(
-                tf.subtract(unlabeled_counts, self.lookup_dictionary['guesses'])))
-            unlabeled_labels_to_guess = tf.reduce_mean(tf.abs(
-                tf.subtract(unlabeled_density_sums, self.lookup_dictionary['guesses'])))
+
+            count_below_loss = tf.maximum(tf.subtract(tf.divide(self.lookup_dictionary['guesses'], 2), unlabeled_counts), 0)
+            count_above_loss = tf.maximum(tf.subtract(unlabeled_counts, tf.multiply(self.lookup_dictionary['guesses'], 2)), 0)
+            label_below_loss = tf.maximum(tf.subtract(tf.divide(self.lookup_dictionary['guesses'], 2), unlabeled_density_sums), 0)
+            label_above_loss = tf.maximum(tf.subtract(unlabeled_density_sums, tf.multiply(self.lookup_dictionary['guesses'], 2)), 0)
+            unlabeled_count_loss = tf.reduce_sum(tf.add(count_above_loss, count_below_loss))
+            unlabeled_label_loss = tf.reduce_sum(tf.add(label_above_loss, label_below_loss))
+
+            unlabeled_counts_to_guesses = tf.abs(tf.subtract(unlabeled_counts, self.lookup_dictionary['guesses']))
+            unlabeled_counts_to_guess_mean = tf.reduce_mean(unlabeled_counts_to_guesses)
+            unlabeled_labels_to_guesses = tf.abs(tf.subtract(unlabeled_density_sums, self.lookup_dictionary['guesses']))
+            unlabeled_labels_to_guess_mean = tf.reduce_mean(unlabeled_labels_to_guesses)
 
         true_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio), true_density_error_tensor),
                                   true_count_error_tensor)
@@ -410,21 +423,39 @@ class CrowdNet(Net):
                                                    self.lookup_dictionary['predictor_density_error_tensor']),
                                        self.lookup_dictionary['predictor_count_error_tensor'])
         discriminator_unlabeled_loss_tensor = tf.add(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                 unlabeled_labels_to_guess),
-                                                     unlabeled_counts_to_guess)
+                                                                 unlabeled_label_loss),
+                                                     unlabeled_count_loss)
         discriminator_generated_loss_tensor = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
                                                                         generated_predicted_absolute_tensor)),
                                                      tf.abs(generated_predicted_counts_tensor))
         feature_matching_loss = tf.reduce_mean(tf.abs(tf.reduce_mean(self.middle_layer_outputs['Generated'], axis=0) -
                                                       tf.reduce_mean(self.middle_layer_outputs['Unlabeled'], axis=0)))
+
+        weighted_unlabeled_labels_features = tf.multiply(self.middle_layer_outputs['Unlabeled'], self.lookup_dictionary['unlabeled_predicted_labels'])
+        weighted_true_labels_features = tf.multiply(self.middle_layer_outputs['True'], self.lookup_dictionary['true_predicted_labels'])
+        weighted_unlabeled_counts_features = tf.multiply(self.middle_layer_outputs['Unlabeled'],
+                                                         self.lookup_dictionary['unlabeled_predicted_count_maps'])
+        weighted_true_counts_features = tf.multiply(self.middle_layer_outputs['True'],
+                                                    self.lookup_dictionary['true_predicted_count_maps'])
+        random_ratio = tf.random_uniform([])
+        labels_weighted_features = tf.add(tf.multiply(random_ratio, weighted_unlabeled_labels_features),
+                                   tf.multiply(tf.subtract(1.0, random_ratio), weighted_true_labels_features))
+        counts_weighted_features = tf.add(tf.multiply(random_ratio, weighted_unlabeled_counts_features),
+                                          tf.multiply(tf.subtract(1.0, random_ratio), weighted_true_counts_features))
+        labels_feature_matching_loss = tf.reduce_mean(tf.abs(
+            tf.reduce_mean(self.middle_layer_outputs['Generated'], axis=[0, 1, 2]) - tf.reduce_mean(
+                labels_weighted_features, axis=[0, 1, 2])))
+        counts_feature_matching_loss = tf.reduce_mean(tf.abs(
+            tf.reduce_mean(self.middle_layer_outputs['Generated'], axis=[0, 1, 2]) - tf.reduce_mean(
+                counts_weighted_features, axis=[0, 1, 2])))
+        feature_matching_loss = tf.add(tf.abs(tf.multiply(tf.constant(self.density_to_count_loss_ratio),
+                                                                        labels_feature_matching_loss)),
+                                                     counts_feature_matching_loss)
         scaled_feature_matching_loss = tf.multiply(
-            tf.constant(-self.feature_matching_parameter * self.settings.image_height * self.settings.image_width, dtype=tf.float32),
+            tf.constant(self.feature_matching_parameter * self.settings.image_height * self.settings.image_width, dtype=tf.float32),
             feature_matching_loss)
-        generator_loss_tensor = tf.negative(tf.add_n([tf.multiply(tf.constant(self.density_to_count_loss_ratio),
-                                                                  generated_predicted_density_tensor),
-                                                      generated_predicted_counts_tensor,
-                                                      scaled_feature_matching_loss
-                                                      ]))
+        generator_loss_tensor = scaled_feature_matching_loss
+
         with tf.name_scope('Loss'):
             tf.summary.scalar('Labels Multiplier', self.lookup_dictionary['labels_multiplier'])
             tf.summary.scalar('Counts Multiplier', self.lookup_dictionary['counts_multiplier'])
