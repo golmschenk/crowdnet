@@ -100,8 +100,8 @@ class CrowdNet(Net):
         absolute_differences_tensor = tf.abs(differences_tensor)
         density_error_tensor = self.example_mean_pixel_sum(absolute_differences_tensor)
 
-        true_person_count_tensor = self.example_mean_pixel_sum(labels_tensor)
-        count_error_tensor = tf.abs(tf.subtract(true_person_count_tensor, predicted_counts_tensor))
+        true_person_count_tensor = tf.reduce_sum(labels_tensor, axis=[1, 2, 3])
+        count_error_tensor = tf.reduce_mean(tf.abs(tf.subtract(true_person_count_tensor, predicted_counts_tensor)))
 
         # Create Summaries.
         relative_person_miscount_tensor = tf.divide(count_error_tensor, tf.add(true_person_count_tensor, 0.01),
@@ -215,13 +215,13 @@ class CrowdNet(Net):
 
         with tf.variable_scope('inference'), dropout_arg_scope:
             predicted_labels_tensor, predicted_count_maps_tensor = self.create_experimental_inference_op(images_tensor)
-            self.lookup_dictionary['true_predicted_labels'] = predicted_labels_tensor
-            self.lookup_dictionary['true_predicted_count_maps'] = predicted_count_maps_tensor
 
             masked_tensors = self.apply_roi_mask(labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor)
             labels_tensor, predicted_labels_tensor, predicted_count_maps_tensor = masked_tensors
+            self.lookup_dictionary['true_predicted_labels'] = predicted_labels_tensor
+            self.lookup_dictionary['true_predicted_count_maps'] = predicted_count_maps_tensor
 
-            predicted_counts_tensor = self.example_mean_pixel_sum(predicted_count_maps_tensor)
+            predicted_counts_tensor = tf.reduce_sum(predicted_count_maps_tensor, axis=[1, 2, 3])
 
         density_error_tensor, count_error_tensor = self.create_error_tensors(labels_tensor,
                                                                              predicted_labels_tensor,
@@ -231,9 +231,10 @@ class CrowdNet(Net):
             labels_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=predicted_labels_tensor.dtype, shape=[]))
             predictor_predicted_labels_tensor = tf.multiply(predicted_labels_tensor, labels_multiplier)
             counts_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=predicted_labels_tensor.dtype, shape=[]))
-            predictor_predicted_counts_tensor = tf.multiply(predicted_counts_tensor, counts_multiplier)
+            predictor_predicted_count_maps_tensor = tf.multiply(predicted_count_maps_tensor, counts_multiplier)
             self.lookup_dictionary['labels_multiplier'] = labels_multiplier
             self.lookup_dictionary['counts_multiplier'] = counts_multiplier
+            predictor_predicted_counts_tensor = tf.reduce_sum(predictor_predicted_count_maps_tensor, axis=[1, 2, 3])
         with tf.name_scope('Predictor'):
             predictor_density_error_tensor, predictor_count_error_tensor = self.create_error_tensors(
                 labels_tensor,
@@ -432,11 +433,15 @@ class CrowdNet(Net):
                                                       tf.reduce_mean(self.middle_layer_outputs['Unlabeled'], axis=0)))
 
         weighted_unlabeled_labels_features = tf.multiply(self.middle_layer_outputs['Unlabeled'], self.lookup_dictionary['unlabeled_predicted_labels'])
+        weighted_unlabeled_labels_features = tf.divide(weighted_unlabeled_labels_features, tf.reduce_sum(self.lookup_dictionary['unlabeled_predicted_labels'], axis=[1, 2, 3]) + 0.0000000001)
         weighted_true_labels_features = tf.multiply(self.middle_layer_outputs['True'], self.lookup_dictionary['true_predicted_labels'])
+        weighted_true_labels_features = tf.divide(weighted_true_labels_features, tf.reduce_sum(self.lookup_dictionary['true_predicted_labels'], axis=[1, 2, 3]) + 0.0000000001)
         weighted_unlabeled_counts_features = tf.multiply(self.middle_layer_outputs['Unlabeled'],
                                                          self.lookup_dictionary['unlabeled_predicted_count_maps'])
+        weighted_unlabeled_counts_features = tf.divide(weighted_unlabeled_counts_features, tf.reduce_sum(self.lookup_dictionary['unlabeled_predicted_count_maps'], axis=[1, 2, 3]) + 0.0000000001)
         weighted_true_counts_features = tf.multiply(self.middle_layer_outputs['True'],
                                                     self.lookup_dictionary['true_predicted_count_maps'])
+        weighted_true_counts_features = tf.divide(weighted_true_counts_features, tf.reduce_sum(self.lookup_dictionary['true_predicted_count_maps'], axis=[1, 2, 3]) + 0.0000000001)
         random_ratio = tf.random_uniform([])
         labels_weighted_features = tf.add(tf.multiply(random_ratio, weighted_unlabeled_labels_features),
                                    tf.multiply(tf.subtract(1.0, random_ratio), weighted_true_labels_features))
