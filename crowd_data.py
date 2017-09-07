@@ -171,6 +171,47 @@ class CrowdData(Data):
         average_person_count = total_person_count / total_image_count
         return average_person_count
 
+    def file_names_from_json(self, data_type):
+        """
+        Creates the files names list for the dataset from JSON.
+
+        :param data_type: The type of dataset being created.
+        :type data_type: str
+        :return: The file names.
+        :rtype: list[str]
+        """
+        with open(self.settings.datasets_json) as json_file:
+            datasets_dictionary = json.load(json_file)
+        if self.settings.test_validation_swap:
+            tmp = datasets_dictionary['validation']
+            datasets_dictionary['validation'] = datasets_dictionary['test']
+            datasets_dictionary['test'] = tmp
+        file_basenames = datasets_dictionary[data_type]
+        file_paths = [os.path.join(self.settings.data_directory, basename) for basename in file_basenames]
+        return file_paths
+
+    def attain_file_name_queue(self, data_type):
+        """
+        Creates the file name queue for the specified data set.
+
+        :param data_type: The type of dataset being created.
+        :type data_type: str
+        :return: The file name queue.
+        :rtype: tf.QueueBase
+        """
+        if data_type in ['test', 'deploy']:
+            num_epochs = 1
+            shuffle = False
+        else:
+            num_epochs = None
+            shuffle = True
+        if self.settings.datasets_json:
+            file_paths = self.file_names_from_json(data_type)
+        else:
+            file_paths = self.file_names_for_patterns(data_type)
+        file_name_queue = tf.train.string_input_producer(file_paths, num_epochs=num_epochs, shuffle=shuffle)
+        return file_name_queue
+
     def create_input_tensors_for_dataset(self, data_type, batch_size):
         """
         Prepares the data inputs.

@@ -227,7 +227,11 @@ class CrowdNet(Net):
                                                                              predicted_labels_tensor,
                                                                              predicted_counts_tensor)
 
-        with tf.variable_scope('predictor'):
+        if self.settings.run_mode == 'test':
+            predictor_scope = tf.variable_scope('True/predictor')
+        else:
+            predictor_scope = tf.variable_scope('predictor')
+        with predictor_scope:
             positive_predicted_labels_tensor = tf.maximum(predicted_labels_tensor, 0)
             positive_predicted_count_maps_tensor = tf.maximum(predicted_count_maps_tensor, 0)
             labels_multiplier = tf.Variable(initial_value=tf.constant(1, dtype=positive_predicted_labels_tensor.dtype, shape=[]))
@@ -247,8 +251,12 @@ class CrowdNet(Net):
         self.density_comparison_summary(images_tensor, labels_tensor, predicted_labels_tensor)
 
         self.lookup_dictionary['labels_tensor'] = labels_tensor
-        self.lookup_dictionary['predicted_labels_tensor'] = predictor_predicted_labels_tensor
-        self.lookup_dictionary['predicted_counts_tensor'] = predictor_predicted_counts_tensor
+        if self.settings.test_with_predictor:
+            self.lookup_dictionary['predicted_labels_tensor'] = predictor_predicted_labels_tensor
+            self.lookup_dictionary['predicted_counts_tensor'] = predictor_predicted_counts_tensor
+        else:
+            self.lookup_dictionary['predicted_labels_tensor'] = predicted_labels_tensor
+            self.lookup_dictionary['predicted_counts_tensor'] = predicted_counts_tensor
         self.lookup_dictionary['predictor_density_error_tensor'] = predictor_density_error_tensor
         self.lookup_dictionary['predictor_count_error_tensor'] = predictor_count_error_tensor
 
@@ -264,10 +272,10 @@ class CrowdNet(Net):
                                                                       self.settings.restore_checkpoint_directory)
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
-        if self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
-            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
-        elif self.settings.run_mode == 'test':
+        if self.settings.run_mode == 'test':
             return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory + '_train')
+        elif self.settings.restore_checkpoint_directory and self.settings.restore_mode == 'continue':
+            return os.path.join(self.settings.logs_directory, self.settings.restore_checkpoint_directory)
         else:
             return os.path.join(self.settings.logs_directory, self.settings.network_name + ' ' +
                                 datetime.datetime.now().strftime("y%Y_m%m_d%d_h%H_m%M_s%S"))
@@ -341,7 +349,7 @@ class CrowdNet(Net):
 
     def train(self):
         """
-        Runs the training of the network. 
+        Runs the training of the network.
         """
         print('Building train graph...')
         train_density_error_tensor, train_count_error_tensor = self.create_network(run_type='train')
@@ -579,7 +587,7 @@ class CrowdNet(Net):
 
     def test(self):
         """
-        Runs the testing of the network. 
+        Runs the testing of the network.
         """
         print('Building testing graph...')
         self.settings.batch_size = 1
@@ -587,14 +595,16 @@ class CrowdNet(Net):
         labels_tensor = self.lookup_dictionary['labels_tensor']
         predicted_labels_tensor = self.lookup_dictionary['predicted_labels_tensor']
         predicted_counts_tensor = self.lookup_dictionary['predicted_counts_tensor']
+        saver = tf.train.Saver()
         total_count = 0
         total_predicted_count = 0
         total_count_error = 0
         number_of_examples = 0
         total_density_count_error = 0
         print('Running test...')
-        with tf.train.MonitoredTrainingSession(checkpoint_dir=self.get_checkpoint_directory_basename(),
-                                               save_checkpoint_secs=None, save_summaries_steps=None) as session:
+        with tf.train.MonitoredSession() as session:
+            latest_checkpoint_path = tf.train.latest_checkpoint(self.get_checkpoint_directory_basename())
+            saver.restore(session, latest_checkpoint_path)
             while not session.should_stop():
                 label, predicted_count, predicted_labels = session.run(
                     [labels_tensor, predicted_counts_tensor, predicted_labels_tensor])
@@ -616,4 +626,7 @@ class CrowdNet(Net):
 
 if __name__ == '__main__':
     crowd_net = CrowdNet()
-    crowd_net.train_unlabeled_gan()
+    if crowd_net.settings.run_mode == 'test':
+        crowd_net.test()
+    else:
+        crowd_net.train_unlabeled_gan()
