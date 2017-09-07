@@ -185,7 +185,7 @@ class CrowdData(Data):
         file_name_queue = self.attain_file_name_queue(data_type)
         image, label, label_guess = self.read_and_decode_single_example_from_tfrecords(file_name_queue, data_type=data_type)
         image, label = self.preaugmentation_preprocess(image, label)
-        if data_type or ['train', 'unlabeled']:
+        if data_type in ['train', 'unlabeled']:
             image, label = self.augment(image, label)
         image, label = self.postaugmentation_preprocess(image, label)
 
