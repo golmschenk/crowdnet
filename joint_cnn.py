@@ -25,10 +25,10 @@ validation_transform = torchvision.transforms.Compose([transforms.Rescale([564 /
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDataset('data', 'new_dataset.json', 'train', transform=train_transform)
-train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-validation_dataset = CrowdDataset('data', 'new_dataset.json', 'validation', transform=validation_transform)
-validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=4, shuffle=True, num_workers=2)
+train_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'train', transform=train_transform)
+train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=4)
+validation_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'validation', transform=validation_transform)
+validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=10, shuffle=False, num_workers=4)
 
 
 class JointCNN(Module):
@@ -72,6 +72,7 @@ class JointCNN(Module):
         x_density = leaky_relu(self.density_conv(x))
         return x_density, x_count
 
+
 net = JointCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
@@ -81,7 +82,8 @@ summary_step_period = 100
 step = 0
 running_loss = 0
 running_example_count = 0
-log_path_name = os.path.join('logs', run_name + ' {} ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
+datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
+log_path_name = os.path.join('../storage/logs', run_name + ' {} ' + datetime_string)
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')

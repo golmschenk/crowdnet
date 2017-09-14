@@ -9,7 +9,7 @@ from torch.nn.functional import leaky_relu
 from torch.optim import Adam
 import torch.utils.data
 import torchvision
-from tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 import transforms
 import viewer
@@ -25,10 +25,10 @@ validation_transform = torchvision.transforms.Compose([transforms.Rescale([564 /
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDataset('data', 'new_dataset.json', 'train', transform=train_transform)
-train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-validation_dataset = CrowdDataset('data', 'new_dataset.json', 'validation', transform=validation_transform)
-validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=4, shuffle=True, num_workers=2)
+train_dataset = CrowdDataset('data', 'train', transform=train_transform)
+train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=4)
+validation_dataset = CrowdDataset('data', 'validation', transform=validation_transform)
+validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=10, shuffle=False, num_workers=4)
 
 
 class CountCNN(Module):
@@ -70,6 +70,7 @@ class CountCNN(Module):
         x = leaky_relu(self.conv6(x))
         return x
 
+
 net = CountCNN()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
@@ -79,7 +80,8 @@ summary_step_period = 100
 step = 0
 running_loss = 0
 running_example_count = 0
-log_path_name = os.path.join('logs', run_name + ' {} ' + datetime.datetime.now().isoformat(sep=' ', timespec='seconds'))
+datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
+log_path_name = os.path.join('logs', run_name + ' {} ' + datetime_string)
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')

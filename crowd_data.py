@@ -18,8 +18,10 @@ class CrowdData(Data):
     A class for managing the crowd data.
     """
 
-    def __init__(self):
-        super().__init__(settings=Settings())
+    def __init__(self, settings=None):
+        if not settings:
+            settings = Settings()
+        super().__init__(settings=settings)
 
         self.train_size = 'all'
         self.dataset_type = None

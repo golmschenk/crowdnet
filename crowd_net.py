@@ -19,12 +19,14 @@ class CrowdNet(Net):
     A neural network class to estimate crowd density from single 2D images.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(settings=Settings(), *args, **kwargs)
+    def __init__(self, settings=None, *args, **kwargs):
+        if not settings:
+            settings = Settings()
+        super().__init__(settings=settings, *args, **kwargs)
 
         self.feature_matching_parameter = 10000.0
         self.density_to_count_loss_ratio = 10.0
-        self.data = CrowdData()
+        self.data = CrowdData(settings)
 
         self.clip_value = 1.0
         self.histograms_on = False
@@ -589,7 +591,7 @@ class CrowdNet(Net):
         """
         Runs the testing of the network.
         """
-        print('Building testing graph...')
+        # print('Building testing graph...')
         self.settings.batch_size = 1
         self.create_network(run_type='test')
         labels_tensor = self.lookup_dictionary['labels_tensor']
@@ -601,7 +603,7 @@ class CrowdNet(Net):
         total_count_error = 0
         number_of_examples = 0
         total_density_count_error = 0
-        print('Running test...')
+        # print('Running test...')
         with tf.train.MonitoredSession() as session:
             latest_checkpoint_path = tf.train.latest_checkpoint(self.get_checkpoint_directory_basename())
             saver.restore(session, latest_checkpoint_path)
@@ -616,17 +618,37 @@ class CrowdNet(Net):
                 total_density_count_error += np.abs(count - predicted_density_count)
                 number_of_examples += 1
                 print('{} examples processed'.format(number_of_examples), end='\r')
-        print('Total count: {}'.format(total_count))
-        print('Total predicted count: {}'.format(total_predicted_count))
-        print('Total count error: {}'.format(total_count_error))
-        print('Total density count error: {}'.format(total_density_count_error))
+        # print('Total count: {}'.format(total_count))
+        # print('Total predicted count: {}'.format(total_predicted_count))
+        # print('Total count error: {}'.format(total_count_error))
+        # print('Total density count error: {}'.format(total_density_count_error))
+        print('')
+        if 'single_camera' in self.settings.datasets_json:
+            print('Scene {}'.format(self.settings.datasets_json.replace('single_camera_', '')))
+        else:
+            print('Validation' if self.settings.test_validation_swap else 'Test')
         print('Average count error: {}'.format(total_count_error / number_of_examples))
         print('Average density count error: {}'.format(total_density_count_error / number_of_examples))
+        print('')
 
 
 if __name__ == '__main__':
-    crowd_net = CrowdNet()
-    if crowd_net.settings.run_mode == 'test':
-        crowd_net.test()
+    test_settings = Settings()
+    if test_settings.run_mode == 'test':
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        settings_list = []
+        validation_settings = Settings()
+        validation_settings.test_validation_swap = True
+        settings_list.append(validation_settings)
+        settings_list.append(test_settings)
+        for index in range(1, 6):
+            single_camera_settings = Settings()
+            single_camera_settings.datasets_json = 'single_camera_{}.json'.format(index)
+            settings_list.append(single_camera_settings)
+        for settings in settings_list:
+            crowd_net = CrowdNet(settings)
+            crowd_net.test()
+            tf.reset_default_graph()
     else:
+        crowd_net = CrowdNet()
         crowd_net.train_unlabeled_gan()
