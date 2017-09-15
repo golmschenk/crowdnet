@@ -13,7 +13,7 @@ from tensorboard import SummaryWriter
 
 import transforms
 import viewer
-from pytorch_crowd_dataset import CrowdDataset
+from crowd_dataset import CrowdDataset
 
 run_name = 'Density CNN'
 

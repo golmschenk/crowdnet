@@ -8,7 +8,7 @@ import scipy.misc
 import numpy as np
 import random
 
-from pytorch_crowd_dataset import CrowdExample
+from crowd_dataset import CrowdExample
 
 
 class NumpyArraysToTorchTensors:

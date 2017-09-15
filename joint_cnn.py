@@ -13,7 +13,7 @@ from tensorboard import SummaryWriter
 
 import transforms
 import viewer
-from pytorch_crowd_dataset import CrowdDataset
+from crowd_dataset import CrowdDataset
 
 run_name = 'Joint CNN'
 
@@ -74,6 +74,7 @@ class JointCNN(Module):
 
 
 net = JointCNN()
+net.cuda()
 criterion = L1Loss()
 optimizer = Adam(net.parameters())
 
@@ -81,54 +82,67 @@ summary_step_period = 100
 
 step = 0
 running_loss = 0
+count_running_loss = 0
+density_running_loss = 0
 running_example_count = 0
 datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
 log_path_name = os.path.join('../storage/logs', run_name + ' {} ' + datetime_string)
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')
-for epoch in range(summary_step_period):
+for epoch in range(100):
     for examples in train_dataset_loader:
         images, labels, roi = examples
-        images, labels, roi = Variable(images), Variable(labels), Variable(roi)
+        images, labels, roi = Variable(images.cuda()), Variable(labels.cuda()), Variable(roi.cuda())
         predicted_density_maps, predicted_count_maps = net(images)
         predicted_density_maps, predicted_count_maps = predicted_density_maps.squeeze(dim=1), predicted_count_maps.squeeze(dim=1)
         predicted_density_maps = predicted_density_maps * roi
         predicted_count_maps = predicted_count_maps * roi
-        density_loss = criterion(predicted_density_maps, labels)
-        count_loss = criterion(predicted_count_maps.sum(1).sum(1), labels.sum(1).sum(1))
-        loss = density_loss + count_loss
+        density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
+        count_loss = torch.abs(predicted_count_maps.sum(1).sum(1) - labels.sum(1).sum(1)).mean()
+        loss = count_loss + density_loss
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         running_loss += loss.data[0]
+        count_running_loss += count_loss.data[0]
+        density_running_loss += density_loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
-            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_density_maps)
+            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(), predicted_density_maps.cpu())
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             mean_loss = running_loss / running_example_count
+            mean_count_loss = count_running_loss / running_example_count
+            mean_density_loss = density_running_loss / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
             summary_writer.add_scalar('Loss', mean_loss, global_step=step)
+            summary_writer.add_scalar('Count Loss', mean_count_loss, global_step=step)
+            summary_writer.add_scalar('Density Loss', mean_density_loss, global_step=step)
             running_loss = 0
+            count_running_loss = 0
+            density_running_loss = 0
             running_example_count = 0
             validation_density_running_loss = 0
             validation_count_running_loss = 0
             for validation_examples in train_dataset_loader:
                 images, labels, roi = validation_examples
-                images, labels, roi = Variable(images), Variable(labels), Variable(roi)
-                predicted_density_maps, predicted_count_maps = net(images).squeeze(dim=1)
+                images, labels, roi = Variable(images.cuda()), Variable(labels.cuda()), Variable(roi.cuda())
+                predicted_density_maps, predicted_count_maps = net(images)
+                predicted_density_maps, predicted_count_maps = predicted_density_maps.squeeze(dim=1), predicted_count_maps.squeeze(dim=1)
                 predicted_density_maps = predicted_density_maps * roi
                 predicted_count_maps = predicted_count_maps * roi
-                density_loss = criterion(predicted_density_maps, labels)
-                count_loss = criterion(predicted_count_maps.sum(1).sum(1), labels.sum(1).sum(1))
+                density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
+                count_loss = torch.abs(predicted_count_maps.sum(1).sum(1) - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
-            comparison_image = viewer.create_crowd_images_comparison_grid(images, labels, predicted_density_maps)
+            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(), predicted_density_maps.cpu())
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
             validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
             validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)
             validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
+
+torch.save(net.state_dict(), log_path_name.format('model'))
 
 print('Finished Training')
