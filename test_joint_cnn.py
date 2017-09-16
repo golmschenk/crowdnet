@@ -1,28 +1,28 @@
 """
 Main code for a training session.
 """
+import csv
+
 import os
-import datetime
+
+import numpy as np
 from torch.autograd import Variable
-from torch.nn import Module, Conv2d, L1Loss
+from torch.nn import Module, Conv2d
 from torch.nn.functional import leaky_relu
-from torch.optim import Adam
 import torch.utils.data
 import torchvision
-from tensorboard import SummaryWriter
 
 import transforms
-import viewer
 from crowd_dataset import CrowdDataset
 
-run_name = 'Joint CNN'
+model_path = 'saved_model_path'
 
 train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
                                                   transforms.RandomHorizontalFlip(),
                                                   transforms.NegativeOneToOneNormalizeImage(),
                                                   transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'train', transform=train_transform)
+test_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'test', transform=train_transform)
 test_dataset_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
 
 
@@ -69,23 +69,15 @@ class JointCNN(Module):
 
 
 net = JointCNN()
-net.load_state_dict(torch.load('saved_model_path'))
-
+net.load_state_dict(torch.load(model_path))
+count_errors = []
+density_errors = []
 print('Starting test...')
 scene_number = 1
 running_count = 0
 running_count_error = 0
 running_density_error = 0
 for example_index, examples in enumerate(test_dataset_loader):
-    if example_index == 120:
-        print('Scene {}'.format(scene_number))
-        print('Total count: {}'.format(running_count))
-        print('Mean count error: {}'.format(running_count_error / 120))
-        print('Mean density error: {}'.format(running_density_error / 120))
-        running_count = 0
-        running_count_error = 0
-        running_density_error = 0
-        scene_number += 1
     images, labels, roi = examples
     images, labels, roi = Variable(images), Variable(labels), Variable(roi)
     predicted_density_maps, predicted_count_maps = net(images)
@@ -98,10 +90,31 @@ for example_index, examples in enumerate(test_dataset_loader):
     running_count += labels.sum(1).sum(1).squeeze()
     running_count_error += count_loss
     running_density_error += density_loss
-print('Scene {}'.format(scene_number))
-print('Total count: {}'.format(running_count))
-print('Mean count error: {}'.format(running_count_error / 119))
-print('Mean density error: {}'.format(running_density_error / 119))
+    if ((example_index + 1) % 120) == 0:
+        print('Scene {}'.format(scene_number))
+        print('Total count: {}'.format(running_count.data[0]))
+        count_error = running_count_error.data[0] / 120
+        print('Mean count error: {}'.format(count_error))
+        density_error = running_density_error.data[0] / 120
+        print('Mean density error: {}'.format(density_error))
+        count_errors.append(count_error)
+        density_errors.append(density_error)
+        running_count = 0
+        running_count_error = 0
+        running_density_error = 0
+        scene_number += 1
 
+csv_file_path = '../storage/logs/Test Results.csv'
+if not os.path.isfile(csv_file_path):
+    with open(csv_file_path, 'w') as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(['Run Name', 'Scene 1', 'Scene 2', 'Scene 3', 'Scene 4', 'Scene 5', 'Mean',
+                         'Scene 1 Density', 'Scene 2 Density', 'Scene 3 Density', 'Scene 4 Density', 'Scene 5 Density',
+                         'Mean Density'])
+with open(csv_file_path, 'a') as csv_file:
+    writer = csv.writer(csv_file)
+    test_results = [os.path.basename(model_path), *count_errors, np.mean(count_errors),
+                    *density_errors, np.mean(density_errors)]
+    writer.writerow(test_results)
 
 print('Finished test.')

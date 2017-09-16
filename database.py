@@ -9,6 +9,17 @@ import numpy as np
 
 def data_type_block_database_from_structured_database(structured_database_directory, data_type_database_directory,
                                                       dataset_json_file_name):
+    """
+    Converts from the structured database to single file datasets per data type.
+
+    :param structured_database_directory: The path to the structured database.
+    :type structured_database_directory: str
+    :param data_type_database_directory: The path where the single file per data type database should be placed.
+    :type data_type_database_directory: str
+    :param dataset_json_file_name: A JSON file containing the specifications of which parts of the structured database
+                                   belong to which data type.
+    :type dataset_json_file_name: str
+    """
     with open(dataset_json_file_name) as json_file:
         dataset_dict = json.load(json_file)
     os.makedirs(data_type_database_directory, exist_ok=True)
@@ -34,6 +45,7 @@ def data_type_block_database_from_structured_database(structured_database_direct
         np.save(os.path.join(dataset_directory, 'images.npy'), images)
         np.save(os.path.join(dataset_directory, 'labels.npy'), labels)
         np.save(os.path.join(dataset_directory, 'rois.npy'), rois)
+
 
 data_type_block_database_from_structured_database('../storage/data/world_expo_database',
                                                   '../storage/data/world_expo_datasets',
