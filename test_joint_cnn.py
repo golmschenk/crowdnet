@@ -1,5 +1,5 @@
 """
-Main code for a training session.
+Code for a test session.
 """
 import csv
 
@@ -18,7 +18,6 @@ from crowd_dataset import CrowdDataset
 model_path = 'saved_model_path'
 
 train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
-                                                  transforms.RandomHorizontalFlip(),
                                                   transforms.NegativeOneToOneNormalizeImage(),
                                                   transforms.NumpyArraysToTorchTensors()])
 
@@ -88,14 +87,14 @@ for example_index, examples in enumerate(test_dataset_loader):
     density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
     count_loss = torch.abs(predicted_count_maps.sum(1).sum(1) - labels.sum(1).sum(1)).mean()
     running_count += labels.sum(1).sum(1).squeeze()
-    running_count_error += count_loss
-    running_density_error += density_loss
+    running_count_error += count_loss.data[0]
+    running_density_error += density_loss.data[0]
     if ((example_index + 1) % 120) == 0:
         print('Scene {}'.format(scene_number))
         print('Total count: {}'.format(running_count.data[0]))
-        count_error = running_count_error.data[0] / 120
+        count_error = running_count_error / 120
         print('Mean count error: {}'.format(count_error))
-        density_error = running_density_error.data[0] / 120
+        density_error = running_density_error / 120
         print('Mean density error: {}'.format(density_error))
         count_errors.append(count_error)
         density_errors.append(density_error)
