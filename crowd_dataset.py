@@ -7,6 +7,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
+CrowdExampleWithPerspective = namedtuple('CrowdExample', ['image', 'label', 'roi', 'perspective'])
 CrowdExample = namedtuple('CrowdExample', ['image', 'label', 'roi'])
 
 
@@ -28,6 +29,7 @@ class CrowdDataset(Dataset):
         self.images = np.load(os.path.join(dataset_directory, 'images.npy'), mmap_mode='r')
         self.labels = np.load(os.path.join(dataset_directory, 'labels.npy'), mmap_mode='r')
         self.rois = np.load(os.path.join(dataset_directory, 'rois.npy'), mmap_mode='r')
+        self.perspectives = np.load(os.path.join(dataset_directory, 'perspectives.npy'), mmap_mode='r')
         self.length = self.labels.shape[0]
         self.transform = transform
 
@@ -38,7 +40,8 @@ class CrowdDataset(Dataset):
         :return: An example from the crowd dataset.
         :rtype: CrowdExample
         """
-        example = CrowdExample(image=self.images[index], label=self.labels[index], roi=self.rois[index])
+        example = CrowdExampleWithPerspective(image=self.images[index], label=self.labels[index], roi=self.rois[index],
+                                              perspective=self.perspectives[index])
         if self.transform:
             example = self.transform(example)
         return example
