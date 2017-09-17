@@ -111,7 +111,7 @@ class RandomlySelectPatchAndRescale:
         while True:
             y, x = self.select_random_position(example_with_perspective)
             patch = self.get_patch_for_position(y, x, example_with_perspective)
-            if self.patch_contains_roi(patch):
+            if np.any(patch.roi):
                 example = self.resize_patch(patch)
                 return example
 
@@ -184,4 +184,20 @@ class RandomlySelectPatchAndRescale:
         image = np.pad(example.image, (y_padding, x_padding, z_padding), 'constant')
         label = np.pad(example.label, (y_padding, x_padding), 'constant')
         roi = np.pad(example.roi, (y_padding, x_padding), 'constant', constant_values=False)
+        return CrowdExample(image=image, label=label, roi=roi)
+
+    def resize_patch(self, patch):
+        """
+        :param patch: The patch to resize.
+        :type patch: CrowdExample
+        :return: The crowd example that is the resized patch.
+        :rtype: CrowdExample
+        """
+        image = scipy.misc.imresize(patch.image, self.scaled_size)
+        original_label_sum = np.sum(patch.label)
+        label = scipy.misc.imresize(patch.label, self.scaled_size, mode='F')
+        if original_label_sum != 0:
+            unnormalized_label_sum = np.sum(label)
+            label = (label / unnormalized_label_sum) * original_label_sum
+        roi = scipy.misc.imresize(patch.roi, self.scaled_size, mode='F') > 0.5
         return CrowdExample(image=image, label=label, roi=roi)
