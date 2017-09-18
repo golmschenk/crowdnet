@@ -98,8 +98,9 @@ class RandomlySelectPatchAndRescale:
     Selects a patch of the example and resizes it based on the perspective map.
     """
 
-    def __init__(self, scaled_size):
-        self.scaled_size = scaled_size
+    def __init__(self):
+        self.image_scaled_size = [72, 72]
+        self.label_scaled_size = [18, 18]
 
     def __call__(self, example_with_perspective):
         """
@@ -112,6 +113,7 @@ class RandomlySelectPatchAndRescale:
             y, x = self.select_random_position(example_with_perspective)
             patch = self.get_patch_for_position(y, x, example_with_perspective)
             if np.any(patch.roi):
+                patch = CrowdExample(image=patch.image * patch.roi, label=patch.label * patch.roi, roi=patch.roi)
                 example = self.resize_patch(patch)
                 return example
 
@@ -193,11 +195,11 @@ class RandomlySelectPatchAndRescale:
         :return: The crowd example that is the resized patch.
         :rtype: CrowdExample
         """
-        image = scipy.misc.imresize(patch.image, self.scaled_size)
+        image = scipy.misc.imresize(patch.image, self.image_scaled_size)
         original_label_sum = np.sum(patch.label)
-        label = scipy.misc.imresize(patch.label, self.scaled_size, mode='F')
+        label = scipy.misc.imresize(patch.label, self.label_scaled_size, mode='F')
         if original_label_sum != 0:
             unnormalized_label_sum = np.sum(label)
             label = (label / unnormalized_label_sum) * original_label_sum
-        roi = scipy.misc.imresize(patch.roi, self.scaled_size, mode='F') > 0.5
+        roi = scipy.misc.imresize(patch.roi, self.image_scaled_size, mode='F') > 0.5
         return CrowdExample(image=image, label=label, roi=roi)
