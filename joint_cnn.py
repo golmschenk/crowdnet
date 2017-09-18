@@ -4,8 +4,8 @@ Main code for a training session.
 import os
 import datetime
 from torch.autograd import Variable
-from torch.nn import Module, Conv2d, L1Loss, MaxPool2d
-from torch.nn.functional import leaky_relu, relu
+from torch.nn import Module, Conv2d, MaxPool2d
+from torch.nn.functional import relu
 from torch.optim import Adam
 import torch.utils.data
 import torchvision
@@ -26,9 +26,10 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NumpyArraysToTorchTensors()])
 
 train_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'train', transform=train_transform)
-train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=4)
+train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True, num_workers=4)
 validation_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'validation', transform=validation_transform)
-validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=10, shuffle=False, num_workers=4)
+validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, shuffle=False,
+                                                        num_workers=4)
 
 
 class JointCNN(Module):
@@ -93,13 +94,13 @@ log_path_name = os.path.join('../storage/logs', run_name + ' {} ' + datetime_str
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')
-for epoch in range(100):
+for epoch in range(1000):
     for examples in train_dataset_loader:
         images, labels, _ = examples
         images, labels = Variable(images.cuda()), Variable(labels.cuda())
-        predicted_density_maps, predicted_count_maps = net(images)
-        density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
-        count_loss = torch.abs(predicted_count_maps - labels.sum(1).sum(1)).mean()
+        predicted_labels, predicted_counts = net(images)
+        density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
+        count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
         loss = count_loss + (density_loss * 10)
         loss.backward()
         optimizer.step()
@@ -109,7 +110,8 @@ for epoch in range(100):
         density_running_loss += density_loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
-            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(), predicted_density_maps.cpu())
+            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(),
+                                                                          predicted_labels.cpu())
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             mean_loss = running_loss / running_example_count
             mean_count_loss = count_running_loss / running_example_count
@@ -127,12 +129,13 @@ for epoch in range(100):
             for validation_examples in train_dataset_loader:
                 images, labels, _ = validation_examples
                 images, labels = Variable(images.cuda()), Variable(labels.cuda())
-                predicted_density_maps, predicted_count_maps = net(images)
-                density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
-                count_loss = torch.abs(predicted_count_maps - labels.sum(1).sum(1)).mean()
+                predicted_labels, predicted_counts = net(images)
+                density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
+                count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
-            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(), predicted_density_maps.cpu())
+            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(),
+                                                                          predicted_labels.cpu())
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
             validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
             validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)

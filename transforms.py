@@ -113,7 +113,8 @@ class RandomlySelectPatchAndRescale:
             y, x = self.select_random_position(example_with_perspective)
             patch = self.get_patch_for_position(y, x, example_with_perspective)
             if np.any(patch.roi):
-                patch = CrowdExample(image=patch.image * patch.roi, label=patch.label * patch.roi, roi=patch.roi)
+                roi_image_patch = patch.image * np.expand_dims(patch.roi, axis=-1)
+                patch = CrowdExample(image=roi_image_patch, label=patch.label * patch.roi, roi=patch.roi)
                 example = self.resize_patch(patch)
                 return example
 
@@ -148,7 +149,7 @@ class RandomlySelectPatchAndRescale:
         example = CrowdExample(image=example_with_perspective.image, label=example_with_perspective.label,
                                roi=example_with_perspective.roi)
         patch_size = 3 * pixels_per_meter
-        half_patch_size = patch_size // 2
+        half_patch_size = int(patch_size // 2)
         if y - half_patch_size < 0:
             example = self.pad_example(example, y_padding=(half_patch_size - y, 0))
             y += half_patch_size - y

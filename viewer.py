@@ -8,6 +8,7 @@ import matplotlib.cm
 import numpy as np
 import torch
 import torchvision.utils
+import scipy.misc
 
 
 def convert_density_maps_to_heatmaps(label, predicted_label):
@@ -26,9 +27,11 @@ def convert_density_maps_to_heatmaps(label, predicted_label):
     predicted_label_array = predicted_label.numpy()
     mappable.set_clim(vmin=min(label_array.min(), predicted_label_array.min()),
                       vmax=max(label_array.max(), predicted_label_array.max()))
-    label_heatmap_array = mappable.to_rgba(label_array).astype(np.float32)
+    resized_label_array = scipy.misc.imresize(label_array, (72, 72), mode='F')
+    label_heatmap_array = mappable.to_rgba(resized_label_array).astype(np.float32)
     label_heatmap_tensor = torch.from_numpy(label_heatmap_array[:, :, :3].transpose((2, 0, 1)))
-    predicted_label_heatmap_array = mappable.to_rgba(predicted_label_array).astype(np.float32)
+    resized_predicted_label_array = scipy.misc.imresize(predicted_label_array, (72, 72), mode='F')
+    predicted_label_heatmap_array = mappable.to_rgba(resized_predicted_label_array).astype(np.float32)
     predicted_label_heatmap_tensor = torch.from_numpy(predicted_label_heatmap_array[:, :, :3].transpose((2, 0, 1)))
     return label_heatmap_tensor, predicted_label_heatmap_tensor
 
