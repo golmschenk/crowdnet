@@ -80,7 +80,8 @@ scene_number = 1
 running_count = 0
 running_count_error = 0
 running_density_error = 0
-for example_index, full_example in enumerate(test_dataset):
+for full_example_index, full_example in enumerate(test_dataset):
+    print('Processing example {}\r'.format(full_example_index))
     bin_predicted_label = np.zeros_like(full_example.label, dtype=np.float32)
     hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
     full_predicted_count = 0
@@ -104,18 +105,18 @@ for example_index, full_example in enumerate(test_dataset):
                 y_start_offset = half_patch_size - y
             y_end_offset = 0
             if y + half_patch_size > full_example.label.shape[0]:
-                y_end_offset = y + half_patch_size - example.label.shape[0]
+                y_end_offset = y + half_patch_size + 1 - full_example.label.shape[0]
             x_start_offset = 0
             if x - half_patch_size < 0:
                 x_start_offset = half_patch_size - x
             x_end_offset = 0
             if x + half_patch_size > full_example.label.shape[1]:
-                x_end_offset = x + half_patch_size - example.label.shape[1]
+                x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
                 bin_predicted_label[
                                     y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                     x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                    ] += predicted_label[y_start_offset:-y_end_offset,
-                                                         x_start_offset:-x_end_offset]
+                                    ] += predicted_label[y_start_offset:predicted_label.shape[0] - y_end_offset,
+                                                         x_start_offset:predicted_label.shape[1] - x_end_offset]
                 hit_predicted_label[
                                     y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                     x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
@@ -128,7 +129,7 @@ for example_index, full_example in enumerate(test_dataset):
     running_count += full_example.label.numpy().sum()
     running_count_error += count_loss
     running_density_error += density_loss
-    if ((example_index + 1) % 120) == 0:
+    if ((full_example_index + 1) % 120) == 0:
         print('Scene {}'.format(scene_number))
         print('Total count: {}'.format(running_count))
         count_error = running_count_error / 120
