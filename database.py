@@ -42,8 +42,9 @@ def data_type_block_database_from_structured_database(structured_database_direct
             else:
                 images = np.concatenate((images, camera_images), axis=0)
                 labels = np.concatenate((labels, camera_labels), axis=0)
-                rois = np.concatenate((np.tile(camera_roi, (camera_labels.shape[0], 1, 1)), rois), axis=0)
-                perspectives = np.concatenate((np.tile(camera_perspective, (camera_labels.shape[0], 1, 1)), rois), axis=0)
+                rois = np.concatenate((rois, np.tile(camera_roi, (camera_labels.shape[0], 1, 1))), axis=0)
+                perspectives = np.concatenate((perspectives, np.tile(camera_perspective,
+                                                                     (camera_labels.shape[0], 1, 1))), axis=0)
         dataset_directory = os.path.join(data_type_database_directory, data_type)
         os.makedirs(dataset_directory, exist_ok=True)
         np.save(os.path.join(dataset_directory, 'images.npy'), images)
