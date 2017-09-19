@@ -120,13 +120,13 @@ class PatchAndRescale:
         if y - half_patch_size < 0:
             example = self.pad_example(example, y_padding=(half_patch_size - y, 0))
             y += half_patch_size - y
-        if y + half_patch_size > example.label.shape[0]:
-            example = self.pad_example(example, y_padding=(0, y + half_patch_size - example.label.shape[0]))
+        if y + half_patch_size >= example.label.shape[0]:
+            example = self.pad_example(example, y_padding=(0, y + half_patch_size + 1 - example.label.shape[0]))
         if x - half_patch_size < 0:
             example = self.pad_example(example, x_padding=(half_patch_size - x, 0))
             x += half_patch_size - x
-        if x + half_patch_size > example.label.shape[1]:
-            example = self.pad_example(example, x_padding=(0, x + half_patch_size - example.label.shape[1]))
+        if x + half_patch_size >= example.label.shape[1]:
+            example = self.pad_example(example, x_padding=(0, x + half_patch_size + 1 - example.label.shape[1]))
         image_patch = example.image[y - half_patch_size:y + half_patch_size + 1,
                                     x - half_patch_size:x + half_patch_size + 1,
                                     :]
@@ -195,8 +195,8 @@ class ExtractPatchForPositionAndRescale(PatchAndRescale):
         """
         :param example_with_perspective: A crowd example with perspective.
         :type example_with_perspective: CrowdExampleWithPerspective
-        :return: A crowd example.
-        :rtype: CrowdExample
+        :return: A crowd example and the original patch size.
+        :rtype: (CrowdExample, int)
         """
         original_patch_size = self.get_patch_size_for_position(example_with_perspective, y, x)
         patch = self.get_patch_for_position(example_with_perspective, y, x)

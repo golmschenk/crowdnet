@@ -16,13 +16,13 @@ import scipy.misc
 import transforms
 from crowd_dataset import CrowdDataset
 
-model_path = 'saved_model_path'
+model_path = '/Users/golmschenk/Code/crowdnet/logs/Joint CNN model y2017m09d18h15m11s19'
 
 patch_transform = transforms.ExtractPatchForPositionAndRescale()
 test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
                                                  transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'test')
+test_dataset = CrowdDataset('data/mini_world_expo_datasets', 'test')
 
 
 class JointCNN(Module):
@@ -104,13 +104,13 @@ for full_example_index, full_example in enumerate(test_dataset):
             if y - half_patch_size < 0:
                 y_start_offset = half_patch_size - y
             y_end_offset = 0
-            if y + half_patch_size > full_example.label.shape[0]:
+            if y + half_patch_size >= full_example.label.shape[0]:
                 y_end_offset = y + half_patch_size + 1 - full_example.label.shape[0]
             x_start_offset = 0
             if x - half_patch_size < 0:
                 x_start_offset = half_patch_size - x
             x_end_offset = 0
-            if x + half_patch_size > full_example.label.shape[1]:
+            if x + half_patch_size >= full_example.label.shape[1]:
                 x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
                 bin_predicted_label[
                                     y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
@@ -143,7 +143,7 @@ for full_example_index, full_example in enumerate(test_dataset):
         running_density_error = 0
         scene_number += 1
 
-csv_file_path = '../storage/logs/Test Results.csv'
+csv_file_path = 'logs/Test Results.csv'
 if not os.path.isfile(csv_file_path):
     with open(csv_file_path, 'w') as csv_file:
         writer = csv.writer(csv_file)
