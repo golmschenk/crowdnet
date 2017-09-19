@@ -7,8 +7,8 @@ import os
 
 import numpy as np
 from torch.autograd import Variable
-from torch.nn import Module, Conv2d
-from torch.nn.functional import leaky_relu
+from torch.nn import Module, Conv2d, MaxPool2d
+from torch.nn.functional import relu
 import torch.utils.data
 import torchvision
 import scipy.misc
@@ -31,13 +31,15 @@ class JointCNN(Module):
     """
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv2d(3, 32, kernel_size=3, padding=1)
-        self.conv2 = Conv2d(self.conv1.out_channels, 64, kernel_size=3, padding=1)
-        self.conv3 = Conv2d(self.conv2.out_channels, 128, kernel_size=3, padding=1)
-        self.conv4 = Conv2d(self.conv3.out_channels, 256, kernel_size=3, padding=1)
-        self.conv5 = Conv2d(self.conv4.out_channels, 10, kernel_size=3, padding=1)
+        self.conv1 = Conv2d(3, 32, kernel_size=7, padding=3)
+        self.max_pool1 = MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = Conv2d(self.conv1.out_channels, 32, kernel_size=7, padding=3)
+        self.max_pool2 = MaxPool2d(kernel_size=2, stride=2)
+        self.conv3 = Conv2d(self.conv2.out_channels, 64, kernel_size=5, padding=2)
+        self.conv4 = Conv2d(self.conv3.out_channels, 1000, kernel_size=18)
+        self.conv5 = Conv2d(self.conv4.out_channels, 400, kernel_size=1)
         self.count_conv = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
-        self.density_conv = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
+        self.density_conv = Conv2d(self.conv5.out_channels, 324, kernel_size=1)
 
     def __call__(self, *args, **kwargs):
         """
@@ -48,23 +50,25 @@ class JointCNN(Module):
         """
         return super().__call__(*args, **kwargs)
 
-    def forward(self, x):
+    def forward(self, z):
         """
         The forward pass of the network.
 
-        :param x: The input images.
-        :type x: torch.autograd.Variable
+        :param z: The input images.
+        :type z: torch.autograd.Variable
         :return: The predicted density labels.
         :rtype: torch.autograd.Variable
         """
-        x = leaky_relu(self.conv1(x))
-        x = leaky_relu(self.conv2(x))
-        x = leaky_relu(self.conv3(x))
-        x = leaky_relu(self.conv4(x))
-        x = leaky_relu(self.conv5(x))
-        x_count = leaky_relu(self.count_conv(x))
-        x_density = leaky_relu(self.density_conv(x))
-        return x_density, x_count
+        z = relu(self.conv1(z))
+        z = self.max_pool1(z)
+        z = relu(self.conv2(z))
+        z = self.max_pool2(z)
+        z = relu(self.conv3(z))
+        z = relu(self.conv4(z))
+        z = relu(self.conv5(z))
+        z_count = self.count_conv(z).view(-1)
+        z_density = self.density_conv(z).view(-1, 18, 18)
+        return z_density, z_count
 
 
 net = JointCNN()
@@ -77,20 +81,21 @@ running_count = 0
 running_count_error = 0
 running_density_error = 0
 for example_index, full_example in enumerate(test_dataset):
-    number_of_pixels = full_example.shape[0] * full_example.shape[1]
-    predicted_labels_stack = np.full([number_of_pixels, *full_example.labels.shape], fill_value=np.nan)
+    bin_predicted_label = np.zeros_like(full_example.label, dtype=np.float32)
+    hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
     full_predicted_count = 0
     pixel_index = 0
-    for y in range(full_example.shape[0]):
-        for x in range(full_example.shape[1]):
+    for y in range(full_example.label.shape[0]):
+        for x in range(full_example.label.shape[1]):
             example_patch, original_patch_size = patch_transform(full_example, y, x)
             example = test_transform(example_patch)
-            image, label = Variable(example.image), Variable(example.label)
+            image, label = Variable(example.image.unsqueeze(0)), Variable(example.label)
             predicted_label, predicted_count = net(image)
-            predicted_label, predicted_count = predicted_label.numpy(), predicted_count.numpy()
+            predicted_label, predicted_count = predicted_label.data.squeeze(0).numpy(), predicted_count.data.squeeze(0).numpy()
             predicted_label_sum = np.sum(predicted_label)
             half_patch_size = int(original_patch_size // 2)
-            predicted_label = scipy.misc.imresize(predicted_label, (2 * half_patch_size) + 1, mode='F')
+            original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
+            predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
             if predicted_label_sum != 0:
                 unnormalized_predicted_label_sum = np.sum(predicted_label)
                 predicted_label = (predicted_label / unnormalized_predicted_label_sum) * predicted_label_sum
@@ -106,14 +111,18 @@ for example_index, full_example in enumerate(test_dataset):
             x_end_offset = 0
             if x + half_patch_size > full_example.label.shape[1]:
                 x_end_offset = x + half_patch_size - example.label.shape[1]
-            predicted_labels_stack[pixel_index,
-                                   y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                                   x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                   ] = predicted_label[y_start_offset:-y_end_offset,
-                                                       x_start_offset:-x_end_offset]
+                bin_predicted_label[
+                                    y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                    ] += predicted_label[y_start_offset:-y_end_offset,
+                                                         x_start_offset:-x_end_offset]
+                hit_predicted_label[
+                                    y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                    ] += 1
             pixel_index += 1
             full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
-    full_predicted_label = np.nanmean(predicted_labels_stack, axis=0)
+    full_predicted_label = bin_predicted_label / hit_predicted_label.astype(np.float32)
     density_loss = np.abs(full_predicted_label - full_example.label.numpy()).sum()
     count_loss = np.abs(full_predicted_count - full_example.label.numpy().sum())
     running_count += full_example.label.numpy().sum()
