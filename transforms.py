@@ -1,7 +1,6 @@
 """
 Code for custom transforms.
 """
-from collections import namedtuple
 
 import torch
 import scipy.misc
@@ -93,46 +92,15 @@ class NegativeOneToOneNormalizeImage:
         return CrowdExample(image=image, label=example.label, roi=example.roi)
 
 
-class RandomlySelectPatchAndRescale:
+class PatchAndRescale:
     """
-    Selects a patch of the example and resizes it based on the perspective map.
+    Select a patch based on a position and rescale it based on the perspective map.
     """
-
     def __init__(self):
         self.image_scaled_size = [72, 72]
         self.label_scaled_size = [18, 18]
 
-    def __call__(self, example_with_perspective):
-        """
-        :param example_with_perspective: A crowd example with perspective.
-        :type example_with_perspective: CrowdExampleWithPerspective
-        :return: A crowd example.
-        :rtype: CrowdExample
-        """
-        while True:
-            y, x = self.select_random_position(example_with_perspective)
-            patch = self.get_patch_for_position(y, x, example_with_perspective)
-            if np.any(patch.roi):
-                roi_image_patch = patch.image * np.expand_dims(patch.roi, axis=-1)
-                patch = CrowdExample(image=roi_image_patch, label=patch.label * patch.roi, roi=patch.roi)
-                example = self.resize_patch(patch)
-                return example
-
-    @staticmethod
-    def select_random_position(example_with_perspective):
-        """
-        Picks a random position in the full example.
-
-        :param example_with_perspective: The full example with perspective.
-        :type example_with_perspective: CrowdExampleWithPerspective
-        :return: The y and x positions chosen randomly.
-        :rtype: (int, int)
-        """
-        y = np.random.randint(example_with_perspective.label.shape[0])
-        x = np.random.randint(example_with_perspective.label.shape[1])
-        return y, x
-
-    def get_patch_for_position(self, y, x, example_with_perspective):
+    def get_patch_for_position(self, example_with_perspective, y, x):
         """
         Retrieves the patch for a given position.
 
@@ -145,11 +113,10 @@ class RandomlySelectPatchAndRescale:
         :return: The patch.
         :rtype: CrowdExample
         """
-        pixels_per_meter = example_with_perspective.perspective[y, x]
+        patch_size = self.get_patch_size_for_position(example_with_perspective, y, x)
+        half_patch_size = int(patch_size // 2)
         example = CrowdExample(image=example_with_perspective.image, label=example_with_perspective.label,
                                roi=example_with_perspective.roi)
-        patch_size = 3 * pixels_per_meter
-        half_patch_size = int(patch_size // 2)
         if y - half_patch_size < 0:
             example = self.pad_example(example, y_padding=(half_patch_size - y, 0))
             y += half_patch_size - y
@@ -168,6 +135,23 @@ class RandomlySelectPatchAndRescale:
         roi_patch = example.roi[y - half_patch_size:y + half_patch_size + 1,
                                 x - half_patch_size:x + half_patch_size + 1]
         return CrowdExample(image=image_patch, label=label_patch, roi=roi_patch)
+
+    def get_patch_size_for_position(self, example_with_perspective, y, x):
+        """
+        Gets the patch size for a 3x3 meter area based of the perspective and the position.
+
+        :param example_with_perspective: The example with perspective information.
+        :type example_with_perspective: CrowdExampleWithPerspective
+        :param x: The x position of the center of the patch.
+        :type x: int
+        :param y: The y position of the center of the patch.
+        :type y: int
+        :return: The patch size.
+        :rtype: float
+        """
+        pixels_per_meter = example_with_perspective.perspective[y, x]
+        patch_size = 3 * pixels_per_meter
+        return patch_size
 
     @staticmethod
     def pad_example(example, y_padding=(0, 0), x_padding=(0, 0)):
@@ -204,3 +188,54 @@ class RandomlySelectPatchAndRescale:
             label = (label / unnormalized_label_sum) * original_label_sum
         roi = scipy.misc.imresize(patch.roi, self.image_scaled_size, mode='F') > 0.5
         return CrowdExample(image=image, label=label, roi=roi)
+
+
+class ExtractPatchForPositionAndRescale(PatchAndRescale):
+    def __call__(self, example_with_perspective, y, x):
+        """
+        :param example_with_perspective: A crowd example with perspective.
+        :type example_with_perspective: CrowdExampleWithPerspective
+        :return: A crowd example.
+        :rtype: CrowdExample
+        """
+        original_patch_size = self.get_patch_size_for_position(example_with_perspective, y, x)
+        patch = self.get_patch_for_position(example_with_perspective, y, x)
+        roi_image_patch = patch.image * np.expand_dims(patch.roi, axis=-1)
+        patch = CrowdExample(image=roi_image_patch, label=patch.label * patch.roi, roi=patch.roi)
+        example = self.resize_patch(patch)
+        return example, original_patch_size
+
+
+class RandomlySelectPatchAndRescale(PatchAndRescale):
+    """
+    Selects a patch of the example and resizes it based on the perspective map.
+    """
+    def __call__(self, example_with_perspective):
+        """
+        :param example_with_perspective: A crowd example with perspective.
+        :type example_with_perspective: CrowdExampleWithPerspective
+        :return: A crowd example.
+        :rtype: CrowdExample
+        """
+        while True:
+            y, x = self.select_random_position(example_with_perspective)
+            patch = self.get_patch_for_position(example_with_perspective, y, x)
+            if np.any(patch.roi):
+                roi_image_patch = patch.image * np.expand_dims(patch.roi, axis=-1)
+                patch = CrowdExample(image=roi_image_patch, label=patch.label * patch.roi, roi=patch.roi)
+                example = self.resize_patch(patch)
+                return example
+
+    @staticmethod
+    def select_random_position(example_with_perspective):
+        """
+        Picks a random position in the full example.
+
+        :param example_with_perspective: The full example with perspective.
+        :type example_with_perspective: CrowdExampleWithPerspective
+        :return: The y and x positions chosen randomly.
+        :rtype: (int, int)
+        """
+        y = np.random.randint(example_with_perspective.label.shape[0])
+        x = np.random.randint(example_with_perspective.label.shape[1])
+        return y, x

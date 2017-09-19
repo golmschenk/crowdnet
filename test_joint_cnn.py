@@ -11,18 +11,18 @@ from torch.nn import Module, Conv2d
 from torch.nn.functional import leaky_relu
 import torch.utils.data
 import torchvision
+import scipy.misc
 
 import transforms
 from crowd_dataset import CrowdDataset
 
 model_path = 'saved_model_path'
 
-train_transform = torchvision.transforms.Compose([transforms.Rescale([564 // 8, 720 // 8]),
-                                                  transforms.NegativeOneToOneNormalizeImage(),
-                                                  transforms.NumpyArraysToTorchTensors()])
+patch_transform = transforms.ExtractPatchForPositionAndRescale()
+test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
+                                                 transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'test', transform=train_transform)
-test_dataset_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+test_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'test')
 
 
 class JointCNN(Module):
@@ -76,22 +76,52 @@ scene_number = 1
 running_count = 0
 running_count_error = 0
 running_density_error = 0
-for example_index, examples in enumerate(test_dataset_loader):
-    images, labels, roi = examples
-    images, labels, roi = Variable(images), Variable(labels), Variable(roi)
-    predicted_density_maps, predicted_count_maps = net(images)
-    predicted_density_maps, predicted_count_maps = predicted_density_maps.squeeze(dim=1), predicted_count_maps.squeeze(
-        dim=1)
-    predicted_density_maps = predicted_density_maps * roi
-    predicted_count_maps = predicted_count_maps * roi
-    density_loss = torch.abs(predicted_density_maps - labels).sum(1).sum(1).mean()
-    count_loss = torch.abs(predicted_count_maps.sum(1).sum(1) - labels.sum(1).sum(1)).mean()
-    running_count += labels.sum(1).sum(1).squeeze()
-    running_count_error += count_loss.data[0]
-    running_density_error += density_loss.data[0]
+for example_index, full_example in enumerate(test_dataset):
+    number_of_pixels = full_example.shape[0] * full_example.shape[1]
+    predicted_labels_stack = np.full([number_of_pixels, *full_example.labels.shape], fill_value=np.nan)
+    full_predicted_count = 0
+    pixel_index = 0
+    for y in range(full_example.shape[0]):
+        for x in range(full_example.shape[1]):
+            example_patch, original_patch_size = patch_transform(full_example, y, x)
+            example = test_transform(example_patch)
+            image, label = Variable(example.image), Variable(example.label)
+            predicted_label, predicted_count = net(image)
+            predicted_label, predicted_count = predicted_label.numpy(), predicted_count.numpy()
+            predicted_label_sum = np.sum(predicted_label)
+            half_patch_size = int(original_patch_size // 2)
+            predicted_label = scipy.misc.imresize(predicted_label, (2 * half_patch_size) + 1, mode='F')
+            if predicted_label_sum != 0:
+                unnormalized_predicted_label_sum = np.sum(predicted_label)
+                predicted_label = (predicted_label / unnormalized_predicted_label_sum) * predicted_label_sum
+            y_start_offset = 0
+            if y - half_patch_size < 0:
+                y_start_offset = half_patch_size - y
+            y_end_offset = 0
+            if y + half_patch_size > full_example.label.shape[0]:
+                y_end_offset = y + half_patch_size - example.label.shape[0]
+            x_start_offset = 0
+            if x - half_patch_size < 0:
+                x_start_offset = half_patch_size - x
+            x_end_offset = 0
+            if x + half_patch_size > full_example.label.shape[1]:
+                x_end_offset = x + half_patch_size - example.label.shape[1]
+            predicted_labels_stack[pixel_index,
+                                   y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                   x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                   ] = predicted_label[y_start_offset:-y_end_offset,
+                                                       x_start_offset:-x_end_offset]
+            pixel_index += 1
+            full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
+    full_predicted_label = np.nanmean(predicted_labels_stack, axis=0)
+    density_loss = np.abs(full_predicted_label - full_example.label.numpy()).sum()
+    count_loss = np.abs(full_predicted_count - full_example.label.numpy().sum())
+    running_count += full_example.label.numpy().sum()
+    running_count_error += count_loss
+    running_density_error += density_loss
     if ((example_index + 1) % 120) == 0:
         print('Scene {}'.format(scene_number))
-        print('Total count: {}'.format(running_count.data[0]))
+        print('Total count: {}'.format(running_count))
         count_error = running_count_error / 120
         print('Mean count error: {}'.format(count_error))
         density_error = running_density_error / 120
