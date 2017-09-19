@@ -11,11 +11,10 @@ import torch.utils.data
 import torchvision
 from tensorboard import SummaryWriter
 
+import settings
 import transforms
 import viewer
 from crowd_dataset import CrowdDataset
-
-run_name = 'Joint CNN'
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                   transforms.RandomHorizontalFlip(),
@@ -25,9 +24,9 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'train', transform=train_transform)
+train_dataset = CrowdDataset(settings.database_path, 'train', transform=train_transform)
 train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True, num_workers=4)
-validation_dataset = CrowdDataset('../storage/data/world_expo_datasets', 'validation', transform=validation_transform)
+validation_dataset = CrowdDataset(settings.database_path, 'validation', transform=validation_transform)
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, shuffle=False,
                                                         num_workers=4)
 
@@ -90,7 +89,7 @@ count_running_loss = 0
 density_running_loss = 0
 running_example_count = 0
 datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
-log_path_name = os.path.join('../storage/logs', run_name + ' {} ' + datetime_string)
+log_path_name = os.path.join(settings.log_directory, settings.trial_name + ' {} ' + datetime_string)
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')

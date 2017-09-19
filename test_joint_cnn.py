@@ -14,15 +14,14 @@ import torchvision
 import scipy.misc
 
 import transforms
+import settings
 from crowd_dataset import CrowdDataset
-
-model_path = '/Users/golmschenk/Code/crowdnet/logs/Joint CNN model y2017m09d18h15m11s19'
 
 patch_transform = transforms.ExtractPatchForPositionAndRescale()
 test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
                                                  transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset('data/mini_world_expo_datasets', 'test')
+test_dataset = CrowdDataset(settings.database_path, 'test')
 
 
 class JointCNN(Module):
@@ -72,7 +71,7 @@ class JointCNN(Module):
 
 
 net = JointCNN()
-net.load_state_dict(torch.load(model_path))
+net.load_state_dict(torch.load(settings.test_model_path))
 count_errors = []
 density_errors = []
 print('Starting test...')
@@ -85,7 +84,6 @@ for full_example_index, full_example in enumerate(test_dataset):
     bin_predicted_label = np.zeros_like(full_example.label, dtype=np.float32)
     hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
     full_predicted_count = 0
-    pixel_index = 0
     for y in range(full_example.label.shape[0]):
         for x in range(full_example.label.shape[1]):
             example_patch, original_patch_size = patch_transform(full_example, y, x)
@@ -121,7 +119,6 @@ for full_example_index, full_example in enumerate(test_dataset):
                                     y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                     x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                     ] += 1
-            pixel_index += 1
             full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
     full_predicted_label = bin_predicted_label / hit_predicted_label.astype(np.float32)
     density_loss = np.abs(full_predicted_label - full_example.label.numpy()).sum()
@@ -143,7 +140,7 @@ for full_example_index, full_example in enumerate(test_dataset):
         running_density_error = 0
         scene_number += 1
 
-csv_file_path = 'logs/Test Results.csv'
+csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
 if not os.path.isfile(csv_file_path):
     with open(csv_file_path, 'w') as csv_file:
         writer = csv.writer(csv_file)
@@ -152,7 +149,7 @@ if not os.path.isfile(csv_file_path):
                          'Mean Density'])
 with open(csv_file_path, 'a') as csv_file:
     writer = csv.writer(csv_file)
-    test_results = [os.path.basename(model_path), *count_errors, np.mean(count_errors),
+    test_results = [os.path.basename(settings.test_model_path), *count_errors, np.mean(count_errors),
                     *density_errors, np.mean(density_errors)]
     writer.writerow(test_results)
 
