@@ -2,12 +2,9 @@
 Code for a test session.
 """
 import csv
-
 import os
-
 import numpy as np
 from torch.autograd import Variable
-import torch.utils.data
 import torchvision
 import scipy.misc
 
@@ -45,7 +42,8 @@ for full_example_index, full_example in enumerate(test_dataset):
             example = test_transform(example_patch)
             image, label = Variable(example.image.unsqueeze(0)), Variable(example.label)
             predicted_label, predicted_count = net(image)
-            predicted_label, predicted_count = predicted_label.data.squeeze(0).numpy(), predicted_count.data.squeeze(0).numpy()
+            predicted_label = predicted_label.data.squeeze(0).numpy()
+            predicted_count = predicted_count.data.squeeze(0).numpy()
             predicted_label_sum = np.sum(predicted_label)
             half_patch_size = int(original_patch_size // 2)
             original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
@@ -65,17 +63,16 @@ for full_example_index, full_example in enumerate(test_dataset):
             x_end_offset = 0
             if x + half_patch_size >= full_example.label.shape[1]:
                 x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
-            bin_predicted_label[
-                                y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+            bin_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                 x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                 ] += predicted_label[y_start_offset:predicted_label.shape[0] - y_end_offset,
                                                      x_start_offset:predicted_label.shape[1] - x_end_offset]
-            hit_predicted_label[
-                                y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+            hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                 x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                 ] += 1
             full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
     full_predicted_count *= stride ** 2
+    hit_predicted_label[hit_predicted_label == 0] = 1  # TODO: Remove as should not be needed for a real use case.
     full_predicted_label = bin_predicted_label / hit_predicted_label.astype(np.float32)
     density_loss = np.abs(full_predicted_label - full_example.label).sum()
     count_loss = np.abs(full_predicted_count - full_example.label.sum())

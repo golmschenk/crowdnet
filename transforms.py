@@ -136,7 +136,8 @@ class PatchAndRescale:
                                 x - half_patch_size:x + half_patch_size + 1]
         return CrowdExample(image=image_patch, label=label_patch, roi=roi_patch)
 
-    def get_patch_size_for_position(self, example_with_perspective, y, x):
+    @staticmethod
+    def get_patch_size_for_position(example_with_perspective, y, x):
         """
         Gets the patch size for a 3x3 meter area based of the perspective and the position.
 
@@ -191,6 +192,9 @@ class PatchAndRescale:
 
 
 class ExtractPatchForPositionAndRescale(PatchAndRescale):
+    """
+    Given an example and a position, extracts the appropriate patch based on the perspective.
+    """
     def __call__(self, example_with_perspective, y, x):
         """
         :param example_with_perspective: A crowd example with perspective.

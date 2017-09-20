@@ -3,7 +3,6 @@ Main code for a training session.
 """
 import datetime
 import os
-
 import torch.utils.data
 import torchvision
 from tensorboard import SummaryWriter

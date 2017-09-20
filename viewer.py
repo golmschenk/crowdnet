@@ -2,13 +2,15 @@
 Code for assisting in viewing the results.
 """
 
-import matplotlib
-matplotlib.use('AGG')
+import matplotlib.pyplot
 import matplotlib.cm
 import numpy as np
 import torch
 import torchvision.utils
 import scipy.misc
+
+
+matplotlib.pyplot.switch_backend('Agg')
 
 
 def convert_density_maps_to_heatmaps(label, predicted_label):
