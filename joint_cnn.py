@@ -14,6 +14,7 @@ import settings
 import transforms
 import viewer
 from crowd_dataset import CrowdDataset
+from hardware import gpu, cpu
 from model import JointCNN
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
@@ -33,7 +34,7 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
                                                         num_workers=settings.number_of_data_loader_workers)
 
 net = JointCNN()
-net.cuda()
+gpu(net)
 optimizer = Adam(net.parameters())
 
 summary_step_period = settings.summary_step_period
@@ -51,7 +52,7 @@ print('Starting training...')
 for epoch in range(settings.number_of_epochs):
     for examples in train_dataset_loader:
         images, labels, _ = examples
-        images, labels = Variable(images.cuda()), Variable(labels.cuda())
+        images, labels = Variable(gpu(images)), Variable(gpu(labels))
         predicted_labels, predicted_counts = net(images)
         density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
@@ -64,8 +65,8 @@ for epoch in range(settings.number_of_epochs):
         density_running_loss += density_loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
-            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(),
-                                                                          predicted_labels.cpu())
+            comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
+                                                                          cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             mean_loss = running_loss / running_example_count
             mean_count_loss = count_running_loss / running_example_count
@@ -82,15 +83,15 @@ for epoch in range(settings.number_of_epochs):
             validation_count_running_loss = 0
             for validation_examples in train_dataset_loader:
                 images, labels, _ = validation_examples
-                images, labels = Variable(images.cuda()), Variable(labels.cuda())
+                images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = net(images)
                 density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
 
-            comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(),
-                                                                          predicted_labels.cpu())
+            comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
+                                                                          cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
             validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
             validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)

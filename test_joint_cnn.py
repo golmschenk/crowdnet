@@ -15,6 +15,7 @@ import transforms
 import settings
 from crowd_dataset import CrowdDataset
 from model import JointCNN
+from hardware import load
 
 patch_transform = transforms.ExtractPatchForPositionAndRescale()
 test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
@@ -23,7 +24,7 @@ test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNorm
 test_dataset = CrowdDataset(settings.database_path, 'test')
 
 net = JointCNN()
-net.load_state_dict(torch.load(settings.test_model_path))
+net.load_state_dict(load(settings.test_model_path))
 
 count_errors = []
 density_errors = []
