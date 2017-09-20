@@ -25,10 +25,12 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NumpyArraysToTorchTensors()])
 
 train_dataset = CrowdDataset(settings.database_path, 'train', transform=train_transform)
-train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=100, shuffle=True, num_workers=4)
+train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=settings.batch_size, shuffle=True,
+                                                   num_workers=settings.number_of_data_loader_workers)
 validation_dataset = CrowdDataset(settings.database_path, 'validation', transform=validation_transform)
-validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, shuffle=False,
-                                                        num_workers=4)
+validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=settings.batch_size,
+                                                        shuffle=False,
+                                                        num_workers=settings.number_of_data_loader_workers)
 
 
 class JointCNN(Module):
@@ -81,7 +83,7 @@ net = JointCNN()
 net.cuda()
 optimizer = Adam(net.parameters())
 
-summary_step_period = 100
+summary_step_period = settings.summary_step_period
 
 step = 0
 running_loss = 0
@@ -93,7 +95,7 @@ log_path_name = os.path.join(settings.log_directory, settings.trial_name + ' {} 
 summary_writer = SummaryWriter(log_path_name.format('train'))
 validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
 print('Starting training...')
-for epoch in range(1000):
+for epoch in range(settings.number_of_epochs):
     for examples in train_dataset_loader:
         images, labels, _ = examples
         images, labels = Variable(images.cuda()), Variable(labels.cuda())
@@ -133,6 +135,7 @@ for epoch in range(1000):
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
+
             comparison_image = viewer.create_crowd_images_comparison_grid(images.cpu(), labels.cpu(),
                                                                           predicted_labels.cpu())
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
