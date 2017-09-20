@@ -72,6 +72,7 @@ class JointCNN(Module):
 
 net = JointCNN()
 net.load_state_dict(torch.load(settings.test_model_path))
+
 count_errors = []
 density_errors = []
 print('Starting test...')
@@ -79,8 +80,9 @@ scene_number = 1
 running_count = 0
 running_count_error = 0
 running_density_error = 0
+stride = 8
 for full_example_index, full_example in enumerate(test_dataset):
-    print('Processing example {}\r'.format(full_example_index))
+    print('Processing example {}'.format(full_example_index), end='\r')
     bin_predicted_label = np.zeros_like(full_example.label, dtype=np.float32)
     hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
     full_predicted_count = 0
@@ -110,20 +112,21 @@ for full_example_index, full_example in enumerate(test_dataset):
             x_end_offset = 0
             if x + half_patch_size >= full_example.label.shape[1]:
                 x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
-                bin_predicted_label[
-                                    y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                    ] += predicted_label[y_start_offset:predicted_label.shape[0] - y_end_offset,
-                                                         x_start_offset:predicted_label.shape[1] - x_end_offset]
-                hit_predicted_label[
-                                    y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                    ] += 1
+            bin_predicted_label[
+                                y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                ] += predicted_label[y_start_offset:predicted_label.shape[0] - y_end_offset,
+                                                     x_start_offset:predicted_label.shape[1] - x_end_offset]
+            hit_predicted_label[
+                                y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                ] += 1
             full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
+    full_predicted_count *= stride ** 2
     full_predicted_label = bin_predicted_label / hit_predicted_label.astype(np.float32)
-    density_loss = np.abs(full_predicted_label - full_example.label.numpy()).sum()
-    count_loss = np.abs(full_predicted_count - full_example.label.numpy().sum())
-    running_count += full_example.label.numpy().sum()
+    density_loss = np.abs(full_predicted_label - full_example.label).sum()
+    count_loss = np.abs(full_predicted_count - full_example.label.sum())
+    running_count += full_example.label.sum()
     running_count_error += count_loss
     running_density_error += density_loss
     if ((full_example_index + 1) % 120) == 0:
