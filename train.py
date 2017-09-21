@@ -44,9 +44,10 @@ count_running_loss = 0
 density_running_loss = 0
 running_example_count = 0
 datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
-log_path_name = os.path.join(settings.log_directory, settings.trial_name + ' {} ' + datetime_string)
-summary_writer = SummaryWriter(log_path_name.format('train'))
-validation_summary_writer = SummaryWriter(log_path_name.format('validation'))
+trial_directory = os.path.join(settings.log_directory, settings.trial_name + ' ' + datetime_string)
+os.makedirs(trial_directory, exist_ok=True)
+summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
+validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
 print('Starting training...')
 for epoch in range(settings.number_of_epochs):
     for examples in train_dataset_loader:
@@ -88,7 +89,6 @@ for epoch in range(settings.number_of_epochs):
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
-
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
@@ -97,7 +97,7 @@ for epoch in range(settings.number_of_epochs):
             validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
-
-torch.save(net.state_dict(), log_path_name.format('model'))
-
+    if epoch != 0 and epoch % settings.save_epoch_period == 0:
+        torch.save(net.state_dict(), os.path.join(trial_directory, 'model {}'.format(epoch)))
+torch.save(net.state_dict(), os.path.join(trial_directory, 'model final {}'.format(settings.number_of_epochs)))
 print('Finished Training')
