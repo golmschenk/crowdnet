@@ -30,14 +30,16 @@ scene_number = 1
 running_count = 0
 running_count_error = 0
 running_density_error = 0
-stride = 8
 for full_example_index, full_example in enumerate(test_dataset):
     print('Processing example {}'.format(full_example_index), end='\r')
-    bin_predicted_label = np.zeros_like(full_example.label, dtype=np.float32)
+    sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
+    sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
     hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
-    full_predicted_count = 0
-    for y in range(full_example.label.shape[0]):
-        for x in range(full_example.label.shape[1]):
+    half_patch_size = 1
+    y = 0
+    while y < full_example.label.shape[0]:
+        x = 0
+        while x < full_example.label.shape[1]:
             example_patch, original_patch_size = patch_transform(full_example, y, x)
             example = test_transform(example_patch)
             image, label = Variable(example.image.unsqueeze(0)), Variable(example.label)
@@ -48,9 +50,10 @@ for full_example_index, full_example in enumerate(test_dataset):
             half_patch_size = int(original_patch_size // 2)
             original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
             predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
-            if predicted_label_sum != 0:
-                unnormalized_predicted_label_sum = np.sum(predicted_label)
-                predicted_label = (predicted_label / unnormalized_predicted_label_sum) * predicted_label_sum
+            unnormalized_predicted_label_sum = np.sum(predicted_label)
+            if unnormalized_predicted_label_sum != 0:
+                density_label = predicted_label * predicted_label_sum / unnormalized_predicted_label_sum
+                count_label = predicted_label * predicted_count / unnormalized_predicted_label_sum
             y_start_offset = 0
             if y - half_patch_size < 0:
                 y_start_offset = half_patch_size - y
@@ -63,17 +66,23 @@ for full_example_index, full_example in enumerate(test_dataset):
             x_end_offset = 0
             if x + half_patch_size >= full_example.label.shape[1]:
                 x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
-            bin_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                ] += predicted_label[y_start_offset:predicted_label.shape[0] - y_end_offset,
-                                                     x_start_offset:predicted_label.shape[1] - x_end_offset]
+            sum_density_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                              x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                              ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
+                                                 x_start_offset:density_label.shape[1] - x_end_offset]
+            sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                            x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                            ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
+                                               x_start_offset:density_label.shape[1] - x_end_offset]
             hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                 x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                 ] += 1
-            full_predicted_count += predicted_count / (((2 * half_patch_size) + 1) ** 2)
-    full_predicted_count *= stride ** 2
-    hit_predicted_label[hit_predicted_label == 0] = 1  # TODO: Remove as should not be needed for a real use case.
-    full_predicted_label = bin_predicted_label / hit_predicted_label.astype(np.float32)
+            x += half_patch_size
+        y += half_patch_size
+    sum_density_label *= full_example.roi
+    sum_count_label *= full_example.roi
+    full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
+    full_predicted_count = np.sum(sum_count_label / hit_predicted_label.astype(np.float32))
     density_loss = np.abs(full_predicted_label - full_example.label).sum()
     count_loss = np.abs(full_predicted_count - full_example.label.sum())
     running_count += full_example.label.sum()
