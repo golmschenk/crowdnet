@@ -21,7 +21,7 @@ test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNorm
 test_dataset = CrowdDataset(settings.database_path, 'test')
 
 net = JointCNN()
-net.load_state_dict(load(settings.test_model_path))
+net.load_state_dict(load(settings.load_model_path))
 
 count_errors = []
 density_errors = []
@@ -111,7 +111,7 @@ if not os.path.isfile(csv_file_path):
                          'Mean Density'])
 with open(csv_file_path, 'a') as csv_file:
     writer = csv.writer(csv_file)
-    test_results = [os.path.basename(settings.test_model_path), *count_errors, np.mean(count_errors),
+    test_results = [os.path.basename(settings.load_model_path), *count_errors, np.mean(count_errors),
                     *density_errors, np.mean(density_errors)]
     writer.writerow(test_results)
 
