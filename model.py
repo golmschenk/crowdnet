@@ -1,9 +1,15 @@
 """
 Code for the model structures.
 """
+import os
 
+import pickle
+import torch
 from torch.nn import Module, Conv2d, MaxPool2d
 from torch.nn.functional import relu
+
+import settings
+from hardware import load
 
 
 class JointCNN(Module):
@@ -50,3 +56,40 @@ class JointCNN(Module):
         x_count = self.count_conv(x).view(-1)
         x_density = self.density_conv(x).view(-1, 18, 18)
         return x_density, x_count
+
+
+def save_trainer(trial_directory, model, optimizer, epoch, step):
+    """
+    Saves all the information needed to continue training.
+
+    :param trial_directory: The directory path to save the data to.
+    :type trial_directory: str
+    :param model: The model to save.
+    :type model: torch.nn.Module
+    :param optimizer: The optimizer to save.
+    :type optimizer: torch.optim.optimizer.Optimizer
+    :param epoch: The number of epochs completed.
+    :type epoch: int
+    :param step: The number of steps completed.
+    :type step: int
+    """
+    torch.save(model.state_dict(), os.path.join(trial_directory, 'model {}'.format(epoch)))
+    torch.save(optimizer.state_dict(), os.path.join(trial_directory, 'optimizer {}'.format(epoch)))
+    with open(os.path.join(trial_directory, 'meta {}'.format(epoch)), 'wb') as pickle_file:
+        pickle.dump({'epoch': epoch, 'step': step}, pickle_file)
+
+
+def load_trainer():
+    """
+    Saves all the information needed to continue training.
+
+    :return: The model and optimizer state dict and the metadata for the training run.
+    :rtype: dict[torch.Tensor], dict[torch.Tensor], int, int
+    """
+    model_state_dict = load(settings.load_model_path)
+    optimizer_state_dict = load(settings.load_model_path.replace('model', 'optimizer'))
+    with open(settings.load_model_path.replace('model', 'meta'), 'rb') as pickle_file:
+        metadata = pickle.load(pickle_file)
+    step = metadata['step']
+    epoch = metadata['epoch']
+    return model_state_dict, optimizer_state_dict, epoch, step

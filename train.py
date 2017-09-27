@@ -14,7 +14,7 @@ import transforms
 import viewer
 from crowd_dataset import CrowdDataset
 from hardware import gpu, cpu
-from model import JointCNN
+from model import JointCNN, load_trainer, save_trainer
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                   transforms.RandomHorizontalFlip(),
@@ -35,10 +35,15 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
 net = JointCNN()
 gpu(net)
 optimizer = Adam(net.parameters())
+step = 0
+epoch = 0
+
+if settings.load_model_path:
+    model_state_dict, optimizer_state_dict, epoch, step = load_trainer()
+    net.load_state_dict(model_state_dict)
+    optimizer.load_state_dict(optimizer_state_dict)
 
 summary_step_period = settings.summary_step_period
-
-step = 0
 running_loss = 0
 count_running_loss = 0
 density_running_loss = 0
@@ -49,7 +54,7 @@ os.makedirs(trial_directory, exist_ok=True)
 summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
 validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
 print('Starting training...')
-for epoch in range(settings.number_of_epochs):
+while epoch < settings.number_of_epochs:
     for examples in train_dataset_loader:
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
@@ -97,7 +102,8 @@ for epoch in range(settings.number_of_epochs):
             validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
+        epoch += 1
     if epoch != 0 and epoch % settings.save_epoch_period == 0:
-        torch.save(net.state_dict(), os.path.join(trial_directory, 'model {}'.format(epoch)))
-torch.save(net.state_dict(), os.path.join(trial_directory, 'model final {}'.format(settings.number_of_epochs)))
+        save_trainer(trial_directory, net, optimizer, epoch, step)
+save_trainer(trial_directory, net, optimizer, epoch, step)
 print('Finished Training')
