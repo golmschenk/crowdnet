@@ -90,6 +90,10 @@ def load_trainer():
     optimizer_state_dict = load(settings.load_model_path.replace('model', 'optimizer'))
     with open(settings.load_model_path.replace('model', 'meta'), 'rb') as pickle_file:
         metadata = pickle.load(pickle_file)
-    step = metadata['step']
-    epoch = metadata['epoch']
+    if settings.restore_mode == 'continue':
+        step = metadata['step']
+        epoch = metadata['epoch']
+    else:
+        step = 0
+        epoch = 0
     return model_state_dict, optimizer_state_dict, epoch, step

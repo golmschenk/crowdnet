@@ -12,3 +12,5 @@ number_of_epochs = 100
 batch_size = 10
 number_of_data_loader_workers = 0
 save_epoch_period = 1000
+learning_rate_function = lambda epoch: 1e-3 * (0.1 ** (epoch / 2000))
+restore_mode = 'transfer'

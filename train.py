@@ -7,7 +7,7 @@ import torch.utils.data
 import torchvision
 from tensorboard import SummaryWriter
 from torch.autograd import Variable
-from torch.optim import Adam
+from torch.optim import Adam, lr_scheduler
 
 import settings
 import transforms
@@ -42,6 +42,8 @@ if settings.load_model_path:
     model_state_dict, optimizer_state_dict, epoch, step = load_trainer()
     net.load_state_dict(model_state_dict)
     optimizer.load_state_dict(optimizer_state_dict)
+scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_function)
+scheduler.step(epoch)
 
 summary_step_period = settings.summary_step_period
 running_loss = 0
@@ -102,7 +104,7 @@ while epoch < settings.number_of_epochs:
             validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
-        epoch += 1
+    epoch += 1
     if epoch != 0 and epoch % settings.save_epoch_period == 0:
         save_trainer(trial_directory, net, optimizer, epoch, step)
 save_trainer(trial_directory, net, optimizer, epoch, step)
