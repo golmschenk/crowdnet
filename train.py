@@ -5,7 +5,7 @@ import datetime
 import os
 import torch.utils.data
 import torchvision
-from tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from torch.optim import Adam, lr_scheduler
 
@@ -34,7 +34,7 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
 
 net = JointCNN()
 gpu(net)
-optimizer = Adam(net.parameters())
+optimizer = Adam(net.parameters(), lr=settings.initial_learning_rate)
 step = 0
 epoch = 0
 
@@ -42,7 +42,7 @@ if settings.load_model_path:
     model_state_dict, optimizer_state_dict, epoch, step = load_trainer()
     net.load_state_dict(model_state_dict)
     optimizer.load_state_dict(optimizer_state_dict)
-scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_function)
+scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 scheduler.step(epoch)
 
 summary_step_period = settings.summary_step_period
@@ -105,6 +105,7 @@ while epoch < settings.number_of_epochs:
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
         step += 1
     epoch += 1
+    scheduler.step(epoch)
     if epoch != 0 and epoch % settings.save_epoch_period == 0:
         save_trainer(trial_directory, net, optimizer, epoch, step)
 save_trainer(trial_directory, net, optimizer, epoch, step)
