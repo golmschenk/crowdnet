@@ -61,8 +61,8 @@ while epoch < settings.number_of_epochs:
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
         predicted_labels, predicted_counts = net(images)
-        density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
-        count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
+        density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
+        count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
         loss.backward()
         optimizer.step()
@@ -92,8 +92,8 @@ while epoch < settings.number_of_epochs:
                 images, labels, _ = validation_examples
                 images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = net(images)
-                density_loss = torch.abs(predicted_labels - labels).sum(1).sum(1).mean()
-                count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
+                density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
+                count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
