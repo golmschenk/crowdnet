@@ -112,7 +112,7 @@ if not os.path.isfile(csv_file_path):
 with open(csv_file_path, 'a') as csv_file:
     writer = csv.writer(csv_file)
     path_list = os.path.normpath(settings.load_model_path).split(os.sep)
-    model_name = os.path.join(path_list[-2:])
+    model_name = os.path.join(*path_list[-2:])
     test_results = [model_name, *count_errors, np.mean(count_errors),
                     *density_errors, np.mean(density_errors)]
     writer.writerow(test_results)
