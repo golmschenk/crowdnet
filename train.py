@@ -34,7 +34,7 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
 
 net = JointCNN()
 gpu(net)
-optimizer = Adam(net.parameters(), lr=settings.initial_learning_rate)
+optimizer = Adam(net.parameters())
 step = 0
 epoch = 0
 
@@ -42,6 +42,7 @@ if settings.load_model_path:
     model_state_dict, optimizer_state_dict, epoch, step = load_trainer()
     net.load_state_dict(model_state_dict)
     optimizer.load_state_dict(optimizer_state_dict)
+optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay})
 scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 scheduler.step(epoch)
 
