@@ -45,6 +45,6 @@ def load(model_path):
     :rtype: dict[T]
     """
     if torch.cuda.is_available():
-        return torch.load(model_path)
-    else:
         return torch.load(model_path, map_location=lambda storage, loc: storage)
+    else:
+        return torch.load(model_path)
