@@ -12,7 +12,7 @@ import transforms
 import settings
 from crowd_dataset import CrowdDataset
 from model import JointCNN
-from hardware import load
+from hardware import load, gpu, cpu
 
 patch_transform = transforms.ExtractPatchForPositionAndRescale()
 test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
@@ -22,6 +22,7 @@ test_dataset = CrowdDataset(settings.database_path, 'test')
 
 net = JointCNN()
 net.load_state_dict(load(settings.load_model_path))
+gpu(net)
 
 count_errors = []
 density_errors = []
@@ -42,10 +43,10 @@ for full_example_index, full_example in enumerate(test_dataset):
         while x < full_example.label.shape[1]:
             example_patch, original_patch_size = patch_transform(full_example, y, x)
             example = test_transform(example_patch)
-            image, label = Variable(example.image.unsqueeze(0)), Variable(example.label)
+            image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
             predicted_label, predicted_count = net(image)
-            predicted_label = predicted_label.data.squeeze(0).numpy()
-            predicted_count = predicted_count.data.squeeze(0).numpy()
+            predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
+            predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
             predicted_label_sum = np.sum(predicted_label)
             half_patch_size = int(original_patch_size // 2)
             original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
