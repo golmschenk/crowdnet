@@ -5,8 +5,8 @@ import os
 
 import pickle
 import torch
-from torch.nn import Module, Conv2d, MaxPool2d
-from torch.nn.functional import relu
+from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d
+from torch.nn.functional import relu, tanh
 
 import settings
 from hardware import load
@@ -14,7 +14,7 @@ from hardware import load
 
 class JointCNN(Module):
     """
-    Basic CNN that produces only a density map.
+    A CNN that produces a density map and a count.
     """
     def __init__(self):
         super().__init__()
@@ -56,6 +56,43 @@ class JointCNN(Module):
         x_count = self.count_conv(x).view(-1)
         x_density = self.density_conv(x).view(-1, 18, 18)
         return x_density, x_count
+
+
+class Generator(Module):
+    """
+    A generator for producing crowd images.
+    """
+    def __init__(self):
+        super().__init__()
+        self.conv_transpose1 = ConvTranspose2d(100, 64, kernel_size=18)
+        self.conv_transpose2 = ConvTranspose2d(self.conv_transpose1.out_channels, 32, kernel_size=4, stride=2,
+                                               padding=1)
+        self.conv_transpose3 = ConvTranspose2d(self.conv_transpose2.out_channels, 3, kernel_size=4, stride=2,
+                                               padding=1)
+
+    def forward(self, z):
+        """
+        The forward pass of the generator.
+
+        :param z: The input images.
+        :type z: torch.autograd.Variable
+        :return: Generated images.
+        :rtype: torch.autograd.Variable
+        """
+        z = z.view(-1, 100, 1, 1)
+        z = relu(self.conv_transpose1(z))
+        z = relu(self.conv_transpose2(z))
+        z = tanh(self.conv_transpose3(z))
+        return z
+
+    def __call__(self, *args, **kwargs):
+        """
+        Defined in subclass just to allow for type hinting.
+
+        :return: The predicted labels.
+        :rtype: torch.autograd.Variable
+        """
+        return super().__call__(*args, **kwargs)
 
 
 def save_trainer(trial_directory, model, optimizer, epoch, step):
