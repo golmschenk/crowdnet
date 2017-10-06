@@ -124,7 +124,7 @@ def load_trainer():
     :rtype: dict[torch.Tensor], dict[torch.Tensor], int, int
     """
     model_state_dict = load(settings.load_model_path)
-    optimizer_state_dict = load(settings.load_model_path.replace('model', 'optimizer'))
+    optimizer_state_dict = torch.load(settings.load_model_path.replace('model', 'optimizer'))
     with open(settings.load_model_path.replace('model', 'meta'), 'rb') as pickle_file:
         metadata = pickle.load(pickle_file)
     if settings.restore_mode == 'continue':
