@@ -53,11 +53,7 @@ generator_scheduler.step(epoch)
 
 summary_step_period = settings.summary_step_period
 running_scalars = defaultdict(float)
-running_loss = 0
-generated_discriminator_running_loss = 0
-generator_running_loss = 0
-count_running_loss = 0
-density_running_loss = 0
+validation_running_scalars = defaultdict(float)
 running_example_count = 0
 datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
 trial_directory = os.path.join(settings.log_directory, settings.trial_name + ' ' + datetime_string)
@@ -112,15 +108,15 @@ while epoch < settings.number_of_epochs:
                 predicted_labels, predicted_counts = discriminator(images)
                 density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
-                running_scalars['Density Loss'] += density_loss.data[0]
-                running_scalars['Count Loss'] += count_loss.data[0]
+                validation_running_scalars['Density Loss'] += density_loss.data[0]
+                validation_running_scalars['Count Loss'] += count_loss.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            for name, running_scalar in running_scalars.items():
+            for name, running_scalar in validation_running_scalars.items():
                 mean_scalar = running_scalar / len(validation_dataset)
                 validation_summary_writer.add_scalar(name, mean_scalar, global_step=step)
-                running_scalars[name] = 0
+                validation_running_scalars[name] = 0
         step += 1
     epoch += 1
     discriminator_scheduler.step(epoch)
