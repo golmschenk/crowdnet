@@ -66,21 +66,24 @@ while epoch < settings.number_of_epochs:
     for examples in train_dataset_loader:
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
-        z = torch.randn(settings.batch_size, 100)
+        z = torch.randn(images.data.shape[0], 100)
         generated_images = generator(Variable(gpu(z)))
         predicted_labels, predicted_counts = discriminator(images)
+        real_feature_layer = discriminator.feature_layer
         generated_predicted_labels, generated_predicted_counts = discriminator(generated_images)
+        generated_feature_layer = discriminator.feature_layer
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
         generated_density_loss = torch.abs(generated_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         generated_count_loss = torch.abs(generated_predicted_counts).pow(settings.loss_order).mean()
-        generated_loss = generated_count_loss + (generated_density_loss * 10)
+        generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
+        generator_loss = (real_feature_layer - generated_feature_layer).abs().sum() / images.data.shape[0]
         discriminator_optimizer.zero_grad()
-        (loss + generated_loss).backward(retain_graph=True)
+        (loss + generated_discriminator_loss).backward(retain_graph=True)
         discriminator_optimizer.step()
         generator_optimizer.zero_grad()
-        generated_loss.neg().backward()
+        generator_loss.backward()
         generator_optimizer.step()
         running_loss += loss.data[0]
         count_running_loss += count_loss.data[0]
@@ -91,7 +94,7 @@ while epoch < settings.number_of_epochs:
                                                                           cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             generated_images_image = torchvision.utils.make_grid(generated_images.data[:9], nrow=3)
-            summary_writer.add_image('Generated', generated_images_image)
+            summary_writer.add_image('Generated', generated_images_image, global_step=step)
             mean_loss = running_loss / running_example_count
             mean_count_loss = count_running_loss / running_example_count
             mean_density_loss = density_running_loss / running_example_count
