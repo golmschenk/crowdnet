@@ -3,6 +3,7 @@ Main code for a GAN training session.
 """
 import datetime
 import os
+import numpy as np
 import torch.utils.data
 import torchvision
 from collections import defaultdict
@@ -77,7 +78,9 @@ while epoch < settings.number_of_epochs:
         generated_density_loss = torch.abs(generated_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         generated_count_loss = torch.abs(generated_predicted_counts).pow(settings.loss_order).mean()
         generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
-        generator_loss = (real_feature_layer - generated_feature_layer).abs().sum() / images.data.shape[0]
+        generator_loss = (real_feature_layer - generated_feature_layer).abs().sum(1).sum(1).sum(1)
+        minimum_count_considered = Variable(gpu(torch.from_numpy(np.full([images.data.shape[0]], 1e-10, dtype=np.float32))))
+        generator_loss = (generator_loss / torch.max(generated_predicted_counts, minimum_count_considered)).mean()
         discriminator_optimizer.zero_grad()
         (loss + generated_discriminator_loss).backward(retain_graph=True)
         discriminator_optimizer.step()
