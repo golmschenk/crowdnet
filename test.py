@@ -84,8 +84,9 @@ for full_example_index, full_example in enumerate(test_dataset):
     sum_count_label *= full_example.roi
     full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
     full_predicted_count = np.sum(sum_count_label / hit_predicted_label.astype(np.float32))
-    density_loss = np.abs(full_predicted_label - full_example.label).sum()
-    count_loss = np.abs(full_predicted_count - full_example.label.sum())
+    label_in_roi = full_example.label * full_example.roi
+    density_loss = np.abs(full_predicted_label - label_in_roi).sum()
+    count_loss = np.abs(full_predicted_count - label_in_roi.sum())
     running_count += full_example.label.sum()
     running_count_error += count_loss
     running_density_error += density_loss

@@ -53,6 +53,6 @@ def data_type_block_database_from_structured_database(structured_database_direct
         np.save(os.path.join(dataset_directory, 'perspectives.npy'), perspectives)
 
 
-data_type_block_database_from_structured_database('../storage/data/world_expo_database',
-                                                  '../storage/data/world_expo_datasets',
-                                                  '../storage/data/world_expo_database/datasets.json')
+data_type_block_database_from_structured_database('../storage/data/Head World Expo Database',
+                                                  '../storage/data/Head World Expo Datasets',
+                                                  '../storage/data/Head World Expo Database/datasets.json')
