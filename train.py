@@ -59,9 +59,11 @@ validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validat
 print('Starting training...')
 while epoch < settings.number_of_epochs:
     for examples in train_dataset_loader:
-        images, labels, _ = examples
+        images, labels, rois = examples
+        rois = Variable(rois)
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
         predicted_labels, predicted_counts = net(images)
+        labels, predicted_labels = labels * rois, predicted_labels * rois
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
