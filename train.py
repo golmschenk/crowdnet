@@ -60,7 +60,7 @@ print('Starting training...')
 while epoch < settings.number_of_epochs:
     for examples in train_dataset_loader:
         images, labels, rois = examples
-        rois = Variable(rois)
+        rois = Variable(gpu(rois))
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
         predicted_labels, predicted_counts = net(images)
         labels, predicted_labels = labels * rois, predicted_labels * rois
@@ -91,21 +91,26 @@ while epoch < settings.number_of_epochs:
             running_example_count = 0
             validation_density_running_loss = 0
             validation_count_running_loss = 0
+            validation_count_running_error = 0
             for validation_examples in train_dataset_loader:
                 images, labels, _ = validation_examples
                 images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = net(images)
                 density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
+                count_error = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_density_running_loss += density_loss.data[0]
                 validation_count_running_loss += count_loss.data[0]
+                validation_count_running_error += count_error.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
             validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
             validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)
+            validation_mean_count_error = validation_count_running_error / len(validation_dataset)
             validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
             validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
+            validation_summary_writer.add_scalar('Count Loss', validation_count_running_error, global_step=step)
         step += 1
     epoch += 1
     scheduler.step(epoch)

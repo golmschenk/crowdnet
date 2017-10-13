@@ -5,7 +5,7 @@ The settings for a run.
 trial_name = 'Joint CNN'
 log_directory = 'logs'
 database_path = 'data/mini_world_expo_datasets'
-load_model_path = '/Users/golmschenk/Desktop/model 7000'
+load_model_path = None
 
 summary_step_period = 10
 number_of_epochs = 100

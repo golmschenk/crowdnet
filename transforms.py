@@ -187,7 +187,7 @@ class PatchAndRescale:
         unnormalized_label_sum = np.sum(label)
         if unnormalized_label_sum != 0:
             label = (label / unnormalized_label_sum) * original_label_sum
-        roi = scipy.misc.imresize(patch.roi, self.image_scaled_size, mode='F') > 0.5
+        roi = scipy.misc.imresize(patch.roi, self.label_scaled_size, mode='F') > 0.5
         return CrowdExample(image=image, label=label, roi=roi)
 
 
