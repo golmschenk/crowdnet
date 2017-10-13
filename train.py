@@ -5,6 +5,7 @@ import datetime
 import os
 import torch.utils.data
 import torchvision
+from collections import defaultdict
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from torch.optim import Adam, lr_scheduler
@@ -47,10 +48,9 @@ scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_mu
 scheduler.step(epoch)
 
 summary_step_period = settings.summary_step_period
-running_loss = 0
-count_running_loss = 0
-density_running_loss = 0
 running_example_count = 0
+running_scalars = defaultdict(float)
+validation_running_scalars = defaultdict(float)
 datetime_string = datetime.datetime.now().strftime("y%Ym%md%dh%Hm%Ms%S")
 trial_directory = os.path.join(settings.log_directory, settings.trial_name + ' ' + datetime_string)
 os.makedirs(trial_directory, exist_ok=True)
@@ -70,47 +70,37 @@ while epoch < settings.number_of_epochs:
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        running_loss += loss.data[0]
-        count_running_loss += count_loss.data[0]
-        density_running_loss += density_loss.data[0]
+        running_scalars['Loss'] += loss.data[0]
+        running_scalars['Count Loss'] += count_loss.data[0]
+        running_scalars['Density Loss'] += density_loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            mean_loss = running_loss / running_example_count
-            mean_count_loss = count_running_loss / running_example_count
-            mean_density_loss = density_running_loss / running_example_count
+            mean_loss = running_scalars['Loss'] / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
-            summary_writer.add_scalar('Loss', mean_loss, global_step=step)
-            summary_writer.add_scalar('Count Loss', mean_count_loss, global_step=step)
-            summary_writer.add_scalar('Density Loss', mean_density_loss, global_step=step)
-            running_loss = 0
-            count_running_loss = 0
-            density_running_loss = 0
-            running_example_count = 0
-            validation_density_running_loss = 0
-            validation_count_running_loss = 0
-            validation_count_running_error = 0
+            for name, running_scalar in running_scalars.items():
+                mean_scalar = running_scalar / running_example_count
+                summary_writer.add_scalar(name, mean_scalar, global_step=step)
+                running_scalars[name] = 0
             for validation_examples in train_dataset_loader:
                 images, labels, _ = validation_examples
                 images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = net(images)
                 density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
-                count_error = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
-                validation_density_running_loss += density_loss.data[0]
-                validation_count_running_loss += count_loss.data[0]
-                validation_count_running_error += count_error.data[0]
+                count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
+                validation_running_scalars['Density Loss'] += density_loss.data[0]
+                validation_running_scalars['Count Loss'] += count_loss.data[0]
+                validation_running_scalars['Count MAE'] += count_mae.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            validation_mean_density_loss = validation_density_running_loss / len(validation_dataset)
-            validation_mean_count_loss = validation_count_running_loss / len(validation_dataset)
-            validation_mean_count_error = validation_count_running_error / len(validation_dataset)
-            validation_summary_writer.add_scalar('Density Loss', validation_mean_density_loss, global_step=step)
-            validation_summary_writer.add_scalar('Count Loss', validation_mean_count_loss, global_step=step)
-            validation_summary_writer.add_scalar('Count Loss', validation_count_running_error, global_step=step)
+            for name, running_scalar in validation_running_scalars.items():
+                mean_scalar = running_scalar / len(validation_dataset)
+                validation_summary_writer.add_scalar(name, mean_scalar, global_step=step)
+                validation_running_scalars[name] = 0
         step += 1
     epoch += 1
     scheduler.step(epoch)
