@@ -80,7 +80,7 @@ while epoch < settings.number_of_epochs:
         generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
         generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
         generator_count_loss = generated_predicted_counts.mean()
-        generator_loss = generated_count_loss + (generated_density_loss * 10)
+        generator_loss = (generated_count_loss + (generated_density_loss * 10)).neg()
         discriminator_optimizer.zero_grad()
         (loss + generated_discriminator_loss).backward(retain_graph=True)
         discriminator_optimizer.step()
