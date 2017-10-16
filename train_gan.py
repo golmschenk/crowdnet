@@ -16,8 +16,7 @@ import transforms
 import viewer
 from crowd_dataset import CrowdDataset
 from hardware import gpu, cpu
-from model import Generator, JointCNN
-
+from model import Generator, JointCNN, WeightClipper
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                   transforms.RandomHorizontalFlip(),
@@ -37,6 +36,7 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
 
 generator = Generator()
 discriminator = JointCNN()
+weight_clipper = WeightClipper()
 gpu(generator)
 gpu(discriminator)
 generator_optimizer = Adam(generator.parameters())
@@ -78,15 +78,17 @@ while epoch < settings.number_of_epochs:
         generated_density_loss = torch.abs(generated_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         generated_count_loss = torch.abs(generated_predicted_counts).pow(settings.loss_order).mean()
         generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
-        generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
-        generator_count_loss = generated_predicted_counts.mean()
-        generator_loss = (generated_count_loss + (generated_density_loss * 10)).neg()
         discriminator_optimizer.zero_grad()
         (loss + generated_discriminator_loss).backward(retain_graph=True)
         discriminator_optimizer.step()
-        generator_optimizer.zero_grad()
-        generator_loss.backward()
-        generator_optimizer.step()
+        generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
+        generator_count_loss = generated_predicted_counts.mean()
+        generator_loss = (generated_count_loss + (generated_density_loss * 10)).neg()
+        if step % 5 == 0:
+            generator_optimizer.zero_grad()
+            generator_loss.backward()
+            generator_optimizer.step()
+        discriminator.apply(weight_clipper)
         running_scalars['Loss'] += loss.data[0]
         running_scalars['Count Loss'] += count_loss.data[0]
         running_scalars['Density Loss'] += density_loss.data[0]

@@ -5,7 +5,7 @@ import os
 
 import pickle
 import torch
-from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d
+from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d, BatchNorm2d
 from torch.nn.functional import tanh, leaky_relu
 
 import settings
@@ -21,8 +21,10 @@ class JointCNN(Module):
         self.conv1 = Conv2d(3, 32, kernel_size=7, padding=3)
         self.max_pool1 = MaxPool2d(kernel_size=2, stride=2)
         self.conv2 = Conv2d(self.conv1.out_channels, 32, kernel_size=7, padding=3)
+        self.conv2_bn = BatchNorm2d(32)
         self.max_pool2 = MaxPool2d(kernel_size=2, stride=2)
         self.conv3 = Conv2d(self.conv2.out_channels, 64, kernel_size=5, padding=2)
+        self.conv3_bn = BatchNorm2d(64)
         self.conv4 = Conv2d(self.conv3.out_channels, 1000, kernel_size=18)
         self.conv5 = Conv2d(self.conv4.out_channels, 400, kernel_size=1)
         self.count_conv = Conv2d(self.conv5.out_channels, 1, kernel_size=1)
@@ -49,9 +51,9 @@ class JointCNN(Module):
         """
         x = leaky_relu(self.conv1(x))
         x = self.max_pool1(x)
-        x = leaky_relu(self.conv2(x))
+        x = self.conv2_bn(leaky_relu(self.conv2(x)))
         x = self.max_pool2(x)
-        x = leaky_relu(self.conv3(x))
+        x = self.conv3_bn(leaky_relu(self.conv3(x)))
         x = leaky_relu(self.conv4(x))
         x = leaky_relu(self.conv5(x))
         self.feature_layer = x
@@ -67,8 +69,10 @@ class Generator(Module):
     def __init__(self):
         super().__init__()
         self.conv_transpose1 = ConvTranspose2d(100, 64, kernel_size=18)
+        self.conv_transpose1_bn = BatchNorm2d(64)
         self.conv_transpose2 = ConvTranspose2d(self.conv_transpose1.out_channels, 32, kernel_size=4, stride=2,
                                                padding=1)
+        self.conv_transpose2_bn = BatchNorm2d(32)
         self.conv_transpose3 = ConvTranspose2d(self.conv_transpose2.out_channels, 3, kernel_size=4, stride=2,
                                                padding=1)
 
@@ -82,8 +86,8 @@ class Generator(Module):
         :rtype: torch.autograd.Variable
         """
         z = z.view(-1, 100, 1, 1)
-        z = leaky_relu(self.conv_transpose1(z))
-        z = leaky_relu(self.conv_transpose2(z))
+        z = self.conv_transpose1_bn(leaky_relu(self.conv_transpose1(z)))
+        z = self.conv_transpose2_bn(leaky_relu(self.conv_transpose2(z)))
         z = tanh(self.conv_transpose3(z))
         return z
 
@@ -95,6 +99,13 @@ class Generator(Module):
         :rtype: torch.autograd.Variable
         """
         return super().__call__(*args, **kwargs)
+
+
+class WeightClipper:
+    def __call__(self, module):
+        if hasattr(module, 'weight'):
+            w = module.weight.data
+            w.clamp_(-0.1, 0.1)
 
 
 def save_trainer(trial_directory, model, optimizer, epoch, step):
