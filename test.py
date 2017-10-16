@@ -45,6 +45,7 @@ for full_example_index, full_example in enumerate(test_dataset):
             example = test_transform(example_patch)
             image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
             predicted_label, predicted_count = net(image)
+            predicted_label = predicted_label * example.roi
             predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
             predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
             predicted_label_sum = np.sum(predicted_label)
