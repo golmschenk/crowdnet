@@ -55,8 +55,8 @@ class JointCNN(Module):
         x = relu(self.conv4(x))
         x = relu(self.conv5(x))
         self.feature_layer = x
-        x_count = self.count_conv(x).view(-1)
-        x_density = self.density_conv(x).view(-1, 18, 18)
+        x_count = relu(self.count_conv(x)).view(-1)
+        x_density = relu(self.density_conv(x)).view(-1, 18, 18)
         return x_density, x_count
 
 
