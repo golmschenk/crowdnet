@@ -3,13 +3,12 @@ Main code for a GAN training session.
 """
 import datetime
 import os
-import numpy as np
 import torch.utils.data
 import torchvision
 from collections import defaultdict
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
-from torch.optim import Adam, lr_scheduler
+from torch.optim import Adam, lr_scheduler, RMSprop
 
 import settings
 import transforms
@@ -39,8 +38,8 @@ discriminator = JointCNN()
 weight_clipper = WeightClipper()
 gpu(generator)
 gpu(discriminator)
-generator_optimizer = Adam(generator.parameters())
-discriminator_optimizer = Adam(discriminator.parameters())
+generator_optimizer = RMSprop(generator.parameters())
+discriminator_optimizer = RMSprop(discriminator.parameters())
 
 step = 0
 epoch = 0
