@@ -6,7 +6,7 @@ import os
 import pickle
 import torch
 from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d, BatchNorm2d
-from torch.nn.functional import tanh, leaky_relu
+from torch.nn.functional import leaky_relu, tanh
 
 import settings
 from hardware import load
