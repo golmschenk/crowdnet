@@ -56,6 +56,9 @@ for full_example_index, full_example in enumerate(test_dataset):
             if unnormalized_predicted_label_sum != 0:
                 density_label = predicted_label * predicted_label_sum / unnormalized_predicted_label_sum
                 count_label = predicted_label * predicted_count / unnormalized_predicted_label_sum
+            else:
+                density_label = predicted_label
+                count_label = np.full(predicted_label.shape, predicted_count / predicted_label.size)
             y_start_offset = 0
             if y - half_patch_size < 0:
                 y_start_offset = half_patch_size - y
@@ -74,8 +77,8 @@ for full_example_index, full_example in enumerate(test_dataset):
                                                  x_start_offset:density_label.shape[1] - x_end_offset]
             sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                             x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                            ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
-                                               x_start_offset:density_label.shape[1] - x_end_offset]
+                            ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
+                                             x_start_offset:count_label.shape[1] - x_end_offset]
             hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                 x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                 ] += 1
