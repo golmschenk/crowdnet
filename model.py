@@ -6,7 +6,7 @@ import os
 import pickle
 import torch
 from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d
-from torch.nn.functional import relu, tanh
+from torch.nn.functional import tanh, leaky_relu
 
 import settings
 from hardware import load
@@ -47,16 +47,16 @@ class JointCNN(Module):
         :return: The predicted density labels.
         :rtype: torch.autograd.Variable
         """
-        x = relu(self.conv1(x))
+        x = leaky_relu(self.conv1(x))
         x = self.max_pool1(x)
-        x = relu(self.conv2(x))
+        x = leaky_relu(self.conv2(x))
         x = self.max_pool2(x)
-        x = relu(self.conv3(x))
-        x = relu(self.conv4(x))
-        x = relu(self.conv5(x))
+        x = leaky_relu(self.conv3(x))
+        x = leaky_relu(self.conv4(x))
+        x = leaky_relu(self.conv5(x))
         self.feature_layer = x
-        x_count = relu(self.count_conv(x)).view(-1)
-        x_density = relu(self.density_conv(x)).view(-1, 18, 18)
+        x_count = leaky_relu(self.count_conv(x)).view(-1)
+        x_density = leaky_relu(self.density_conv(x)).view(-1, 18, 18)
         return x_density, x_count
 
 
@@ -82,8 +82,8 @@ class Generator(Module):
         :rtype: torch.autograd.Variable
         """
         z = z.view(-1, 100, 1, 1)
-        z = relu(self.conv_transpose1(z))
-        z = relu(self.conv_transpose2(z))
+        z = leaky_relu(self.conv_transpose1(z))
+        z = leaky_relu(self.conv_transpose2(z))
         z = tanh(self.conv_transpose3(z))
         return z
 
