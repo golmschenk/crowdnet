@@ -63,31 +63,43 @@ validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validat
 print('Starting training...')
 while epoch < settings.number_of_epochs:
     for examples in train_dataset_loader:
+        # Real image discriminator processing.
+        discriminator_optimizer.zero_grad()
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
-        z = torch.randn(images.data.shape[0], 100)
-        fake_images = generator(Variable(gpu(z)))
         predicted_labels, predicted_counts = discriminator(images)
-        real_feature_layer = discriminator.feature_layer
-        fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
-        fake_feature_layer = discriminator.feature_layer
-        generator_density_loss = fake_predicted_labels.sum(1).sum(1).mean()
-        generator_count_loss = fake_predicted_counts.mean()
-        generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
-        if step % 5 == 0:
-            generator_optimizer.zero_grad()
-            generator_loss.backward(retain_graph=True)
-            generator_optimizer.step()
+        # real_feature_layer = discriminator.feature_layer
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
+        loss.backward()
+        # Fake image discriminator processing.
+        z = torch.randn(images.data.shape[0], 100)
+        fake_images = generator(Variable(gpu(z)))
+        fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
+        # fake_feature_layer = discriminator.feature_layer
         fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
-        discriminator_optimizer.zero_grad()
-        (loss + fake_discriminator_loss).backward()
+        fake_discriminator_loss.backward()
+        # Discriminator update.
         discriminator_optimizer.step()
         discriminator.apply(weight_clipper)
+
+        # Generator image processing.
+        generator_optimizer.zero_grad()
+        z = torch.randn(images.data.shape[0], 100)
+        fake_images = generator(Variable(gpu(z)))
+        fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
+        # fake_feature_layer = discriminator.feature_layer
+        generator_density_loss = fake_predicted_labels.sum(1).sum(1).mean()
+        generator_count_loss = fake_predicted_counts.mean()
+        generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
+        # Generator update.
+        if step % 5 == 0:
+            generator_loss.backward(retain_graph=True)
+            generator_optimizer.step()
+
         running_scalars['Loss'] += loss.data[0]
         running_scalars['Count Loss'] += count_loss.data[0]
         running_scalars['Density Loss'] += density_loss.data[0]
