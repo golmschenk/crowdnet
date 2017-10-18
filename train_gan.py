@@ -8,7 +8,7 @@ import torchvision
 from collections import defaultdict
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
-from torch.optim import Adam, lr_scheduler, RMSprop
+from torch.optim import lr_scheduler, RMSprop
 
 import settings
 import transforms
@@ -66,13 +66,13 @@ while epoch < settings.number_of_epochs:
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
         z = torch.randn(images.data.shape[0], 100)
-        generated_images = generator(Variable(gpu(z)))
+        fake_images = generator(Variable(gpu(z)))
         predicted_labels, predicted_counts = discriminator(images)
         real_feature_layer = discriminator.feature_layer
-        generated_predicted_labels, generated_predicted_counts = discriminator(generated_images)
-        generated_feature_layer = discriminator.feature_layer
-        generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
-        generator_count_loss = generated_predicted_counts.mean()
+        fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
+        fake_feature_layer = discriminator.feature_layer
+        generator_density_loss = fake_predicted_labels.sum(1).sum(1).mean()
+        generator_count_loss = fake_predicted_counts.mean()
         generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
         if step % 5 == 0:
             generator_optimizer.zero_grad()
@@ -81,25 +81,25 @@ while epoch < settings.number_of_epochs:
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
-        generated_density_loss = torch.abs(generated_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
-        generated_count_loss = torch.abs(generated_predicted_counts).pow(settings.loss_order).mean()
-        generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
+        fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
+        fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
+        fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
         discriminator_optimizer.zero_grad()
-        (loss + generated_discriminator_loss).backward()
+        (loss + fake_discriminator_loss).backward()
         discriminator_optimizer.step()
         discriminator.apply(weight_clipper)
         running_scalars['Loss'] += loss.data[0]
         running_scalars['Count Loss'] += count_loss.data[0]
         running_scalars['Density Loss'] += density_loss.data[0]
-        running_scalars['Generated Discriminator Loss'] += generated_discriminator_loss.data[0]
+        running_scalars['Fake Discriminator Loss'] += fake_discriminator_loss.data[0]
         running_scalars['Generator Loss'] += generator_loss.data[0]
         running_example_count += images.size()[0]
         if step % summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
-            generated_images_image = torchvision.utils.make_grid(generated_images.data[:9], nrow=3)
-            summary_writer.add_image('Generated', generated_images_image, global_step=step)
+            fake_images_image = torchvision.utils.make_grid(fake_images.data[:9], nrow=3)
+            summary_writer.add_image('Fake', fake_images_image, global_step=step)
             mean_loss = running_scalars['Loss'] / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
             for name, running_scalar in running_scalars.items():
