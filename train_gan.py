@@ -71,6 +71,13 @@ while epoch < settings.number_of_epochs:
         real_feature_layer = discriminator.feature_layer
         generated_predicted_labels, generated_predicted_counts = discriminator(generated_images)
         generated_feature_layer = discriminator.feature_layer
+        generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
+        generator_count_loss = generated_predicted_counts.mean()
+        generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
+        if step % 5 == 0:
+            generator_optimizer.zero_grad()
+            generator_loss.backward(retain_graph=True)
+            generator_optimizer.step()
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
@@ -78,15 +85,8 @@ while epoch < settings.number_of_epochs:
         generated_count_loss = torch.abs(generated_predicted_counts).pow(settings.loss_order).mean()
         generated_discriminator_loss = generated_count_loss + (generated_density_loss * 10)
         discriminator_optimizer.zero_grad()
-        (loss + generated_discriminator_loss).backward(retain_graph=True)
+        (loss + generated_discriminator_loss).backward()
         discriminator_optimizer.step()
-        generator_density_loss = generated_predicted_labels.sum(1).sum(1).mean()
-        generator_count_loss = generated_predicted_counts.mean()
-        generator_loss = (generated_count_loss + (generated_density_loss * 10)).neg()
-        if step % 5 == 0:
-            generator_optimizer.zero_grad()
-            generator_loss.backward()
-            generator_optimizer.step()
         discriminator.apply(weight_clipper)
         running_scalars['Loss'] += loss.data[0]
         running_scalars['Count Loss'] += count_loss.data[0]
