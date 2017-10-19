@@ -8,14 +8,14 @@ import torchvision
 from collections import defaultdict
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
-from torch.optim import lr_scheduler, RMSprop
+from torch.optim import lr_scheduler, Adam
 
 import settings
 import transforms
 import viewer
 from crowd_dataset import CrowdDataset
 from hardware import gpu, cpu
-from model import Generator, JointCNN, WeightClipper
+from model import Generator, JointCNN
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                   transforms.RandomHorizontalFlip(),
@@ -35,11 +35,10 @@ validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batc
 
 generator = Generator()
 discriminator = JointCNN()
-weight_clipper = WeightClipper()
 gpu(generator)
 gpu(discriminator)
-generator_optimizer = RMSprop(generator.parameters())
-discriminator_optimizer = RMSprop(discriminator.parameters())
+generator_optimizer = Adam(generator.parameters())
+discriminator_optimizer = Adam(discriminator.parameters())
 
 step = 0
 epoch = 0
@@ -74,21 +73,36 @@ while epoch < settings.number_of_epochs:
         loss = count_loss + (density_loss * 10)
         loss.backward()
         # Fake image discriminator processing.
-        z = torch.randn(images.data.shape[0], 100)
+        current_batch_size = images.data.shape[0]
+        z = torch.randn(current_batch_size, 100)
         fake_images = generator(Variable(gpu(z)))
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
         # fake_feature_layer = discriminator.feature_layer
         fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
-        fake_discriminator_loss.backward()
+        fake_discriminator_loss.backward(retain_graph=True)
+        # Gradient penalty.
+        alpha = Variable(gpu(torch.rand(current_batch_size, 1, 1, 1)))
+        interpolates = alpha * images + ((1.0 - alpha) * fake_images)
+        interpolates_labels, interpolates_counts = discriminator(interpolates)
+        density_gradients = torch.autograd.grad(outputs=interpolates_labels, inputs=interpolates,
+                                                grad_outputs=gpu(torch.ones(interpolates_labels.size())),
+                                                create_graph=True, retain_graph=True, only_inputs=True)[0]
+        density_gradients = density_gradients.view(current_batch_size, -1)
+        density_gradient_penalty = ((density_gradients.norm(2, dim=1) - 1) ** 2).mean() * 10
+        count_gradients = torch.autograd.grad(outputs=interpolates_counts, inputs=interpolates,
+                                              grad_outputs=gpu(torch.ones(interpolates_counts.size())),
+                                              create_graph=True, retain_graph=True, only_inputs=True)[0]
+        count_gradients = count_gradients.view(current_batch_size, -1)
+        count_gradients_penalty = ((count_gradients.norm(2, dim=1) - 1) ** 2).mean() * 10
+        gradient_penalty = count_gradients_penalty + density_gradient_penalty * 10
+        gradient_penalty.backward()
         # Discriminator update.
         discriminator_optimizer.step()
-        discriminator.apply(weight_clipper)
-
         # Generator image processing.
         generator_optimizer.zero_grad()
-        z = torch.randn(images.data.shape[0], 100)
+        z = torch.randn(current_batch_size, 100)
         fake_images = generator(Variable(gpu(z)))
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
         # fake_feature_layer = discriminator.feature_layer
@@ -97,7 +111,7 @@ while epoch < settings.number_of_epochs:
         generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
         # Generator update.
         if step % 5 == 0:
-            generator_loss.backward(retain_graph=True)
+            generator_loss.backward()
             generator_optimizer.step()
 
         running_scalars['Loss'] += loss.data[0]
