@@ -108,7 +108,7 @@ class WeightClipper:
             w.clamp_(-0.1, 0.1)
 
 
-def save_trainer(trial_directory, model, optimizer, epoch, step):
+def save_trainer(trial_directory, model, optimizer, epoch, step, prefix=None):
     """
     Saves all the information needed to continue training.
 
@@ -122,23 +122,41 @@ def save_trainer(trial_directory, model, optimizer, epoch, step):
     :type epoch: int
     :param step: The number of steps completed.
     :type step: int
+    :param prefix: A prefix to append to the model file names.
+    :type prefix: str
     """
-    torch.save(model.state_dict(), os.path.join(trial_directory, 'model {}'.format(epoch)))
-    torch.save(optimizer.state_dict(), os.path.join(trial_directory, 'optimizer {}'.format(epoch)))
-    with open(os.path.join(trial_directory, 'meta {}'.format(epoch)), 'wb') as pickle_file:
+    model_path = 'model {}'.format(epoch)
+    optimizer_path = 'optimizer {}'.format(epoch)
+    meta_path = 'meta {}'.format(epoch)
+    if prefix:
+        model_path = prefix + ' ' + model_path
+        optimizer_path = prefix + ' ' + optimizer_path
+        meta_path = prefix + ' ' + meta_path
+    torch.save(model.state_dict(), os.path.join(trial_directory, model_path))
+    torch.save(optimizer.state_dict(), os.path.join(trial_directory, optimizer_path))
+    with open(os.path.join(trial_directory, meta_path), 'wb') as pickle_file:
         pickle.dump({'epoch': epoch, 'step': step}, pickle_file)
 
 
-def load_trainer():
+def load_trainer(prefix=None):
     """
     Saves all the information needed to continue training.
 
+    :param prefix: A prefix to append to the model file names.
+    :type prefix: str
     :return: The model and optimizer state dict and the metadata for the training run.
     :rtype: dict[torch.Tensor], dict[torch.Tensor], int, int
     """
-    model_state_dict = load(settings.load_model_path)
-    optimizer_state_dict = torch.load(settings.load_model_path.replace('model', 'optimizer'))
-    with open(settings.load_model_path.replace('model', 'meta'), 'rb') as pickle_file:
+    model_path = settings.load_model_path
+    optimizer_path = settings.load_model_path.replace('model', 'optimizer')
+    meta_path = settings.load_model_path.replace('model', 'meta')
+    if prefix:
+        model_path = prefix + ' ' + model_path
+        optimizer_path = prefix + ' ' + optimizer_path
+        meta_path = prefix + ' ' + meta_path
+    model_state_dict = load(model_path)
+    optimizer_state_dict = torch.load(optimizer_path)
+    with open(meta_path, 'rb') as pickle_file:
         metadata = pickle.load(pickle_file)
     if settings.restore_mode == 'continue':
         step = metadata['step']

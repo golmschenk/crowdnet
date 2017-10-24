@@ -15,7 +15,7 @@ import transforms
 import viewer
 from crowd_dataset import CrowdDataset
 from hardware import gpu, cpu
-from model import Generator, JointCNN
+from model import Generator, JointCNN, load_trainer, save_trainer
 
 train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                   transforms.RandomHorizontalFlip(),
@@ -43,9 +43,17 @@ discriminator_optimizer = Adam(discriminator.parameters())
 step = 0
 epoch = 0
 
+if settings.load_model_path:
+    d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
+    discriminator.load_state_dict(d_model_state_dict)
+    discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
 discriminator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay})
 discriminator_scheduler = lr_scheduler.LambdaLR(discriminator_optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 discriminator_scheduler.step(epoch)
+if settings.load_model_path:
+    g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
+    generator.load_state_dict(g_model_state_dict)
+    generator_optimizer.load_state_dict(g_optimizer_state_dict)
 generator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay})
 generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 generator_scheduler.step(epoch)
@@ -151,4 +159,9 @@ while epoch < settings.number_of_epochs:
     epoch += 1
     discriminator_scheduler.step(epoch)
     generator_scheduler.step(epoch)
+    if epoch != 0 and epoch % settings.save_epoch_period == 0:
+        save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
+        save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
+save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
+save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
 print('Finished Training')
