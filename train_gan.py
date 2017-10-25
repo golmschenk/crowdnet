@@ -43,22 +43,23 @@ discriminator_optimizer = Adam(discriminator.parameters())
 step = 0
 epoch = 0
 
+optimizer_defaults = {'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay}
 if settings.load_model_path:
     d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
     discriminator.load_state_dict(d_model_state_dict)
     discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-discriminator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay})
-discriminator_scheduler = lr_scheduler.LambdaLR(discriminator_optimizer, lr_lambda=settings.learning_rate_multiplier_function)
+discriminator_optimizer.param_groups[0].update(optimizer_defaults)
+discriminator_scheduler = lr_scheduler.LambdaLR(discriminator_optimizer,
+                                                lr_lambda=settings.learning_rate_multiplier_function)
 discriminator_scheduler.step(epoch)
 if settings.load_model_path:
     g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
     generator.load_state_dict(g_model_state_dict)
     generator_optimizer.load_state_dict(g_optimizer_state_dict)
-generator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_decay': settings.weight_decay})
+generator_optimizer.param_groups[0].update(optimizer_defaults)
 generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 generator_scheduler.step(epoch)
 
-summary_step_period = settings.summary_step_period
 running_scalars = defaultdict(float)
 validation_running_scalars = defaultdict(float)
 running_example_count = 0
@@ -128,7 +129,7 @@ while epoch < settings.number_of_epochs:
         running_scalars['Fake Discriminator Loss'] += fake_discriminator_loss.data[0]
         running_scalars['Generator Loss'] += generator_loss.data[0]
         running_example_count += images.size()[0]
-        if step % summary_step_period == 0 and step != 0:
+        if step % settings.summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)

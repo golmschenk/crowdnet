@@ -47,7 +47,6 @@ optimizer.param_groups[0].update({'lr': settings.initial_learning_rate, 'weight_
 scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=settings.learning_rate_multiplier_function)
 scheduler.step(epoch)
 
-summary_step_period = settings.summary_step_period
 running_example_count = 0
 running_scalars = defaultdict(float)
 validation_running_scalars = defaultdict(float)
@@ -74,7 +73,7 @@ while epoch < settings.number_of_epochs:
         running_scalars['Count Loss'] += count_loss.data[0]
         running_scalars['Density Loss'] += density_loss.data[0]
         running_example_count += images.size()[0]
-        if step % summary_step_period == 0 and step != 0:
+        if step % settings.summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
