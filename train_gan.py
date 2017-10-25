@@ -146,8 +146,10 @@ while epoch < settings.number_of_epochs:
                 predicted_labels, predicted_counts = discriminator(images)
                 density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
+                count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_running_scalars['Density Loss'] += density_loss.data[0]
                 validation_running_scalars['Count Loss'] += count_loss.data[0]
+                validation_running_scalars['Count MAE'] += count_mae.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
