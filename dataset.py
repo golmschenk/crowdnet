@@ -7,8 +7,8 @@ import json
 import numpy as np
 
 
-def data_type_block_database_from_structured_database(structured_database_directory, data_type_database_directory,
-                                                      dataset_json_file_name):
+def data_type_block_dataset_from_structured_database(structured_database_directory, data_type_database_directory,
+                                                     dataset_json_file_name):
     """
     Converts from the structured database to single file datasets per data type.
 
@@ -53,6 +53,6 @@ def data_type_block_database_from_structured_database(structured_database_direct
         np.save(os.path.join(dataset_directory, 'perspectives.npy'), perspectives)
 
 
-data_type_block_database_from_structured_database('../storage/data/Head World Expo Database',
+data_type_block_dataset_from_structured_database('../storage/data/Head World Expo Database',
                                                   '../storage/data/Head World Expo Datasets',
                                                   '../storage/data/Head World Expo Database/datasets.json')
