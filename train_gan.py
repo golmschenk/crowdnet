@@ -3,6 +3,7 @@ Main code for a GAN training session.
 """
 import datetime
 import os
+import numpy as np
 import torch.utils.data
 import torchvision
 from collections import defaultdict
@@ -13,7 +14,7 @@ from torch.optim import lr_scheduler, Adam
 import settings
 import transforms
 import viewer
-from crowd_dataset import CrowdDataset
+from crowd_dataset import CrowdDataset, CrowdDatasetWithUnlabeled
 from hardware import gpu, cpu
 from model import Generator, JointCNN, load_trainer, save_trainer
 
@@ -25,9 +26,9 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDataset(settings.database_path, 'train', transform=train_transform)
+train_dataset = CrowdDatasetWithUnlabeled(settings.database_path, 'train', transform=train_transform)
 train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=settings.batch_size, shuffle=True,
-                                                   num_workers=settings.number_of_data_loader_workers)
+                                                   num_workers=settings.number_of_data_loader_workers, drop_last=True)
 validation_dataset = CrowdDataset(settings.database_path, 'validation', transform=validation_transform)
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=settings.batch_size,
                                                         shuffle=False,
@@ -70,23 +71,40 @@ summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
 validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
 print('Starting training...')
 while epoch < settings.number_of_epochs:
-    for examples in train_dataset_loader:
+    for examples, unlabeled_examples in train_dataset_loader:
         # Real image discriminator processing.
         discriminator_optimizer.zero_grad()
         images, labels, _ = examples
         images, labels = Variable(gpu(images)), Variable(gpu(labels))
         predicted_labels, predicted_counts = discriminator(images)
-        # real_feature_layer = discriminator.feature_layer
+        real_feature_layer = discriminator.feature_layer
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
         loss.backward()
+        # Unlabeled image discriminator processing.
+        unlabeled_images, _, _ = unlabeled_examples
+        unlabeled_images = Variable(gpu(unlabeled_images))
+        unlabeled_predicted_labels, unlabeled_predicted_counts = discriminator(unlabeled_images)
+
+        predicted_label_count_mean = predicted_labels.sum(1).sum(1).mean()
+        predicted_count_mean = predicted_counts.mean()
+        unlabeled_predicted_count_mean = unlabeled_predicted_counts.mean()
+        unlabeled_predicted_label_count_mean = unlabeled_predicted_labels.sum(1).sum(1).mean()
+        beta = 2.0
+        unlabeled_count_loss_min = torch.max(0.0, predicted_count_mean / beta - unlabeled_predicted_count_mean)
+        unlabeled_count_loss_max = torch.max(0.0, unlabeled_predicted_count_mean - predicted_count_mean * beta)
+        unlabeled_label_loss_min = torch.max(0.0, predicted_label_count_mean / beta - unlabeled_predicted_label_count_mean)
+        unlabeled_label_loss_max = torch.max(0.0, unlabeled_predicted_label_count_mean - predicted_label_count_mean * beta)
+        unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
+        unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
+        unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
+        unlabeled_loss.backward()
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
         z = torch.randn(current_batch_size, 100)
         fake_images = generator(Variable(gpu(z)))
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
-        # fake_feature_layer = discriminator.feature_layer
         fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
@@ -114,10 +132,12 @@ while epoch < settings.number_of_epochs:
         z = torch.randn(current_batch_size, 100)
         fake_images = generator(Variable(gpu(z)))
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
-        # fake_feature_layer = discriminator.feature_layer
-        generator_density_loss = fake_predicted_labels.sum(1).sum(1).mean()
-        generator_count_loss = fake_predicted_counts.mean()
-        generator_loss = (generator_count_loss + (generator_density_loss * 10)).neg()
+        fake_feature_layer = discriminator.feature_layer
+        generator_loss = (real_feature_layer - fake_feature_layer).abs().sum(1).sum(1).sum(1)
+        fake_predicted_label_sums = fake_predicted_labels.sum(1).sum(1)
+        feature_weights = fake_predicted_counts + (fake_predicted_label_sums * 10)
+        minimum_weights = Variable(gpu(torch.from_numpy(np.full([images.data.shape[0]], 1e-10, dtype=np.float32))))
+        generator_loss = (generator_loss / torch.max(feature_weights, minimum_weights)).mean()
         # Generator update.
         if step % 5 == 0:
             generator_loss.backward()
