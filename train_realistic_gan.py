@@ -142,7 +142,7 @@ while epoch < settings.number_of_epochs:
                 summary_writer.add_scalar(name, mean_scalar, global_step=step)
                 running_scalars[name] = 0
             running_example_count = 0
-            for validation_examples in train_dataset_loader:
+            for validation_examples in validation_dataset_loader:
                 images, labels, _ = validation_examples
                 images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = discriminator(images)
