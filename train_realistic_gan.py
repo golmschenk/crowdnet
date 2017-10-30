@@ -25,10 +25,10 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDataset(settings.database_path, 'train', transform=train_transform)
+train_dataset = CrowdDataset(settings.train_dataset_path, 'train', transform=train_transform)
 train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=settings.batch_size, shuffle=True,
                                                    num_workers=settings.number_of_data_loader_workers)
-validation_dataset = CrowdDataset(settings.database_path, 'validation', transform=validation_transform)
+validation_dataset = CrowdDataset(settings.validation_dataset_path, 'validation', transform=validation_transform)
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=settings.batch_size,
                                                         shuffle=False,
                                                         num_workers=settings.number_of_data_loader_workers)

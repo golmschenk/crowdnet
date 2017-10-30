@@ -4,7 +4,9 @@ The settings for a run.
 
 trial_name = 'Joint CNN'
 log_directory = 'logs'
-database_path = 'data/mini_world_expo_datasets'
+train_dataset_path = 'data/mini_world_expo_datasets'
+validation_dataset_path = train_dataset_path
+test_dataset_path = validation_dataset_path
 load_model_path = None
 
 summary_step_period = 10

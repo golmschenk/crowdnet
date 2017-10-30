@@ -18,7 +18,7 @@ patch_transform = transforms.ExtractPatchForPositionAndRescale()
 test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
                                                  transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset(settings.database_path, 'test')
+test_dataset = CrowdDataset(settings.test_dataset_path, 'test')
 
 net = JointCNN()
 net.load_state_dict(load(settings.load_model_path))
