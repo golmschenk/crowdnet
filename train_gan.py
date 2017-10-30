@@ -26,10 +26,10 @@ validation_transform = torchvision.transforms.Compose([transforms.RandomlySelect
                                                        transforms.NegativeOneToOneNormalizeImage(),
                                                        transforms.NumpyArraysToTorchTensors()])
 
-train_dataset = CrowdDatasetWithUnlabeled(settings.database_path, 'train', transform=train_transform)
+train_dataset = CrowdDatasetWithUnlabeled(settings.train_dataset_path, 'train', transform=train_transform)
 train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=settings.batch_size, shuffle=True,
-                                                   num_workers=settings.number_of_data_loader_workers, drop_last=True)
-validation_dataset = CrowdDataset(settings.database_path, 'validation', transform=validation_transform)
+                                                   num_workers=settings.number_of_data_loader_workers)
+validation_dataset = CrowdDataset(settings.validation_dataset_path, 'validation', transform=validation_transform)
 validation_dataset_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=settings.batch_size,
                                                         shuffle=False,
                                                         num_workers=settings.number_of_data_loader_workers)
@@ -70,7 +70,7 @@ os.makedirs(trial_directory, exist_ok=True)
 summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
 validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
 print('Starting training...')
-while epoch < settings.number_of_epochs:
+while step < settings.number_of_epochs:
     for examples, unlabeled_examples in train_dataset_loader:
         # Real image discriminator processing.
         discriminator_optimizer.zero_grad()
@@ -81,7 +81,7 @@ while epoch < settings.number_of_epochs:
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
-        loss.backward()
+        loss.backward(retain_graph=True)
         # Unlabeled image discriminator processing.
         unlabeled_images, _, _ = unlabeled_examples
         unlabeled_images = Variable(gpu(unlabeled_images))
@@ -92,14 +92,15 @@ while epoch < settings.number_of_epochs:
         unlabeled_predicted_count_mean = unlabeled_predicted_counts.mean()
         unlabeled_predicted_label_count_mean = unlabeled_predicted_labels.sum(1).sum(1).mean()
         beta = 2.0
-        unlabeled_count_loss_min = torch.max(0.0, predicted_count_mean / beta - unlabeled_predicted_count_mean)
-        unlabeled_count_loss_max = torch.max(0.0, unlabeled_predicted_count_mean - predicted_count_mean * beta)
-        unlabeled_label_loss_min = torch.max(0.0, predicted_label_count_mean / beta - unlabeled_predicted_label_count_mean)
-        unlabeled_label_loss_max = torch.max(0.0, unlabeled_predicted_label_count_mean - predicted_label_count_mean * beta)
+        zero = Variable(gpu(torch.FloatTensor([0])))
+        unlabeled_count_loss_min = torch.max(zero, predicted_count_mean / beta - unlabeled_predicted_count_mean)
+        unlabeled_count_loss_max = torch.max(zero, unlabeled_predicted_count_mean - predicted_count_mean * beta)
+        unlabeled_label_loss_min = torch.max(zero, predicted_label_count_mean / beta - unlabeled_predicted_label_count_mean)
+        unlabeled_label_loss_max = torch.max(zero, unlabeled_predicted_label_count_mean - predicted_label_count_mean * beta)
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
-        unlabeled_loss.backward()
+        unlabeled_loss.backward(retain_graph=True)
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
         z = torch.randn(current_batch_size, 100)
@@ -162,7 +163,7 @@ while epoch < settings.number_of_epochs:
                 summary_writer.add_scalar(name, mean_scalar, global_step=step)
                 running_scalars[name] = 0
             running_example_count = 0
-            for validation_examples in train_dataset_loader:
+            for validation_examples in validation_dataset_loader:
                 images, labels, _ = validation_examples
                 images, labels = Variable(gpu(images)), Variable(gpu(labels))
                 predicted_labels, predicted_counts = discriminator(images)
@@ -181,11 +182,11 @@ while epoch < settings.number_of_epochs:
                 validation_running_scalars[name] = 0
         step += 1
     epoch += 1
-    discriminator_scheduler.step(epoch)
-    generator_scheduler.step(epoch)
-    if epoch != 0 and epoch % settings.save_epoch_period == 0:
-        save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
-        save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
-save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
-save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
+    discriminator_scheduler.step(step)
+    generator_scheduler.step(step)
+    if step != 0 and step % settings.save_epoch_period == 0:
+        save_trainer(trial_directory, discriminator, discriminator_optimizer, step, step, prefix='discriminator')
+        save_trainer(trial_directory, generator, generator_optimizer, step, step, prefix='generator')
+save_trainer(trial_directory, discriminator, discriminator_optimizer, step, step, prefix='discriminator')
+save_trainer(trial_directory, generator, generator_optimizer, step, step, prefix='generator')
 print('Finished Training')
