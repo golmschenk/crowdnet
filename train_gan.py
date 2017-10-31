@@ -69,7 +69,7 @@ os.makedirs(trial_directory, exist_ok=True)
 summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
 validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
 print('Starting training...')
-while step < settings.number_of_epochs:
+while epoch < settings.number_of_epochs:
     for examples, unlabeled_examples in train_dataset_loader:
         # Real image discriminator processing.
         discriminator_optimizer.zero_grad()
@@ -99,6 +99,7 @@ while step < settings.number_of_epochs:
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
+        running_scalars['Unlabeled Loss'] += loss.data[0]
         unlabeled_loss.backward(retain_graph=True)
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
@@ -184,11 +185,11 @@ while step < settings.number_of_epochs:
                 validation_running_scalars[name] = 0
         step += 1
     epoch += 1
-    discriminator_scheduler.step(step)
-    generator_scheduler.step(step)
-    if step != 0 and step % settings.save_epoch_period == 0:
-        save_trainer(trial_directory, discriminator, discriminator_optimizer, step, step, prefix='discriminator')
-        save_trainer(trial_directory, generator, generator_optimizer, step, step, prefix='generator')
-save_trainer(trial_directory, discriminator, discriminator_optimizer, step, step, prefix='discriminator')
-save_trainer(trial_directory, generator, generator_optimizer, step, step, prefix='generator')
+    discriminator_scheduler.step(epoch)
+    generator_scheduler.step(epoch)
+    if epoch != 0 and epoch % settings.save_epoch_period == 0:
+        save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
+        save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
+save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
+save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
 print('Finished Training')
