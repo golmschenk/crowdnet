@@ -151,9 +151,9 @@ def load_trainer(prefix=None):
     optimizer_path = settings.load_model_path.replace('model', 'optimizer')
     meta_path = settings.load_model_path.replace('model', 'meta')
     if prefix:
-        model_path = prefix + ' ' + model_path
-        optimizer_path = prefix + ' ' + optimizer_path
-        meta_path = prefix + ' ' + meta_path
+        model_path = os.path.join(os.path.split(model_path)[0], prefix + ' ' + os.path.split(model_path)[1])
+        optimizer_path = os.path.join(os.path.split(optimizer_path)[0], prefix + ' ' + os.path.split(optimizer_path)[1])
+        meta_path = os.path.join(os.path.split(meta_path)[0], prefix + ' ' + os.path.split(meta_path)[1])
     model_state_dict = load(model_path)
     optimizer_state_dict = torch.load(optimizer_path)
     with open(meta_path, 'rb') as pickle_file:
