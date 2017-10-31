@@ -3,7 +3,6 @@ Main code for a GAN training session.
 """
 import datetime
 import os
-import numpy as np
 import torch.utils.data
 import torchvision
 from collections import defaultdict
@@ -135,11 +134,13 @@ while step < settings.number_of_epochs:
         fake_images = generator(Variable(gpu(z)))
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
         fake_feature_layer = discriminator.feature_layer
-        generator_loss = (real_feature_layer - fake_feature_layer).abs().sum(1).sum(1).sum(1)
-        fake_predicted_label_sums = fake_predicted_labels.sum(1).sum(1)
-        feature_weights = fake_predicted_counts + (fake_predicted_label_sums * 10)
-        minimum_weights = Variable(gpu(torch.from_numpy(np.full([images.data.shape[0]], 1e-10, dtype=np.float32))))
-        generator_loss = (generator_loss / torch.max(feature_weights, minimum_weights)).mean()
+        epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
+        count_weights = (predicted_counts / torch.max(predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
+        labels_weights = (predicted_labels.sum(1).sum(1) / torch.max(predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
+        feature_weights = (count_weights + (labels_weights * 10)) / 11
+        weighted_real_feature_layer = feature_weights * real_feature_layer
+        generator_loss = (weighted_real_feature_layer.mean(0) - fake_feature_layer.mean(0)).abs().sum()
+
         # Generator update.
         if step % 5 == 0:
             generator_loss.backward()
