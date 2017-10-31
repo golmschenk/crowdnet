@@ -111,8 +111,9 @@ while step < settings.number_of_epochs:
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
         fake_discriminator_loss.backward(retain_graph=True)
         # Gradient penalty.
-        alpha = Variable(gpu(torch.rand(current_batch_size, 1, 1, 1)))
-        interpolates = alpha * images + ((1.0 - alpha) * fake_images)
+        alpha = Variable(gpu(torch.rand(3, current_batch_size, 1, 1, 1)))
+        alpha = alpha / alpha.sum(0)
+        interpolates = alpha[0] * images + alpha[1] * unlabeled_images + alpha[2] * fake_images
         interpolates_labels, interpolates_counts = discriminator(interpolates)
         density_gradients = torch.autograd.grad(outputs=interpolates_labels, inputs=interpolates,
                                                 grad_outputs=gpu(torch.ones(interpolates_labels.size())),
