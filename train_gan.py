@@ -99,6 +99,7 @@ while epoch < settings.number_of_epochs:
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
+        running_scalars['Unlabeled Count'] += unlabeled_predicted_count_mean
         running_scalars['Unlabeled Loss'] += unlabeled_loss.data[0]
         unlabeled_loss.backward(retain_graph=True)
         # Fake image discriminator processing.
@@ -108,7 +109,9 @@ while epoch < settings.number_of_epochs:
         fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
         fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
+        fake_mean_count = fake_predicted_counts.mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
+        running_scalars['Fake Count'] += fake_mean_count
         running_scalars['Fake Loss'] += fake_discriminator_loss.data[0]
         fake_discriminator_loss.backward(retain_graph=True)
         # Gradient penalty.
@@ -174,9 +177,11 @@ while epoch < settings.number_of_epochs:
                 density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
                 count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
+                count_me = (predicted_counts - labels.sum(1).sum(1)).mean()
                 validation_running_scalars['Density Loss'] += density_loss.data[0]
                 validation_running_scalars['Count Loss'] += count_loss.data[0]
                 validation_running_scalars['Count MAE'] += count_mae.data[0]
+                validation_running_scalars['Count ME'] += count_mae.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
