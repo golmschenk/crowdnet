@@ -99,8 +99,8 @@ while epoch < settings.number_of_epochs:
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
-        running_scalars['Unlabeled Count'] += unlabeled_predicted_count_mean
-        running_scalars['Unlabeled Loss'] += unlabeled_loss.data[0]
+        running_scalars['Unlabeled/Count'] += unlabeled_predicted_count_mean.data[0]
+        running_scalars['Unlabeled/Loss'] += unlabeled_loss.data[0]
         unlabeled_loss.backward(retain_graph=True)
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
@@ -111,7 +111,7 @@ while epoch < settings.number_of_epochs:
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_mean_count = fake_predicted_counts.mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
-        running_scalars['Fake Count'] += fake_mean_count
+        running_scalars['Fake Count'] += fake_mean_count.data[0]
         running_scalars['Fake Loss'] += fake_discriminator_loss.data[0]
         fake_discriminator_loss.backward(retain_graph=True)
         # Gradient penalty.
