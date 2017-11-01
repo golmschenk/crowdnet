@@ -99,7 +99,7 @@ while epoch < settings.number_of_epochs:
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
-        running_scalars['Unlabeled Loss'] += loss.data[0]
+        running_scalars['Unlabeled Loss'] += unlabeled_loss.data[0]
         unlabeled_loss.backward(retain_graph=True)
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
@@ -109,6 +109,7 @@ while epoch < settings.number_of_epochs:
         fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
+        running_scalars['Fake Loss'] += fake_discriminator_loss.data[0]
         fake_discriminator_loss.backward(retain_graph=True)
         # Gradient penalty.
         alpha = Variable(gpu(torch.rand(3, current_batch_size, 1, 1, 1)))
@@ -133,7 +134,7 @@ while epoch < settings.number_of_epochs:
         generator_optimizer.zero_grad()
         z = torch.randn(current_batch_size, 100)
         fake_images = generator(Variable(gpu(z)))
-        fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
+        _, _ = discriminator(fake_images)  # Produces feature layer for next line.
         fake_feature_layer = discriminator.feature_layer
         epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
         count_weights = (predicted_counts / torch.max(predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
