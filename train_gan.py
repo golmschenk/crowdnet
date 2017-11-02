@@ -80,7 +80,7 @@ while epoch < settings.number_of_epochs:
         density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
-        loss.backward(retain_graph=True)
+        loss.backward()
         running_scalars['Real/Loss'] += loss.data[0]
         running_scalars['Real/Count Loss'] += count_loss.data[0]
         running_scalars['Real/Density Loss'] += density_loss.data[0]
@@ -89,24 +89,26 @@ while epoch < settings.number_of_epochs:
         unlabeled_images = Variable(gpu(unlabeled_images))
         unlabeled_predicted_labels, unlabeled_predicted_counts = discriminator(unlabeled_images)
 
-        predicted_label_count_mean = predicted_labels.sum(1).sum(1).mean()
-        predicted_count_mean = predicted_counts.mean()
+        label_count_mean = labels.sum(1).sum(1).mean()
+        count_mean = labels.sum(1).sum(1).mean()
         unlabeled_predicted_count_mean = unlabeled_predicted_counts.mean()
         unlabeled_predicted_label_count_mean = unlabeled_predicted_labels.sum(1).sum(1).mean()
         beta = 2.0
         # noinspection PyArgumentList
         zero = Variable(gpu(torch.FloatTensor([0])))
-        unlabeled_count_loss_min = torch.max(zero, predicted_count_mean / beta - unlabeled_predicted_count_mean)
-        unlabeled_count_loss_max = torch.max(zero, unlabeled_predicted_count_mean - predicted_count_mean * beta)
-        unlabeled_label_loss_min = torch.max(zero, predicted_label_count_mean / beta - unlabeled_predicted_label_count_mean)
-        unlabeled_label_loss_max = torch.max(zero, unlabeled_predicted_label_count_mean - predicted_label_count_mean * beta)
+        unlabeled_count_loss_min = torch.max(zero, count_mean / beta - unlabeled_predicted_count_mean)
+        unlabeled_count_loss_max = torch.max(zero, unlabeled_predicted_count_mean - count_mean * beta)
+        unlabeled_label_loss_min = torch.max(zero,
+                                             label_count_mean / beta - unlabeled_predicted_label_count_mean)
+        unlabeled_label_loss_max = torch.max(zero,
+                                             unlabeled_predicted_label_count_mean - label_count_mean * beta)
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
-        running_scalars['Unlabeled/Count ME'] += (unlabeled_predicted_count_mean - predicted_count_mean).data[0]
+        running_scalars['Unlabeled/Count ME'] += (unlabeled_predicted_count_mean - count_mean).data[0]
         running_scalars['Unlabeled/Count'] += unlabeled_predicted_count_mean.data[0]
         running_scalars['Unlabeled/Loss'] += unlabeled_loss.data[0]
-        unlabeled_loss.backward(retain_graph=True)
+        unlabeled_loss.backward()
         # Fake image discriminator processing.
         current_batch_size = images.data.shape[0]
         z = torch.randn(current_batch_size, 100)
@@ -145,11 +147,14 @@ while epoch < settings.number_of_epochs:
         _, _ = discriminator(fake_images)  # Produces feature layer for next line.
         fake_feature_layer = discriminator.feature_layer
         # noinspection PyArgumentList
+        detached_predicted_counts = predicted_counts.detach()
+        detached_predicted_labels = predicted_labels.detach()
+        detached_real_feature_layer = real_feature_layer.detach()
         epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
-        count_weights = (predicted_counts / torch.max(predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
-        labels_weights = (predicted_labels.sum(1).sum(1) / torch.max(predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
+        count_weights = (detached_predicted_counts / torch.max(detached_predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
+        labels_weights = (detached_predicted_labels.sum(1).sum(1) / torch.max(detached_predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
         feature_weights = (count_weights + (labels_weights * 10)) / 11
-        weighted_real_feature_layer = feature_weights * real_feature_layer
+        weighted_real_feature_layer = feature_weights * detached_real_feature_layer
         generator_loss = (weighted_real_feature_layer.mean(0) - fake_feature_layer.mean(0)).abs().sum()
         running_scalars['Generator/Loss'] += generator_loss.data[0]
         # Generator update.
