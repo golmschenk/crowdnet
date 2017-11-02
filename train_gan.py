@@ -81,6 +81,9 @@ while epoch < settings.number_of_epochs:
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
         loss.backward(retain_graph=True)
+        running_scalars['Real/Loss'] += loss.data[0]
+        running_scalars['Real/Count Loss'] += count_loss.data[0]
+        running_scalars['Real/Density Loss'] += density_loss.data[0]
         # Unlabeled image discriminator processing.
         unlabeled_images, _, _ = unlabeled_examples
         unlabeled_images = Variable(gpu(unlabeled_images))
@@ -91,6 +94,7 @@ while epoch < settings.number_of_epochs:
         unlabeled_predicted_count_mean = unlabeled_predicted_counts.mean()
         unlabeled_predicted_label_count_mean = unlabeled_predicted_labels.sum(1).sum(1).mean()
         beta = 2.0
+        # noinspection PyArgumentList
         zero = Variable(gpu(torch.FloatTensor([0])))
         unlabeled_count_loss_min = torch.max(zero, predicted_count_mean / beta - unlabeled_predicted_count_mean)
         unlabeled_count_loss_max = torch.max(zero, unlabeled_predicted_count_mean - predicted_count_mean * beta)
@@ -99,6 +103,7 @@ while epoch < settings.number_of_epochs:
         unlabeled_density_loss = unlabeled_label_loss_max + unlabeled_label_loss_min
         unlabeled_count_loss = unlabeled_count_loss_max + unlabeled_count_loss_min
         unlabeled_loss = unlabeled_count_loss + (unlabeled_density_loss * 10)
+        running_scalars['Unlabeled/Count ME'] += (unlabeled_predicted_count_mean - predicted_count_mean).data[0]
         running_scalars['Unlabeled/Count'] += unlabeled_predicted_count_mean.data[0]
         running_scalars['Unlabeled/Loss'] += unlabeled_loss.data[0]
         unlabeled_loss.backward(retain_graph=True)
@@ -111,8 +116,8 @@ while epoch < settings.number_of_epochs:
         fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
         fake_mean_count = fake_predicted_counts.mean()
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
-        running_scalars['Fake Count'] += fake_mean_count.data[0]
-        running_scalars['Fake Loss'] += fake_discriminator_loss.data[0]
+        running_scalars['Fake/Count'] += fake_mean_count.data[0]
+        running_scalars['Fake/Loss'] += fake_discriminator_loss.data[0]
         fake_discriminator_loss.backward(retain_graph=True)
         # Gradient penalty.
         alpha = Variable(gpu(torch.rand(3, current_batch_size, 1, 1, 1)))
@@ -139,23 +144,19 @@ while epoch < settings.number_of_epochs:
         fake_images = generator(Variable(gpu(z)))
         _, _ = discriminator(fake_images)  # Produces feature layer for next line.
         fake_feature_layer = discriminator.feature_layer
+        # noinspection PyArgumentList
         epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
         count_weights = (predicted_counts / torch.max(predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
         labels_weights = (predicted_labels.sum(1).sum(1) / torch.max(predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
         feature_weights = (count_weights + (labels_weights * 10)) / 11
         weighted_real_feature_layer = feature_weights * real_feature_layer
         generator_loss = (weighted_real_feature_layer.mean(0) - fake_feature_layer.mean(0)).abs().sum()
-
+        running_scalars['Generator/Loss'] += generator_loss.data[0]
         # Generator update.
         if step % 5 == 0:
             generator_loss.backward()
             generator_optimizer.step()
 
-        running_scalars['Loss'] += loss.data[0]
-        running_scalars['Count Loss'] += count_loss.data[0]
-        running_scalars['Density Loss'] += density_loss.data[0]
-        running_scalars['Fake Discriminator Loss'] += fake_discriminator_loss.data[0]
-        running_scalars['Generator Loss'] += generator_loss.data[0]
         running_example_count += images.size()[0]
         if step % settings.summary_step_period == 0 and step != 0:
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
@@ -163,7 +164,7 @@ while epoch < settings.number_of_epochs:
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             fake_images_image = torchvision.utils.make_grid(fake_images.data[:9], nrow=3)
             summary_writer.add_image('Fake', fake_images_image, global_step=step)
-            mean_loss = running_scalars['Loss'] / running_example_count
+            mean_loss = running_scalars['Real/Loss'] / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
             for name, running_scalar in running_scalars.items():
                 mean_scalar = running_scalar / running_example_count
@@ -178,10 +179,10 @@ while epoch < settings.number_of_epochs:
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
                 count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 count_me = (predicted_counts - labels.sum(1).sum(1)).mean()
-                validation_running_scalars['Density Loss'] += density_loss.data[0]
-                validation_running_scalars['Count Loss'] += count_loss.data[0]
-                validation_running_scalars['Count MAE'] += count_mae.data[0]
-                validation_running_scalars['Count ME'] += count_mae.data[0]
+                validation_running_scalars['Real/Density Loss'] += density_loss.data[0]
+                validation_running_scalars['Real/Count Loss'] += count_loss.data[0]
+                validation_running_scalars['Real/Count MAE'] += count_mae.data[0]
+                validation_running_scalars['Real/Count ME'] += count_me.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
