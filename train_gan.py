@@ -81,9 +81,10 @@ while epoch < settings.number_of_epochs:
         count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
         loss = count_loss + (density_loss * 10)
         loss.backward()
-        running_scalars['Real/Loss'] += loss.data[0]
-        running_scalars['Real/Count Loss'] += count_loss.data[0]
-        running_scalars['Real/Density Loss'] += density_loss.data[0]
+        running_scalars['Labeled/Loss'] += loss.data[0]
+        running_scalars['Labeled/Count Loss'] += count_loss.data[0]
+        running_scalars['Labeled/Density Loss'] += density_loss.data[0]
+        running_scalars['Labeled/Count ME'] += (predicted_counts - labels.sum(1).sum(1)).mean()
         # Unlabeled image discriminator processing.
         unlabeled_images, _, _ = unlabeled_examples
         unlabeled_images = Variable(gpu(unlabeled_images))
@@ -120,11 +121,11 @@ while epoch < settings.number_of_epochs:
         fake_discriminator_loss = fake_count_loss + (fake_density_loss * 10)
         running_scalars['Fake/Count'] += fake_mean_count.data[0]
         running_scalars['Fake/Loss'] += fake_discriminator_loss.data[0]
-        fake_discriminator_loss.backward(retain_graph=True)
+        fake_discriminator_loss.backward()
         # Gradient penalty.
         alpha = Variable(gpu(torch.rand(3, current_batch_size, 1, 1, 1)))
         alpha = alpha / alpha.sum(0)
-        interpolates = alpha[0] * images + alpha[1] * unlabeled_images + alpha[2] * fake_images
+        interpolates = alpha[0] * images + alpha[1] * unlabeled_images + alpha[2] * fake_images.detach()
         interpolates_labels, interpolates_counts = discriminator(interpolates)
         density_gradients = torch.autograd.grad(outputs=interpolates_labels, inputs=interpolates,
                                                 grad_outputs=gpu(torch.ones(interpolates_labels.size())),
@@ -146,10 +147,10 @@ while epoch < settings.number_of_epochs:
         fake_images = generator(Variable(gpu(z)))
         _, _ = discriminator(fake_images)  # Produces feature layer for next line.
         fake_feature_layer = discriminator.feature_layer
-        # noinspection PyArgumentList
         detached_predicted_counts = predicted_counts.detach()
         detached_predicted_labels = predicted_labels.detach()
         detached_real_feature_layer = real_feature_layer.detach()
+        # noinspection PyArgumentList
         epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
         count_weights = (detached_predicted_counts / torch.max(detached_predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
         labels_weights = (detached_predicted_labels.sum(1).sum(1) / torch.max(detached_predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
@@ -169,7 +170,7 @@ while epoch < settings.number_of_epochs:
             summary_writer.add_image('Comparison', comparison_image, global_step=step)
             fake_images_image = torchvision.utils.make_grid(fake_images.data[:9], nrow=3)
             summary_writer.add_image('Fake', fake_images_image, global_step=step)
-            mean_loss = running_scalars['Real/Loss'] / running_example_count
+            mean_loss = running_scalars['Labeled/Loss'] / running_example_count
             print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
             for name, running_scalar in running_scalars.items():
                 mean_scalar = running_scalar / running_example_count
@@ -184,10 +185,10 @@ while epoch < settings.number_of_epochs:
                 count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
                 count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
                 count_me = (predicted_counts - labels.sum(1).sum(1)).mean()
-                validation_running_scalars['Real/Density Loss'] += density_loss.data[0]
-                validation_running_scalars['Real/Count Loss'] += count_loss.data[0]
-                validation_running_scalars['Real/Count MAE'] += count_mae.data[0]
-                validation_running_scalars['Real/Count ME'] += count_me.data[0]
+                validation_running_scalars['Labeled/Density Loss'] += density_loss.data[0]
+                validation_running_scalars['Labeled/Count Loss'] += count_loss.data[0]
+                validation_running_scalars['Labeled/Count MAE'] += count_mae.data[0]
+                validation_running_scalars['Labeled/Count ME'] += count_me.data[0]
             comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                           cpu(predicted_labels))
             validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
