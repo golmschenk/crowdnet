@@ -93,14 +93,23 @@ class CrowdDatasetWithUnlabeled(Dataset):
         if self.transform:
             example = self.transform(example)
 
-        unlabeled_index = np.random.randint(self.unlabeled_length)
-        unlabeled_camera_index = np.searchsorted(self.unlabeled_lookup, unlabeled_index)
-        unlabeled_image = self.unlabeled_video_reader.get_data(unlabeled_camera_index)
-        unlabeled_example = CrowdExampleWithPerspective(image=unlabeled_image,
-                                                        label=np.zeros(shape=(unlabeled_image.shape[:2]),
-                                                                       dtype=np.float32),
-                                                        roi=self.unlabeled_rois[unlabeled_camera_index],
-                                                        perspective=self.unlabeled_perspectives[unlabeled_camera_index])
+        unlabeled_example = None
+        for attempt in range(3):  # Azure hard drive acts up once and a while during this read. Try again.
+            try:
+                unlabeled_index = np.random.randint(self.unlabeled_length)
+                unlabeled_camera_index = np.searchsorted(self.unlabeled_lookup, unlabeled_index)
+                unlabeled_image = self.unlabeled_video_reader.get_data(unlabeled_camera_index)
+                unlabeled_example = CrowdExampleWithPerspective(image=unlabeled_image,
+                                                                label=np.zeros(shape=(unlabeled_image.shape[:2]),
+                                                                               dtype=np.float32),
+                                                                roi=self.unlabeled_rois[unlabeled_camera_index],
+                                                                perspective=self.unlabeled_perspectives[
+                                                                    unlabeled_camera_index])
+            except imageio.core.format.CannotReadFrameError as error:
+                if attempt == 2:
+                    raise error
+                continue
+            break
 
         if self.transform:
             unlabeled_example = self.transform(unlabeled_example)
