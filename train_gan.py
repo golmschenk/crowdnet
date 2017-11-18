@@ -15,7 +15,7 @@ import transforms
 import viewer
 from crowd_dataset import CrowdDataset, CrowdDatasetWithUnlabeled
 from hardware import gpu, cpu
-from model import Generator, JointCNN, load_trainer, save_trainer, Predictor
+from model import GAN, load_trainer, save_trainer
 
 
 def train(settings=None):
@@ -38,22 +38,21 @@ def train(settings=None):
                                                             shuffle=False,
                                                             num_workers=settings.number_of_data_loader_workers)
 
-    generator = Generator()
-    discriminator = JointCNN()
-    predictor = Predictor()
-    gpu(generator)
-    gpu(discriminator)
-    gpu(predictor)
-    generator_optimizer = Adam(generator.parameters())
-    discriminator_optimizer = Adam(discriminator.parameters())
-    predictor_optimizer = Adam(discriminator.parameters())
+    gan = GAN()
+    gpu(gan)
+    D = gan.D
+    G = gan.G
+    P = gan.P
+    generator_optimizer = Adam(G.parameters())
+    discriminator_optimizer = Adam(D.parameters())
+    predictor_optimizer = Adam(D.parameters())
 
     step = 0
     epoch = 0
 
     if settings.load_model_path:
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
-        discriminator.load_state_dict(d_model_state_dict)
+        D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
     discriminator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate,
                                                     'weight_decay': settings.weight_decay})
@@ -62,7 +61,7 @@ def train(settings=None):
     discriminator_scheduler.step(epoch)
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
-        generator.load_state_dict(g_model_state_dict)
+        G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
     generator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate})
     generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer,
@@ -88,8 +87,8 @@ def train(settings=None):
             discriminator_optimizer.zero_grad()
             images, labels, _ = examples
             images, labels = Variable(gpu(images)), Variable(gpu(labels))
-            predicted_labels, predicted_counts = discriminator(images)
-            real_feature_layer = discriminator.feature_layer
+            predicted_labels, predicted_counts = D(images)
+            real_feature_layer = D.feature_layer
             density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
             count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
             loss = count_loss + (density_loss * 10)
@@ -100,10 +99,10 @@ def train(settings=None):
             running_scalars['Labeled/Count ME'] += (predicted_counts - labels.sum(1).sum(1)).mean().data[0]
             # Predictor.
             predictor_optimizer.zero_grad()
-            predictor_predicted_counts = predictor(predicted_counts.detach())
+            predictor_predicted_counts = P(predicted_counts.detach())
             predictor_count_loss = torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
                                              ).pow(settings.loss_order).mean()
-            predictor_count_loss.backward(predictor.parameters())
+            predictor_count_loss.backward(P.parameters())
             predictor_optimizer.step()
             running_scalars['Predictor/Count Loss'] += predictor_count_loss.data[0]
             running_scalars['Predictor/Count MAE'] += torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
@@ -112,7 +111,7 @@ def train(settings=None):
             # Unlabeled image discriminator processing.
             unlabeled_images, _, _ = unlabeled_examples
             unlabeled_images = Variable(gpu(unlabeled_images))
-            unlabeled_predicted_labels, unlabeled_predicted_counts = discriminator(unlabeled_images)
+            unlabeled_predicted_labels, unlabeled_predicted_counts = D(unlabeled_images)
             label_count_mean = labels.sum(1).sum(1).mean()
             count_mean = labels.sum(1).sum(1).mean()
             unlabeled_predicted_count_mean = unlabeled_predicted_counts.mean()
@@ -136,8 +135,8 @@ def train(settings=None):
             # Fake image discriminator processing.
             current_batch_size = images.data.shape[0]
             z = torch.randn(current_batch_size, 100)
-            fake_images = generator(Variable(gpu(z)))
-            fake_predicted_labels, fake_predicted_counts = discriminator(fake_images)
+            fake_images = G(Variable(gpu(z)))
+            fake_predicted_labels, fake_predicted_counts = D(fake_images)
             fake_density_loss = torch.abs(fake_predicted_labels).pow(settings.loss_order).sum(1).sum(1).mean()
             fake_count_loss = torch.abs(fake_predicted_counts).pow(settings.loss_order).mean()
             fake_mean_count = fake_predicted_counts.mean()
@@ -149,7 +148,7 @@ def train(settings=None):
             alpha = Variable(gpu(torch.rand(3, current_batch_size, 1, 1, 1)))
             alpha = alpha / alpha.sum(0)
             interpolates = alpha[0] * images + alpha[1] * unlabeled_images + alpha[2] * fake_images
-            interpolates_labels, interpolates_counts = discriminator(interpolates)
+            interpolates_labels, interpolates_counts = D(interpolates)
             density_gradients = torch.autograd.grad(outputs=interpolates_labels, inputs=interpolates,
                                                     grad_outputs=gpu(torch.ones(interpolates_labels.size())),
                                                     create_graph=True, retain_graph=True, only_inputs=True)[0]
@@ -167,9 +166,9 @@ def train(settings=None):
             # Generator image processing.
             generator_optimizer.zero_grad()
             z = torch.randn(current_batch_size, 100)
-            fake_images = generator(Variable(gpu(z)))
-            _, _ = discriminator(fake_images)  # Produces feature layer for next line.
-            fake_feature_layer = discriminator.feature_layer
+            fake_images = G(Variable(gpu(z)))
+            _, _ = D(fake_images)  # Produces feature layer for next line.
+            fake_feature_layer = D.feature_layer
             detached_predicted_counts = predicted_counts.detach()
             detached_predicted_labels = predicted_labels.detach()
             detached_real_feature_layer = real_feature_layer.detach()
@@ -205,7 +204,7 @@ def train(settings=None):
                 for validation_examples in validation_dataset_loader:
                     images, labels, _ = validation_examples
                     images, labels = Variable(gpu(images)), Variable(gpu(labels))
-                    predicted_labels, predicted_counts = discriminator(images)
+                    predicted_labels, predicted_counts = D(images)
                     density_loss = torch.abs(predicted_labels - labels).pow(settings.loss_order).sum(1).sum(1).mean()
                     count_loss = torch.abs(predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
                     count_mae = torch.abs(predicted_counts - labels.sum(1).sum(1)).mean()
@@ -227,10 +226,10 @@ def train(settings=None):
         generator_scheduler.step(epoch)
         predictor_scheduler.step(epoch)
         if epoch != 0 and epoch % settings.save_epoch_period == 0:
-            save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
-            save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
-    save_trainer(trial_directory, discriminator, discriminator_optimizer, epoch, step, prefix='discriminator')
-    save_trainer(trial_directory, generator, generator_optimizer, epoch, step, prefix='generator')
+            save_trainer(trial_directory, D, discriminator_optimizer, epoch, step, prefix='discriminator')
+            save_trainer(trial_directory, G, generator_optimizer, epoch, step, prefix='generator')
+    save_trainer(trial_directory, D, discriminator_optimizer, epoch, step, prefix='discriminator')
+    save_trainer(trial_directory, G, generator_optimizer, epoch, step, prefix='generator')
     print('Finished Training')
     return trial_directory
 

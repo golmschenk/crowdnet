@@ -147,6 +147,21 @@ class Predictor(Module):
         return super().__call__(*args, **kwargs)
 
 
+class GAN(Module):
+    """
+    The full GAN.
+    """
+    def __init__(self):
+        super().__init__()
+        self.D = JointCNN()
+        self.G = Generator()
+        self.P = Predictor()
+
+    def forward(self, x):
+        """Forward pass not implemented here."""
+        raise NotImplementedError
+
+
 def save_trainer(trial_directory, model, optimizer, epoch, step, prefix=None):
     """
     Saves all the information needed to continue training.
