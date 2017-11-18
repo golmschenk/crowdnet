@@ -114,14 +114,13 @@ def test(settings=None):
             running_density_error = 0
             scene_number += 1
 
-    test_dataset = CrowdDataset(settings.test_dataset_path, 'validation')
+    validation_dataset = CrowdDataset(settings.validation_dataset_path, 'validation')
 
     print('Starting test...')
-    scene_number = 1
     running_count = 0
     running_count_error = 0
     running_density_error = 0
-    for full_example_index, full_example in enumerate(test_dataset):
+    for full_example_index, full_example in enumerate(validation_dataset):
         print('Processing example {}'.format(full_example_index), end='\r')
         sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
         sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
@@ -162,16 +161,16 @@ def test(settings=None):
                 if x + half_patch_size >= full_example.label.shape[1]:
                     x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
                 sum_density_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
-                     x_start_offset:density_label.shape[1] - x_end_offset]
+                                  x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                  ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
+                                                     x_start_offset:density_label.shape[1] - x_end_offset]
                 sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
-                     x_start_offset:count_label.shape[1] - x_end_offset]
+                                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
+                                                 x_start_offset:count_label.shape[1] - x_end_offset]
                 hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                ] += 1
+                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                    ] += 1
                 x += half_patch_size
             y += half_patch_size
         sum_density_label *= full_example.roi
@@ -184,7 +183,7 @@ def test(settings=None):
         running_count += full_example.label.sum()
         running_count_error += count_loss
         running_density_error += density_loss
-    validation_count_error = running_count_error / len(test_dataset)
+    validation_count_error = running_count_error / len(validation_dataset)
 
     csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
     if not os.path.isfile(csv_file_path):
@@ -204,6 +203,7 @@ def test(settings=None):
     print('Finished test.')
     settings.load_model_path = None
     return np.mean(count_errors)
+
 
 if __name__ == '__main__':
     test()
