@@ -5,6 +5,7 @@ from collections import namedtuple
 import os
 import imageio as imageio
 import numpy as np
+import time
 from torch.utils.data import Dataset
 
 
@@ -108,6 +109,7 @@ class CrowdDatasetWithUnlabeled(Dataset):
             except imageio.core.format.CannotReadFrameError as error:
                 if attempt == 2:
                     raise error
+                time.sleep(60)
                 continue
             break
 

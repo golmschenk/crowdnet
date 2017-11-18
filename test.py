@@ -14,114 +14,194 @@ from crowd_dataset import CrowdDataset
 from model import JointCNN
 from hardware import load, gpu, cpu
 
-patch_transform = transforms.ExtractPatchForPositionAndRescale()
-test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
-                                                 transforms.NumpyArraysToTorchTensors()])
+def main(load_model_directory=None):
+    if load_model_directory:
+        settings.load_model_path = os.path.join(load_model_directory, 'discriminator model {}'.format(settings.number_of_epochs))
+    patch_transform = transforms.ExtractPatchForPositionAndRescale()
+    test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
+                                                     transforms.NumpyArraysToTorchTensors()])
 
-test_dataset = CrowdDataset(settings.test_dataset_path, 'test')
+    test_dataset = CrowdDataset(settings.test_dataset_path, 'test')
 
-net = JointCNN()
-net.load_state_dict(load(settings.load_model_path))
-gpu(net)
-net.eval()
+    net = JointCNN()
+    net.load_state_dict(load(settings.load_model_path))
+    gpu(net)
+    net.eval()
 
-count_errors = []
-density_errors = []
-print('Starting test...')
-scene_number = 1
-running_count = 0
-running_count_error = 0
-running_density_error = 0
-for full_example_index, full_example in enumerate(test_dataset):
-    print('Processing example {}'.format(full_example_index), end='\r')
-    sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
-    sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
-    hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
-    half_patch_size = 1
-    y = 0
-    while y < full_example.label.shape[0]:
-        x = 0
-        while x < full_example.label.shape[1]:
-            example_patch, original_patch_size = patch_transform(full_example, y, x)
-            example = test_transform(example_patch)
-            image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
-            predicted_label, predicted_count = net(image)
-            predicted_label = predicted_label * Variable(gpu(example.roi))
-            predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
-            predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
-            predicted_label_sum = np.sum(predicted_label)
-            half_patch_size = int(original_patch_size // 2)
-            original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
-            predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
-            unnormalized_predicted_label_sum = np.sum(predicted_label)
-            if unnormalized_predicted_label_sum != 0:
-                density_label = predicted_label * predicted_label_sum / unnormalized_predicted_label_sum
-                count_label = predicted_label * predicted_count / unnormalized_predicted_label_sum
-            else:
-                density_label = predicted_label
-                count_label = np.full(predicted_label.shape, predicted_count / predicted_label.size)
-            y_start_offset = 0
-            if y - half_patch_size < 0:
-                y_start_offset = half_patch_size - y
-            y_end_offset = 0
-            if y + half_patch_size >= full_example.label.shape[0]:
-                y_end_offset = y + half_patch_size + 1 - full_example.label.shape[0]
-            x_start_offset = 0
-            if x - half_patch_size < 0:
-                x_start_offset = half_patch_size - x
-            x_end_offset = 0
-            if x + half_patch_size >= full_example.label.shape[1]:
-                x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
-            sum_density_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                              x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                              ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
-                                                 x_start_offset:density_label.shape[1] - x_end_offset]
-            sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
-                            x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                            ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
-                                             x_start_offset:count_label.shape[1] - x_end_offset]
-            hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+    count_errors = []
+    density_errors = []
+    print('Starting test...')
+    scene_number = 1
+    running_count = 0
+    running_count_error = 0
+    running_density_error = 0
+    for full_example_index, full_example in enumerate(test_dataset):
+        print('Processing example {}'.format(full_example_index), end='\r')
+        sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
+        sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
+        hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
+        half_patch_size = 1
+        y = 0
+        while y < full_example.label.shape[0]:
+            x = 0
+            while x < full_example.label.shape[1]:
+                example_patch, original_patch_size = patch_transform(full_example, y, x)
+                example = test_transform(example_patch)
+                image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
+                predicted_label, predicted_count = net(image)
+                predicted_label = predicted_label * Variable(gpu(example.roi))
+                predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
+                predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
+                predicted_label_sum = np.sum(predicted_label)
+                half_patch_size = int(original_patch_size // 2)
+                original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
+                predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
+                unnormalized_predicted_label_sum = np.sum(predicted_label)
+                if unnormalized_predicted_label_sum != 0:
+                    density_label = predicted_label * predicted_label_sum / unnormalized_predicted_label_sum
+                    count_label = predicted_label * predicted_count / unnormalized_predicted_label_sum
+                else:
+                    density_label = predicted_label
+                    count_label = np.full(predicted_label.shape, predicted_count / predicted_label.size)
+                y_start_offset = 0
+                if y - half_patch_size < 0:
+                    y_start_offset = half_patch_size - y
+                y_end_offset = 0
+                if y + half_patch_size >= full_example.label.shape[0]:
+                    y_end_offset = y + half_patch_size + 1 - full_example.label.shape[0]
+                x_start_offset = 0
+                if x - half_patch_size < 0:
+                    x_start_offset = half_patch_size - x
+                x_end_offset = 0
+                if x + half_patch_size >= full_example.label.shape[1]:
+                    x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
+                sum_density_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                  x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                  ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
+                                                     x_start_offset:density_label.shape[1] - x_end_offset]
+                sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                 x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
-                                ] += 1
-            x += half_patch_size
-        y += half_patch_size
-    sum_density_label *= full_example.roi
-    sum_count_label *= full_example.roi
-    full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
-    full_predicted_count = np.sum(sum_count_label / hit_predicted_label.astype(np.float32))
-    label_in_roi = full_example.label * full_example.roi
-    density_loss = np.abs(full_predicted_label - label_in_roi).sum()
-    count_loss = np.abs(full_predicted_count - label_in_roi.sum())
-    running_count += full_example.label.sum()
-    running_count_error += count_loss
-    running_density_error += density_loss
-    if ((full_example_index + 1) % 120) == 0:
-        print('Scene {}'.format(scene_number))
-        print('Total count: {}'.format(running_count))
-        count_error = running_count_error / 120
-        print('Mean count error: {}'.format(count_error))
-        density_error = running_density_error / 120
-        print('Mean density error: {}'.format(density_error))
-        count_errors.append(count_error)
-        density_errors.append(density_error)
-        running_count = 0
-        running_count_error = 0
-        running_density_error = 0
-        scene_number += 1
+                                ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
+                                                 x_start_offset:count_label.shape[1] - x_end_offset]
+                hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                                    x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                                    ] += 1
+                x += half_patch_size
+            y += half_patch_size
+        sum_density_label *= full_example.roi
+        sum_count_label *= full_example.roi
+        full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
+        full_predicted_count = np.sum(sum_count_label / hit_predicted_label.astype(np.float32))
+        label_in_roi = full_example.label * full_example.roi
+        density_loss = np.abs(full_predicted_label - label_in_roi).sum()
+        count_loss = np.abs(full_predicted_count - label_in_roi.sum())
+        running_count += full_example.label.sum()
+        running_count_error += count_loss
+        running_density_error += density_loss
+        if ((full_example_index + 1) % 120) == 0:
+            print('Scene {}'.format(scene_number))
+            print('Total count: {}'.format(running_count))
+            count_error = running_count_error / 120
+            print('Mean count error: {}'.format(count_error))
+            density_error = running_density_error / 120
+            print('Mean density error: {}'.format(density_error))
+            count_errors.append(count_error)
+            density_errors.append(density_error)
+            running_count = 0
+            running_count_error = 0
+            running_density_error = 0
+            scene_number += 1
 
-csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
-if not os.path.isfile(csv_file_path):
-    with open(csv_file_path, 'w') as csv_file:
+    test_dataset = CrowdDataset(settings.test_dataset_path, 'validation')
+
+    print('Starting test...')
+    scene_number = 1
+    running_count = 0
+    running_count_error = 0
+    running_density_error = 0
+    for full_example_index, full_example in enumerate(test_dataset):
+        print('Processing example {}'.format(full_example_index), end='\r')
+        sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
+        sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
+        hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
+        half_patch_size = 1
+        y = 0
+        while y < full_example.label.shape[0]:
+            x = 0
+            while x < full_example.label.shape[1]:
+                example_patch, original_patch_size = patch_transform(full_example, y, x)
+                example = test_transform(example_patch)
+                image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
+                predicted_label, predicted_count = net(image)
+                predicted_label = predicted_label * Variable(gpu(example.roi))
+                predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
+                predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
+                predicted_label_sum = np.sum(predicted_label)
+                half_patch_size = int(original_patch_size // 2)
+                original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
+                predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
+                unnormalized_predicted_label_sum = np.sum(predicted_label)
+                if unnormalized_predicted_label_sum != 0:
+                    density_label = predicted_label * predicted_label_sum / unnormalized_predicted_label_sum
+                    count_label = predicted_label * predicted_count / unnormalized_predicted_label_sum
+                else:
+                    density_label = predicted_label
+                    count_label = np.full(predicted_label.shape, predicted_count / predicted_label.size)
+                y_start_offset = 0
+                if y - half_patch_size < 0:
+                    y_start_offset = half_patch_size - y
+                y_end_offset = 0
+                if y + half_patch_size >= full_example.label.shape[0]:
+                    y_end_offset = y + half_patch_size + 1 - full_example.label.shape[0]
+                x_start_offset = 0
+                if x - half_patch_size < 0:
+                    x_start_offset = half_patch_size - x
+                x_end_offset = 0
+                if x + half_patch_size >= full_example.label.shape[1]:
+                    x_end_offset = x + half_patch_size + 1 - full_example.label.shape[1]
+                sum_density_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                ] += density_label[y_start_offset:density_label.shape[0] - y_end_offset,
+                     x_start_offset:density_label.shape[1] - x_end_offset]
+                sum_count_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                ] += count_label[y_start_offset:count_label.shape[0] - y_end_offset,
+                     x_start_offset:count_label.shape[1] - x_end_offset]
+                hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
+                x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
+                ] += 1
+                x += half_patch_size
+            y += half_patch_size
+        sum_density_label *= full_example.roi
+        sum_count_label *= full_example.roi
+        full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
+        full_predicted_count = np.sum(sum_count_label / hit_predicted_label.astype(np.float32))
+        label_in_roi = full_example.label * full_example.roi
+        density_loss = np.abs(full_predicted_label - label_in_roi).sum()
+        count_loss = np.abs(full_predicted_count - label_in_roi.sum())
+        running_count += full_example.label.sum()
+        running_count_error += count_loss
+        running_density_error += density_loss
+    validation_count_error = running_count_error / len(test_dataset)
+
+    csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
+    if not os.path.isfile(csv_file_path):
+        with open(csv_file_path, 'w') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(['Run Name', 'Scene 1', 'Scene 2', 'Scene 3', 'Scene 4', 'Scene 5', 'Mean',
+                             'Scene 1 Density', 'Scene 2 Density', 'Scene 3 Density', 'Scene 4 Density', 'Scene 5 Density',
+                             'Mean Density', 'Mean Validation'])
+    with open(csv_file_path, 'a') as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(['Run Name', 'Scene 1', 'Scene 2', 'Scene 3', 'Scene 4', 'Scene 5', 'Mean',
-                         'Scene 1 Density', 'Scene 2 Density', 'Scene 3 Density', 'Scene 4 Density', 'Scene 5 Density',
-                         'Mean Density'])
-with open(csv_file_path, 'a') as csv_file:
-    writer = csv.writer(csv_file)
-    path_list = os.path.normpath(settings.load_model_path).split(os.sep)
-    model_name = os.path.join(*path_list[-2:])
-    test_results = [model_name, *count_errors, np.mean(count_errors),
-                    *density_errors, np.mean(density_errors)]
-    writer.writerow(test_results)
+        path_list = os.path.normpath(settings.load_model_path).split(os.sep)
+        model_name = os.path.join(*path_list[-2:])
+        test_results = [model_name, *count_errors, np.mean(count_errors),
+                        *density_errors, np.mean(density_errors), validation_count_error]
+        writer.writerow(test_results)
 
-print('Finished test.')
+    print('Finished test.')
+    settings.load_model_path = None
+    return np.mean(count_errors)
+
+if __name__ == '__main__':
+    main()
