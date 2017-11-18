@@ -9,14 +9,16 @@ import torchvision
 import scipy.misc
 
 import transforms
-import settings
+import settings as settings_
 from crowd_dataset import CrowdDataset
 from model import JointCNN
 from hardware import load, gpu, cpu
 
-def main(load_model_directory=None):
-    if load_model_directory:
-        settings.load_model_path = os.path.join(load_model_directory, 'discriminator model {}'.format(settings.number_of_epochs))
+
+def test(settings=None):
+    """Main script for testing a model."""
+    if not settings:
+        settings = settings_
     patch_transform = transforms.ExtractPatchForPositionAndRescale()
     test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
                                                      transforms.NumpyArraysToTorchTensors()])
@@ -189,8 +191,8 @@ def main(load_model_directory=None):
         with open(csv_file_path, 'w') as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(['Run Name', 'Scene 1', 'Scene 2', 'Scene 3', 'Scene 4', 'Scene 5', 'Mean',
-                             'Scene 1 Density', 'Scene 2 Density', 'Scene 3 Density', 'Scene 4 Density', 'Scene 5 Density',
-                             'Mean Density', 'Mean Validation'])
+                             'Scene 1 Density', 'Scene 2 Density', 'Scene 3 Density', 'Scene 4 Density',
+                             'Scene 5 Density', 'Mean Density', 'Mean Validation'])
     with open(csv_file_path, 'a') as csv_file:
         writer = csv.writer(csv_file)
         path_list = os.path.normpath(settings.load_model_path).split(os.sep)
@@ -204,4 +206,4 @@ def main(load_model_directory=None):
     return np.mean(count_errors)
 
 if __name__ == '__main__':
-    main()
+    test()

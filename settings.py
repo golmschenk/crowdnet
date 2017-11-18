@@ -2,7 +2,7 @@
 The settings for a run.
 """
 
-trial_name = 'Joint CNN'
+trial_name = 'GAN'
 log_directory = 'logs'
 train_dataset_path = 'data/3 Cameras 3 Images'
 validation_dataset_path = 'data/mini_world_expo_datasets'

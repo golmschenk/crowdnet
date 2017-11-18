@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from torch.optim import lr_scheduler, Adam
 
-import settings
+import settings as settings_
 import transforms
 import viewer
 from crowd_dataset import CrowdDataset, CrowdDatasetWithUnlabeled
@@ -18,11 +18,10 @@ from hardware import gpu, cpu
 from model import Generator, JointCNN, load_trainer, save_trainer, Predictor
 
 
-def main(trial_name=None, train_dataset_path=None):
-    if trial_name:
-        settings.trial_name = trial_name
-    if train_dataset_path:
-        settings.train_dataset_path = train_dataset_path
+def train(settings=None):
+    """Main script for training the semi-supervised GAN."""
+    if not settings:
+        settings = settings_
     train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                       transforms.RandomHorizontalFlip(),
                                                       transforms.NegativeOneToOneNormalizeImage(),
@@ -66,7 +65,8 @@ def main(trial_name=None, train_dataset_path=None):
         generator.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
     generator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate})
-    generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=settings.learning_rate_multiplier_function)
+    generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer,
+                                                lr_lambda=settings.learning_rate_multiplier_function)
     generator_scheduler.step(epoch)
     predictor_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate})
     predictor_scheduler = lr_scheduler.LambdaLR(predictor_optimizer,
@@ -101,11 +101,13 @@ def main(trial_name=None, train_dataset_path=None):
             # Predictor.
             predictor_optimizer.zero_grad()
             predictor_predicted_counts = predictor(predicted_counts.detach())
-            predictor_count_loss = torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)).pow(settings.loss_order).mean()
+            predictor_count_loss = torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
+                                             ).pow(settings.loss_order).mean()
             predictor_count_loss.backward(predictor.parameters())
             predictor_optimizer.step()
             running_scalars['Predictor/Count Loss'] += predictor_count_loss.data[0]
-            running_scalars['Predictor/Count MAE'] += torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)).mean()
+            running_scalars['Predictor/Count MAE'] += torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
+                                                                ).mean().data[0]
             running_scalars['Predictor/Count ME'] += (predictor_predicted_counts - labels.sum(1).sum(1)).mean().data[0]
             # Unlabeled image discriminator processing.
             unlabeled_images, _, _ = unlabeled_examples
@@ -173,8 +175,10 @@ def main(trial_name=None, train_dataset_path=None):
             detached_real_feature_layer = real_feature_layer.detach()
             # noinspection PyArgumentList
             epsilon = Variable(gpu(torch.FloatTensor([1e-10])))
-            count_weights = (detached_predicted_counts / torch.max(detached_predicted_counts.sum(), epsilon)).view(-1, 1, 1, 1)
-            labels_weights = (detached_predicted_labels.sum(1).sum(1) / torch.max(detached_predicted_labels.sum(), epsilon)).view(-1, 1, 1, 1)
+            count_weights = (detached_predicted_counts / torch.max(detached_predicted_counts.sum(),
+                                                                   epsilon)).view(-1, 1, 1, 1)
+            labels_weights = (detached_predicted_labels.sum(1).sum(1) / torch.max(detached_predicted_labels.sum(),
+                                                                                  epsilon)).view(-1, 1, 1, 1)
             feature_weights = (count_weights + (labels_weights * 10)) / 11
             weighted_real_feature_layer = feature_weights * detached_real_feature_layer
             generator_loss = (weighted_real_feature_layer.mean(0) - fake_feature_layer.mean(0)).abs().sum()
@@ -230,5 +234,6 @@ def main(trial_name=None, train_dataset_path=None):
     print('Finished Training')
     return trial_directory
 
+
 if __name__ == '__main__':
-    main()
+    train()
