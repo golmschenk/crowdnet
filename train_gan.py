@@ -8,7 +8,7 @@ import torchvision
 from collections import defaultdict
 from tensorboardX import SummaryWriter
 from torch.autograd import Variable
-from torch.optim import lr_scheduler, Adam
+from torch.optim import Adam
 
 import settings as settings_
 import transforms
@@ -43,8 +43,8 @@ def train(settings=None):
     D = gan.D
     G = gan.G
     P = gan.P
+    discriminator_optimizer = Adam(D.parameters(), weight_decay=settings.weight_decay)
     generator_optimizer = Adam(G.parameters())
-    discriminator_optimizer = Adam(D.parameters())
     predictor_optimizer = Adam(P.parameters())
 
     step = 0
@@ -54,7 +54,6 @@ def train(settings=None):
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-    discriminator_optimizer.param_groups[0].update({'weight_decay': settings.weight_decay})
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
         G.load_state_dict(g_model_state_dict)
