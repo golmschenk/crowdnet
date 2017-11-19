@@ -43,6 +43,7 @@ def train(settings=None):
     D = gan.D
     G = gan.G
     P = gan.P
+    gpu(P)
     discriminator_optimizer = Adam(D.parameters(), weight_decay=settings.weight_decay)
     generator_optimizer = Adam(G.parameters())
     predictor_optimizer = Adam(P.parameters())
@@ -89,12 +90,13 @@ def train(settings=None):
             predictor_predicted_counts = P(predicted_counts.detach())
             predictor_count_loss = torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
                                              ).pow(settings.loss_order).mean()
-            predictor_count_loss.backward(P.parameters())
+            predictor_count_loss.backward()
             predictor_optimizer.step()
             running_scalars['Predictor/Count Loss'] += predictor_count_loss.data[0]
             running_scalars['Predictor/Count MAE'] += torch.abs(predictor_predicted_counts - labels.sum(1).sum(1)
                                                                 ).mean().data[0]
             running_scalars['Predictor/Count ME'] += (predictor_predicted_counts - labels.sum(1).sum(1)).mean().data[0]
+            running_scalars['Predictor/Exponent'] += P.exponent.data[0]
             # Unlabeled image discriminator processing.
             unlabeled_images, _, _ = unlabeled_examples
             unlabeled_images = Variable(gpu(unlabeled_images))
