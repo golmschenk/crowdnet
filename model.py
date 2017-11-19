@@ -112,7 +112,7 @@ class Predictor(Module):
     """
     def __init__(self):
         super().__init__()
-        self.exponent = Parameter(torch.Tensor([1]))
+        self.exponent = Parameter(torch.Tensor([0]))
         self.e = Variable(torch.Tensor([math.e]), requires_grad=False)
 
     def forward(self, y):

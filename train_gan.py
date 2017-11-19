@@ -45,7 +45,7 @@ def train(settings=None):
     P = gan.P
     generator_optimizer = Adam(G.parameters())
     discriminator_optimizer = Adam(D.parameters())
-    predictor_optimizer = Adam(D.parameters())
+    predictor_optimizer = Adam(P.parameters())
 
     step = 0
     epoch = 0
@@ -54,23 +54,11 @@ def train(settings=None):
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-    discriminator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate,
-                                                    'weight_decay': settings.weight_decay})
-    discriminator_scheduler = lr_scheduler.LambdaLR(discriminator_optimizer,
-                                                    lr_lambda=settings.learning_rate_multiplier_function)
-    discriminator_scheduler.step(epoch)
+    discriminator_optimizer.param_groups[0].update({'weight_decay': settings.weight_decay})
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
         G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
-    generator_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate})
-    generator_scheduler = lr_scheduler.LambdaLR(generator_optimizer,
-                                                lr_lambda=settings.learning_rate_multiplier_function)
-    generator_scheduler.step(epoch)
-    predictor_optimizer.param_groups[0].update({'lr': settings.initial_learning_rate})
-    predictor_scheduler = lr_scheduler.LambdaLR(predictor_optimizer,
-                                                lr_lambda=settings.learning_rate_multiplier_function)
-    predictor_scheduler.step(epoch)
 
     running_scalars = defaultdict(float)
     validation_running_scalars = defaultdict(float)
@@ -222,9 +210,6 @@ def train(settings=None):
                     validation_running_scalars[name] = 0
             step += 1
         epoch += 1
-        discriminator_scheduler.step(epoch)
-        generator_scheduler.step(epoch)
-        predictor_scheduler.step(epoch)
         if epoch != 0 and epoch % settings.save_epoch_period == 0:
             save_trainer(trial_directory, D, discriminator_optimizer, epoch, step, prefix='discriminator')
             save_trainer(trial_directory, G, generator_optimizer, epoch, step, prefix='generator')
