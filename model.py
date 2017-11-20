@@ -113,7 +113,7 @@ class Predictor(Module):
     def __init__(self):
         super().__init__()
         self.exponent = Parameter(torch.Tensor([0]))
-        self.e = gpu(Parameter(torch.Tensor([math.e]), requires_grad=False))
+        self.register_buffer('e', torch.Tensor([math.e]))
 
     def forward(self, y):
         """
@@ -124,7 +124,7 @@ class Predictor(Module):
         :return: Scaled person counts.
         :rtype: torch.autograd.Variable
         """
-        y = y * (self.e.pow(self.exponent))
+        y = y * Variable(self.e).pow(self.exponent)
         return y
 
     def __call__(self, *args, **kwargs):

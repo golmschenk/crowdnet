@@ -202,6 +202,11 @@ def train(settings=None):
                     validation_running_scalars['Labeled/Count Loss'] += count_loss.data[0]
                     validation_running_scalars['Labeled/Count MAE'] += count_mae.data[0]
                     validation_running_scalars['Labeled/Count ME'] += count_me.data[0]
+                    predictor_predicted_counts = P(predicted_counts.detach())
+                    validation_running_scalars['Predictor/Count MAE'] += torch.abs(predictor_predicted_counts -
+                                                                                   labels.sum(1).sum(1)).mean().data[0]
+                    validation_running_scalars['Predictor/Count ME'] += (predictor_predicted_counts -
+                                                                         labels.sum(1).sum(1)).mean().data[0]
                 comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                               cpu(predicted_labels))
                 validation_summary_writer.add_image('Comparison', comparison_image, global_step=step)
