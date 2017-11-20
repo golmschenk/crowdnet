@@ -12,7 +12,7 @@ from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d, BatchNorm2d, Pa
 from torch.nn.functional import leaky_relu, tanh
 
 import settings
-from hardware import load
+from hardware import load, gpu
 
 
 class JointCNN(Module):
@@ -113,7 +113,7 @@ class Predictor(Module):
     def __init__(self):
         super().__init__()
         self.exponent = Parameter(torch.Tensor([0]))
-        self.e = Variable(torch.Tensor([math.e]), requires_grad=False)
+        self.e = gpu(Parameter(torch.Tensor([math.e]), requires_grad=False))
 
     def forward(self, y):
         """
@@ -126,16 +126,6 @@ class Predictor(Module):
         """
         y = y * (self.e.pow(self.exponent))
         return y
-
-    def cuda(self, *args, **kwargs):
-        """Overrides to include the e constant."""
-        self.e.cuda()
-        super().cuda(*args, **kwargs)
-
-    def cpu(self):
-        """Overrides to include the e constant."""
-        self.e.cpu()
-        super().cpu()
 
     def __call__(self, *args, **kwargs):
         """

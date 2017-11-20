@@ -11,7 +11,7 @@ import scipy.misc
 import transforms
 import settings as settings_
 from crowd_dataset import CrowdDataset
-from model import JointCNN
+from model import JointCNN, load_trainer
 from hardware import load, gpu, cpu
 
 
@@ -26,7 +26,8 @@ def test(settings=None):
     test_dataset = CrowdDataset(settings.test_dataset_path, 'test')
 
     net = JointCNN()
-    net.load_state_dict(load(settings.load_model_path))
+    model_state_dict, _, _, _ = load_trainer(prefix='discriminator')
+    net.load_state_dict(model_state_dict)
     gpu(net)
     net.eval()
 
