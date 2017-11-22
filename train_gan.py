@@ -44,9 +44,9 @@ def train(settings=None):
     G = gan.G
     P = gan.P
     gpu(P)
-    discriminator_optimizer = Adam(D.parameters(), weight_decay=settings.weight_decay)
-    generator_optimizer = Adam(G.parameters())
-    predictor_optimizer = Adam(P.parameters())
+    discriminator_optimizer = Adam(D.parameters(), lr=1e-3, weight_decay=settings.weight_decay)
+    generator_optimizer = Adam(G.parameters(), lr=1e-3)
+    predictor_optimizer = Adam(P.parameters(), lr=1e-3)
 
     step = 0
     epoch = 0

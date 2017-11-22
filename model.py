@@ -69,15 +69,10 @@ class Generator(Module):
     """
     def __init__(self):
         super().__init__()
-        self.conv_transpose1 = ConvTranspose2d(100, 256, kernel_size=9)
-        self.conv_transpose1_bn = BatchNorm2d(256)
-        self.conv_transpose2 = ConvTranspose2d(self.conv_transpose1.out_channels, 128, kernel_size=4, stride=2,
+        self.conv_transpose1 = ConvTranspose2d(100, 64, kernel_size=18)
+        self.conv_transpose2 = ConvTranspose2d(self.conv_transpose1.out_channels, 32, kernel_size=4, stride=2,
                                                padding=1)
-        self.conv_transpose2_bn = BatchNorm2d(128)
-        self.conv_transpose3 = ConvTranspose2d(self.conv_transpose2.out_channels, 64, kernel_size=4, stride=2,
-                                               padding=1)
-        self.conv_transpose3_bn = BatchNorm2d(64)
-        self.conv_transpose4 = ConvTranspose2d(self.conv_transpose3.out_channels, 3, kernel_size=4, stride=2,
+        self.conv_transpose3 = ConvTranspose2d(self.conv_transpose3.out_channels, 3, kernel_size=4, stride=2,
                                                padding=1)
 
     def forward(self, z):
@@ -90,10 +85,9 @@ class Generator(Module):
         :rtype: torch.autograd.Variable
         """
         z = z.view(-1, 100, 1, 1)
-        z = self.conv_transpose1_bn(leaky_relu(self.conv_transpose1(z)))
-        z = self.conv_transpose2_bn(leaky_relu(self.conv_transpose2(z)))
-        z = self.conv_transpose3_bn(leaky_relu(self.conv_transpose3(z)))
-        z = tanh(self.conv_transpose4(z))
+        z = leaky_relu(self.conv_transpose1(z))
+        z = leaky_relu(self.conv_transpose2(z))
+        z = tanh(self.conv_transpose3(z))
         return z
 
     def __call__(self, *args, **kwargs):
