@@ -3,7 +3,9 @@ Code for a test session.
 """
 import csv
 import os
+from collections import namedtuple
 import numpy as np
+import torch
 from torch.autograd import Variable
 import torchvision
 import scipy.misc
@@ -12,16 +14,52 @@ import transforms
 import settings as settings_
 from crowd_dataset import CrowdDataset
 from model import JointCNN, load_trainer
-from hardware import load, gpu, cpu
+from hardware import gpu, cpu
+
+
+ExamplePatchWithMeta = namedtuple('ExamplePatchWithMeta', ['example', 'half_patch_size', 'x', 'y'])
+
+
+def batches_of_examples_with_meta(full_example, batch_size=20):
+    """
+    Generator for example patch batches with meta.
+
+    :param full_example: The original full size example.
+    :type full_example: CrowdExample
+    :param batch_size: The number of patches per batch to get.
+    :type batch_size: int
+    :return: A list of examples patches with meta.
+    :rtype: list[ExamplePatchWithMeta]
+    """
+    patch_transform = transforms.ExtractPatchForPositionAndRescale()
+    test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
+                                                     transforms.NumpyArraysToTorchTensors()])
+    sample_x = 0
+    sample_y = 0
+    half_patch_size = 0  # Don't move on the first patch.
+    while True:
+        batch = []
+        for _ in range(batch_size):
+            sample_x += half_patch_size
+            if sample_x >= full_example.label.shape[1]:
+                sample_x = 0
+                sample_y += half_patch_size
+            if sample_y >= full_example.label.shape[0]:
+                if batch:
+                    yield batch
+                return
+            example_patch, original_patch_size = patch_transform(full_example, sample_y, sample_x)
+            example = test_transform(example_patch)
+            half_patch_size = int(original_patch_size // 2)
+            example_with_meta = ExamplePatchWithMeta(example, half_patch_size, sample_x, sample_y)
+            batch.append(example_with_meta)
+        yield batch
 
 
 def test(settings=None):
     """Main script for testing a model."""
     if not settings:
         settings = settings_
-    patch_transform = transforms.ExtractPatchForPositionAndRescale()
-    test_transform = torchvision.transforms.Compose([transforms.NegativeOneToOneNormalizeImage(),
-                                                     transforms.NumpyArraysToTorchTensors()])
 
     test_dataset = CrowdDataset(settings.test_dataset_path, 'test')
 
@@ -43,20 +81,20 @@ def test(settings=None):
         sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
         sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
         hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
-        half_patch_size = 1
-        y = 0
-        while y < full_example.label.shape[0]:
-            x = 0
-            while x < full_example.label.shape[1]:
-                example_patch, original_patch_size = patch_transform(full_example, y, x)
-                example = test_transform(example_patch)
-                image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
-                predicted_label, predicted_count = net(image)
-                predicted_label = predicted_label * Variable(gpu(example.roi))
-                predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
-                predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
+        for batch in batches_of_examples_with_meta(full_example):
+            images = torch.stack([example_with_meta.example.image for example_with_meta in batch])
+            rois = torch.stack([example_with_meta.example.roi for example_with_meta in batch])
+            images = Variable(gpu(images))
+            predicted_labels, predicted_counts = net(images)
+            predicted_labels = predicted_labels * Variable(gpu(rois))
+            predicted_labels = cpu(predicted_labels.data).numpy()
+            predicted_counts = cpu(predicted_counts.data).numpy()
+            for example_index, example_with_meta in enumerate(batch):
+                predicted_label = predicted_labels[example_index]
+                predicted_count = predicted_counts[example_index]
+                x, y = example_with_meta.x, example_with_meta.y
+                half_patch_size = example_with_meta.half_patch_size
                 predicted_label_sum = np.sum(predicted_label)
-                half_patch_size = int(original_patch_size // 2)
                 original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
                 predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
                 unnormalized_predicted_label_sum = np.sum(predicted_label)
@@ -89,8 +127,6 @@ def test(settings=None):
                 hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                     x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                     ] += 1
-                x += half_patch_size
-            y += half_patch_size
         sum_density_label *= full_example.roi
         sum_count_label *= full_example.roi
         full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
@@ -126,20 +162,20 @@ def test(settings=None):
         sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
         sum_count_label = np.zeros_like(full_example.label, dtype=np.float32)
         hit_predicted_label = np.zeros_like(full_example.label, dtype=np.int32)
-        half_patch_size = 1
-        y = 0
-        while y < full_example.label.shape[0]:
-            x = 0
-            while x < full_example.label.shape[1]:
-                example_patch, original_patch_size = patch_transform(full_example, y, x)
-                example = test_transform(example_patch)
-                image, label = Variable(gpu(example.image.unsqueeze(0))), Variable(gpu(example.label))
-                predicted_label, predicted_count = net(image)
-                predicted_label = predicted_label * Variable(gpu(example.roi))
-                predicted_label = cpu(predicted_label.data.squeeze(0)).numpy()
-                predicted_count = cpu(predicted_count.data.squeeze(0)).numpy()
+        for batch in batches_of_examples_with_meta(full_example):
+            images = torch.stack([example_with_meta.example.image for example_with_meta in batch])
+            rois = torch.stack([example_with_meta.example.roi for example_with_meta in batch])
+            images = Variable(gpu(images))
+            predicted_labels, predicted_counts = net(images)
+            predicted_labels = predicted_labels * Variable(gpu(rois))
+            predicted_labels = cpu(predicted_labels.data).numpy()
+            predicted_counts = cpu(predicted_counts.data).numpy()
+            for example_index, example_with_meta in enumerate(batch):
+                predicted_label = predicted_labels[example_index]
+                predicted_count = predicted_counts[example_index]
+                x, y = example_with_meta.x, example_with_meta.y
+                half_patch_size = example_with_meta.half_patch_size
                 predicted_label_sum = np.sum(predicted_label)
-                half_patch_size = int(original_patch_size // 2)
                 original_patch_dimensions = ((2 * half_patch_size) + 1, (2 * half_patch_size) + 1)
                 predicted_label = scipy.misc.imresize(predicted_label, original_patch_dimensions, mode='F')
                 unnormalized_predicted_label_sum = np.sum(predicted_label)
@@ -172,8 +208,6 @@ def test(settings=None):
                 hit_predicted_label[y - half_patch_size + y_start_offset:y + half_patch_size + 1 - y_end_offset,
                                     x - half_patch_size + x_start_offset:x + half_patch_size + 1 - x_end_offset
                                     ] += 1
-                x += half_patch_size
-            y += half_patch_size
         sum_density_label *= full_example.roi
         sum_count_label *= full_example.roi
         full_predicted_label = sum_density_label / hit_predicted_label.astype(np.float32)
