@@ -55,12 +55,12 @@ def train(settings=None):
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-    discriminator_optimizer.param_groups[0].update({'lr': 1e-3, 'weight_decay': settings.weight_decay})
+    discriminator_optimizer.param_groups[0].update({'lr': 1e-4, 'weight_decay': settings.weight_decay})
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
         G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
-    generator_optimizer.param_groups[0].update({'lr': 1e-3})
+    generator_optimizer.param_groups[0].update({'lr': 1e-4})
 
     running_scalars = defaultdict(float)
     validation_running_scalars = defaultdict(float)

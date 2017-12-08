@@ -220,7 +220,7 @@ def test(settings=None):
         running_density_error += density_loss
     validation_count_error = running_count_error / len(validation_dataset)
 
-    csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
+    csv_file_path = os.path.join(settings.log_directory, 'Test 2 Results.csv')
     if not os.path.isfile(csv_file_path):
         with open(csv_file_path, 'w') as csv_file:
             writer = csv.writer(csv_file)
