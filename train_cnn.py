@@ -30,7 +30,7 @@ def train(settings=None):
                                                            transforms.NegativeOneToOneNormalizeImage(),
                                                            transforms.NumpyArraysToTorchTensors()])
 
-    train_dataset = CrowdDatasetWithUnlabeled(settings.train_dataset_path, 'train', transform=train_transform)
+    train_dataset = CrowdDataset(settings.train_dataset_path, 'train', transform=train_transform)
     train_dataset_loader = torch.utils.data.DataLoader(train_dataset, batch_size=settings.batch_size, shuffle=True,
                                                        num_workers=settings.number_of_data_loader_workers)
     validation_dataset = CrowdDataset(settings.validation_dataset_path, 'validation', transform=validation_transform)
@@ -55,12 +55,12 @@ def train(settings=None):
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-    discriminator_optimizer.param_groups[0].update({'lr': 1e-3, 'weight_decay': settings.weight_decay})
+    discriminator_optimizer.param_groups[0].update({'lr': 1e-4, 'weight_decay': settings.weight_decay})
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
         G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
-    generator_optimizer.param_groups[0].update({'lr': 1e-3})
+    generator_optimizer.param_groups[0].update({'lr': 1e-4})
 
     running_scalars = defaultdict(float)
     validation_running_scalars = defaultdict(float)
@@ -72,7 +72,7 @@ def train(settings=None):
     validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
     print('Starting training...')
     while epoch < settings.number_of_epochs:
-        for examples, unlabeled_examples in train_dataset_loader:
+        for examples in train_dataset_loader:
             # Real image discriminator processing.
             discriminator_optimizer.zero_grad()
             images, labels, _ = examples
