@@ -151,12 +151,14 @@ def test(settings=None):
     #         running_density_error = 0
     #         scene_number += 1
 
-    validation_dataset = CrowdDataset(settings.validation_dataset_path, 'validation')
+    validation_dataset = CrowdDataset(settings.validation_dataset_path, '200608 Time Lapse Demo')
 
     print('Starting test...')
     running_count = 0
     running_count_error = 0
     running_density_error = 0
+    initial_label = validation_dataset[0].label
+    full_predicted_labels = np.zeros(shape=(len(validation_dataset), initial_label.shape[0], initial_label.shape[1]), dtype=np.float32)
     for full_example_index, full_example in enumerate(validation_dataset):
         print('Processing example {}'.format(full_example_index), end='\r')
         sum_density_label = np.zeros_like(full_example.label, dtype=np.float32)
@@ -219,8 +221,8 @@ def test(settings=None):
         running_count += full_example.label.sum()
         running_count_error += count_loss
         running_density_error += density_loss
+        full_predicted_labels[full_example_index] = full_predicted_label
     validation_count_error = running_count_error / len(validation_dataset)
-
 
     csv_file_path = os.path.join(settings.log_directory, 'Test Results.csv')
     if not os.path.isfile(csv_file_path):
@@ -236,6 +238,8 @@ def test(settings=None):
         test_results = [model_name, *count_errors, np.mean(count_errors),
                         *density_errors, np.mean(density_errors), validation_count_error]
         writer.writerow(test_results)
+
+    np.save(os.path.join(settings.log_directory, 'predicted_labels_time_lapse.npy'), full_predicted_labels)
 
     print('Finished test.')
     settings.load_model_path = None
