@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from torch.optim import Adam
 
-import settings as settings_
+from settings import Settings
 import transforms
 import viewer
 from crowd_dataset import CrowdDataset, CrowdDatasetWithUnlabeled
@@ -21,7 +21,7 @@ from model import GAN, load_trainer, save_trainer
 def train(settings=None):
     """Main script for training the semi-supervised GAN."""
     if not settings:
-        settings = settings_
+        settings = Settings()
     train_transform = torchvision.transforms.Compose([transforms.RandomlySelectPatchAndRescale(),
                                                       transforms.RandomHorizontalFlip(),
                                                       transforms.NegativeOneToOneNormalizeImage(),
@@ -150,4 +150,11 @@ def train(settings=None):
 
 
 if __name__ == '__main__':
-    train()
+    for camera_count in [5, 1, 3, 10, 20]:
+        for image_count in [1, 3, 5, 10, 20]:
+            print('Processing CNN R {} Camera {} Images...'.format(camera_count, image_count))
+            settings = Settings()
+            settings.trial_name = 'CNN R {} Cameras {} Images'.format(camera_count, image_count)
+            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled Random'.format(
+                camera_count, image_count)
+            train(settings)

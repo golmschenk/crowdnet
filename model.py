@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from torch.nn import Module, Conv2d, MaxPool2d, ConvTranspose2d, BatchNorm2d, Parameter
 from torch.nn.functional import leaky_relu, tanh
 
-import settings
+from settings import Settings
 from hardware import load, gpu
 
 
@@ -185,6 +185,7 @@ def load_trainer(prefix=None):
     :return: The model and optimizer state dict and the metadata for the training run.
     :rtype: dict[torch.Tensor], dict[torch.Tensor], int, int
     """
+    settings = Settings()
     model_path = settings.load_model_path
     optimizer_path = settings.load_model_path.replace('model', 'optimizer')
     meta_path = settings.load_model_path.replace('model', 'meta')

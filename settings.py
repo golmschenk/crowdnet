@@ -1,23 +1,24 @@
 """
 The settings for a run.
 """
+class Settings:
+    def __init__(self):
+        self.trial_name = 'cnn'
+        self.log_directory = '/media/root/Gold/crowd/logs'
+        self.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/5 Camera 5 Images Target Unlabeled'
+        self.validation_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/Test and Validation'
+        self.test_dataset_path = self.validation_dataset_path
+        self.load_model_path = None
 
-trial_name = 'cnn'
-log_directory = 'logs'
-train_dataset_path = '/mnt/Gold/data/World Expo Datasets/5 Camera 5 Images Target Unlabeled'
-validation_dataset_path = train_dataset_path
-test_dataset_path = validation_dataset_path
-load_model_path = None
+        self.summary_step_period = 100
+        self.number_of_epochs = 100000
+        self.batch_size = 400
+        self.number_of_data_loader_workers = 0
+        self.save_epoch_period = 100000
+        self.restore_mode = 'transfer'
+        self.loss_order = 1
+        self.weight_decay = 0.01
 
-summary_step_period = 100
-number_of_epochs = 300000
-batch_size = 400
-number_of_data_loader_workers = 0
-save_epoch_period = 2500
-restore_mode = 'transfer'
-loss_order = 1
-weight_decay = 0.01
-
-unlabeled_loss_multiplier = 1e-3
-fake_loss_multiplier = 1e-6
-mean_offset = 0
+        self.unlabeled_loss_multiplier = 1e-3
+        self.fake_loss_multiplier = 1e-6
+        self.mean_offset = 0
