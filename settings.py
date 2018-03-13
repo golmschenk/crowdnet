@@ -6,7 +6,7 @@ class Settings:
         self.trial_name = 'cnn'
         self.log_directory = '/media/root/Gold/crowd/logs'
         self.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/5 Camera 5 Images Target Unlabeled'
-        self.validation_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/Test and Validation'
+        self.validation_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/Test And Validation'
         self.test_dataset_path = self.validation_dataset_path
         self.load_model_path = None
 
@@ -22,3 +22,4 @@ class Settings:
         self.unlabeled_loss_multiplier = 1e-3
         self.fake_loss_multiplier = 1e-6
         self.mean_offset = 0
+        self.learning_rate = 1e-3

@@ -3,6 +3,8 @@ Main code for a GAN training session.
 """
 import datetime
 import os
+import re
+
 import torch.utils.data
 import torchvision
 from collections import defaultdict
@@ -86,12 +88,12 @@ def train(settings=None):
         d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
-    discriminator_optimizer.param_groups[0].update({'lr': 1e-3, 'weight_decay': settings.weight_decay})
+    discriminator_optimizer.param_groups[0].update({'lr': settings.learning_rate, 'weight_decay': settings.weight_decay})
     if settings.load_model_path:
         g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
         G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
-    generator_optimizer.param_groups[0].update({'lr': 1e-3})
+    generator_optimizer.param_groups[0].update({'lr': settings.learning_rate})
 
     running_scalars = defaultdict(float)
     validation_running_scalars = defaultdict(float)
@@ -102,6 +104,7 @@ def train(settings=None):
     summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
     validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
     print('Starting training...')
+    step_time_start = datetime.datetime.now()
     while epoch < settings.number_of_epochs:
         for examples, unlabeled_examples in train_dataset_loader:
             unlabeled_images = unlabeled_examples[0]
@@ -137,9 +140,14 @@ def train(settings=None):
             fake_examples = G(gpu(Variable(z)))
             _ = D(fake_examples.detach())
             fake_feature_layer = D.feature_layer
-            fake_loss = feature_distance_loss(unlabeled_feature_layer, fake_feature_layer, scale=True,
+            fake_loss = feature_distance_loss(unlabeled_feature_layer, fake_feature_layer,
                                               order=1).neg() * settings.fake_loss_multiplier
             fake_loss.backward()
+            # Feature norm loss.
+            _ = D(gpu(Variable(unlabeled_images)))
+            unlabeled_feature_layer = D.feature_layer
+            feature_norm_loss = (unlabeled_feature_layer.norm(0).mean() - 1).pow(2)
+            feature_norm_loss.backward()
             # Discriminator update.
             discriminator_optimizer.step()
             # Generator.
@@ -162,8 +170,8 @@ def train(settings=None):
                 summary_writer.add_image('Comparison', comparison_image, global_step=step)
                 fake_images_image = torchvision.utils.make_grid(fake_examples.data[:9], nrow=3)
                 summary_writer.add_image('Fake', fake_images_image, global_step=step)
-                mean_loss = running_scalars['Labeled/Loss'] / running_example_count
-                print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
+                print('\rStep {}, {}...'.format(step, datetime.datetime.now() - step_time_start), end='')
+                step_time_start = datetime.datetime.now()
                 for name, running_scalar in running_scalars.items():
                     mean_scalar = running_scalar / running_example_count
                     summary_writer.add_scalar(name, mean_scalar, global_step=step)
@@ -199,11 +207,22 @@ def train(settings=None):
     return trial_directory
 
 
+def clean_scientific_notation(string):
+    regex = r'\.?0*e([+\-])0*([0-9])'
+    string = re.sub(regex, r'e\g<1>\g<2>', string)
+    string = re.sub(r'e\+', r'e', string)
+    return string
+
+
 if __name__ == '__main__':
-    for camera_count in [1]:
-        for image_count in [3, 5, 10, 1, 20]:
-            print('Processing SRGAN R {} Camera {} Images...'.format(camera_count, image_count))
+    for camera_count in [5]:
+        for image_count in [5]:
             settings = Settings()
-            settings.trial_name = 'SRGAN R {} Cameras {} Images'.format(camera_count, image_count)
-            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled Random'.format(camera_count, image_count)
+            scale_multiplier = 1e0
+            settings.unlabeled_loss_multiplier = 1e0 * scale_multiplier
+            settings.fake_loss_multiplier = 1e0 * scale_multiplier
+            settings.learning_rate = 1e-4
+            settings.trial_name = clean_scientific_notation('SRGAN {} Cameras {} Images fl {:e} ul {:e} lr {:e}'.format(camera_count, image_count, settings.fake_loss_multiplier, settings.unlabeled_loss_multiplier, settings.learning_rate))
+            print('Processing {}...'.format(settings.trial_name))
+            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled'.format(camera_count, image_count)
             train(settings)

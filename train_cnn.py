@@ -3,6 +3,8 @@ Main code for a GAN training session.
 """
 import datetime
 import os
+import re
+
 import torch.utils.data
 import torchvision
 from collections import defaultdict
@@ -149,12 +151,21 @@ def train(settings=None):
     return trial_directory
 
 
+def clean_scientific_notation(string):
+    regex = r'\.?0*e([+\-])0*([0-9])'
+    string = re.sub(regex, r'e\g<1>\g<2>', string)
+    string = re.sub(r'e\+', r'e', string)
+    return string
+
+
 if __name__ == '__main__':
-    for camera_count in [5, 1, 3, 10, 20]:
-        for image_count in [1, 3, 5, 10, 20]:
-            print('Processing CNN R {} Camera {} Images...'.format(camera_count, image_count))
+    for camera_count in [5]:
+        for image_count in [5]:
             settings = Settings()
-            settings.trial_name = 'CNN R {} Cameras {} Images'.format(camera_count, image_count)
-            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled Random'.format(
+            settings.learning_rate = 1e-5
+            settings.trial_name = 'CNN {} Cameras {} Images lr {:e}'.format(camera_count, image_count, settings.learning_rate)
+            settings.trial_name = clean_scientific_notation(settings.trial_name)
+            print('Processing {}...'.format(settings.trial_name))
+            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled'.format(
                 camera_count, image_count)
             train(settings)
