@@ -148,6 +148,19 @@ def train(settings=None):
             unlabeled_feature_layer = D.feature_layer
             feature_norm_loss = (unlabeled_feature_layer.norm(0).mean() - 1).pow(2)
             feature_norm_loss.backward()
+            # Gradient penalty.
+            if settings.gradient_penalty_on:
+                alpha = gpu(Variable(torch.rand(2)))
+                alpha = alpha / alpha.sum(0)
+                interpolates = (alpha[0] * gpu(Variable(unlabeled_images, requires_grad=True)) +
+                                alpha[1] * gpu(Variable(fake_examples.detach().data, requires_grad=True)))
+                _ = D(interpolates)
+                interpolates_predictions = D.feature_layer
+                gradients = torch.autograd.grad(outputs=interpolates_predictions, inputs=interpolates,
+                                                grad_outputs=gpu(torch.ones(interpolates_predictions.size())),
+                                                create_graph=True, only_inputs=True)[0]
+                gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * settings.gradient_penalty_multiplier
+                gradient_penalty.backward()
             # Discriminator update.
             discriminator_optimizer.step()
             # Generator.
@@ -217,12 +230,16 @@ def clean_scientific_notation(string):
 if __name__ == '__main__':
     for camera_count in [5]:
         for image_count in [5]:
-            settings = Settings()
-            scale_multiplier = 1e0
-            settings.unlabeled_loss_multiplier = 1e0 * scale_multiplier
-            settings.fake_loss_multiplier = 1e0 * scale_multiplier
-            settings.learning_rate = 1e-4
-            settings.trial_name = clean_scientific_notation('SRGAN {} Cameras {} Images fl {:e} ul {:e} lr {:e}'.format(camera_count, image_count, settings.fake_loss_multiplier, settings.unlabeled_loss_multiplier, settings.learning_rate))
-            print('Processing {}...'.format(settings.trial_name))
-            settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled'.format(camera_count, image_count)
-            train(settings)
+            for scale_multiplier in [1e2, 1e0, 1e3, 1e1]:
+                settings = Settings()
+                scale_multiplier = scale_multiplier
+                settings.unlabeled_loss_multiplier = 1e0 * scale_multiplier
+                settings.fake_loss_multiplier = 1e0 * scale_multiplier
+                settings.learning_rate = 1e-5
+                settings.mean_offset = 0
+                settings.gradient_penalty_on = True
+                settings.gradient_penalty_multiplier = 10
+                settings.trial_name = clean_scientific_notation('SRGAN {} Cameras {} Images fl {:e} ul {:e} lr {:e} gp'.format(camera_count, image_count, settings.fake_loss_multiplier, settings.unlabeled_loss_multiplier, settings.learning_rate))
+                print('Processing {}...'.format(settings.trial_name))
+                settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled'.format(camera_count, image_count)
+                train(settings)

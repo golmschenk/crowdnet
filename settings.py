@@ -11,7 +11,7 @@ class Settings:
         self.load_model_path = None
 
         self.summary_step_period = 100
-        self.number_of_epochs = 100000
+        self.number_of_epochs = 1000000
         self.batch_size = 400
         self.number_of_data_loader_workers = 0
         self.save_epoch_period = 100000
@@ -23,3 +23,5 @@ class Settings:
         self.fake_loss_multiplier = 1e-6
         self.mean_offset = 0
         self.learning_rate = 1e-3
+        self.gradient_penalty_on = False
+        self.gradient_penalty_multiplier = 1

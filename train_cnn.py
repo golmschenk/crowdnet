@@ -73,6 +73,7 @@ def train(settings=None):
     summary_writer = SummaryWriter(os.path.join(trial_directory, 'train'))
     validation_summary_writer = SummaryWriter(os.path.join(trial_directory, 'validation'))
     print('Starting training...')
+    step_time_start = datetime.datetime.now()
     while epoch < settings.number_of_epochs:
         for examples in train_dataset_loader:
             # Real image discriminator processing.
@@ -109,8 +110,8 @@ def train(settings=None):
                 comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                               cpu(predicted_labels))
                 summary_writer.add_image('Comparison', comparison_image, global_step=step)
-                mean_loss = running_scalars['Labeled/Loss'] / running_example_count
-                print('[Epoch: {}, Step: {}] Loss: {:g}'.format(epoch, step, mean_loss))
+                print('\rStep {}, {}...'.format(step, datetime.datetime.now() - step_time_start), end='')
+                step_time_start = datetime.datetime.now()
                 for name, running_scalar in running_scalars.items():
                     mean_scalar = running_scalar / running_example_count
                     summary_writer.add_scalar(name, mean_scalar, global_step=step)
