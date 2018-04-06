@@ -176,7 +176,7 @@ def save_trainer(trial_directory, model, optimizer, epoch, step, prefix=None):
         pickle.dump({'epoch': epoch, 'step': step}, pickle_file)
 
 
-def load_trainer(prefix=None):
+def load_trainer(prefix=None, settings=None):
     """
     Saves all the information needed to continue training.
 
@@ -185,7 +185,8 @@ def load_trainer(prefix=None):
     :return: The model and optimizer state dict and the metadata for the training run.
     :rtype: dict[torch.Tensor], dict[torch.Tensor], int, int
     """
-    settings = Settings()
+    if settings is None:
+        settings = Settings()
     model_path = settings.load_model_path
     optimizer_path = settings.load_model_path.replace('model', 'optimizer')
     meta_path = settings.load_model_path.replace('model', 'meta')

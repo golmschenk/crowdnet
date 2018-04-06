@@ -85,12 +85,14 @@ def train(settings=None):
     epoch = 0
 
     if settings.load_model_path:
-        d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator')
+        d_model_state_dict, d_optimizer_state_dict, epoch, step = load_trainer(prefix='discriminator',
+                                                                               settings=settings)
         D.load_state_dict(d_model_state_dict)
         discriminator_optimizer.load_state_dict(d_optimizer_state_dict)
     discriminator_optimizer.param_groups[0].update({'lr': settings.learning_rate, 'weight_decay': settings.weight_decay})
     if settings.load_model_path:
-        g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator')
+        g_model_state_dict, g_optimizer_state_dict, _, _ = load_trainer(prefix='generator',
+                                                                        settings=settings)
         G.load_state_dict(g_model_state_dict)
         generator_optimizer.load_state_dict(g_optimizer_state_dict)
     generator_optimizer.param_groups[0].update({'lr': settings.learning_rate})
@@ -146,7 +148,7 @@ def train(settings=None):
             # Feature norm loss.
             _ = D(gpu(Variable(unlabeled_images)))
             unlabeled_feature_layer = D.feature_layer
-            feature_norm_loss = (unlabeled_feature_layer.norm(0).mean() - 1).pow(2)
+            feature_norm_loss = (unlabeled_feature_layer.norm(dim=1).mean() - 1).pow(2)
             feature_norm_loss.backward()
             # Gradient penalty.
             if settings.gradient_penalty_on:
@@ -159,7 +161,7 @@ def train(settings=None):
                 gradients = torch.autograd.grad(outputs=interpolates_predictions, inputs=interpolates,
                                                 grad_outputs=gpu(torch.ones(interpolates_predictions.size())),
                                                 create_graph=True, only_inputs=True)[0]
-                gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * settings.gradient_penalty_multiplier
+                gradient_penalty = ((gradients.norm(dim=1) - 1) ** 2).mean() * settings.gradient_penalty_multiplier
                 gradient_penalty.backward()
             # Discriminator update.
             discriminator_optimizer.step()
@@ -200,7 +202,7 @@ def train(settings=None):
                     count_me = (predicted_counts - labels.sum(1).sum(1)).mean()
                     validation_running_scalars['Labeled/Density Loss'] += density_loss.data[0]
                     validation_running_scalars['Labeled/Count Loss'] += count_loss.data[0]
-                    validation_running_scalars['Labeled/Count MAE'] += count_mae.data[0]
+                    validation_running_scalars['Test/Count MAE'] += count_mae.data[0]
                     validation_running_scalars['Labeled/Count ME'] += count_me.data[0]
                 comparison_image = viewer.create_crowd_images_comparison_grid(cpu(images), cpu(labels),
                                                                               cpu(predicted_labels))
@@ -230,7 +232,7 @@ def clean_scientific_notation(string):
 if __name__ == '__main__':
     for camera_count in [5]:
         for image_count in [5]:
-            for scale_multiplier in [1e2, 1e0, 1e3, 1e1]:
+            for scale_multiplier in [1e0]:
                 settings = Settings()
                 scale_multiplier = scale_multiplier
                 settings.unlabeled_loss_multiplier = 1e0 * scale_multiplier
@@ -239,7 +241,13 @@ if __name__ == '__main__':
                 settings.mean_offset = 0
                 settings.gradient_penalty_on = True
                 settings.gradient_penalty_multiplier = 10
-                settings.trial_name = clean_scientific_notation('SRGAN {} Cameras {} Images fl {:e} ul {:e} lr {:e} gp'.format(camera_count, image_count, settings.fake_loss_multiplier, settings.unlabeled_loss_multiplier, settings.learning_rate))
+                settings.load_model_path = '/media/root/Gold/crowd/Old Logs/Before feature norm loss fix/SRGAN 5 Cameras 5 Images fl 1e1 ul 1e1 lr 1e-5 y2018m03d17h21m53s34/model 900000'
+                trial_name = 'SRGAN C{} I{} fl{:e} ul{:e} lr{:e} gp loaded'.format(camera_count, image_count,
+                                                                                            settings.fake_loss_multiplier,
+                                                                                            settings.unlabeled_loss_multiplier,
+                                                                                            settings.learning_rate)
+                trial_name += ' zbg{:e}'.format(settings.mean_offset)
+                settings.trial_name = clean_scientific_notation(trial_name)
                 print('Processing {}...'.format(settings.trial_name))
                 settings.train_dataset_path = '/media/root/Gold/crowd/data/World Expo Datasets/{} Camera {} Images Target Unlabeled'.format(camera_count, image_count)
                 train(settings)

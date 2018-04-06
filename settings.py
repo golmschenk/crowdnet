@@ -10,11 +10,11 @@ class Settings:
         self.test_dataset_path = self.validation_dataset_path
         self.load_model_path = None
 
-        self.summary_step_period = 100
+        self.summary_step_period = 1000
         self.number_of_epochs = 1000000
         self.batch_size = 400
         self.number_of_data_loader_workers = 0
-        self.save_epoch_period = 100000
+        self.save_epoch_period = 10000000
         self.restore_mode = 'transfer'
         self.loss_order = 1
         self.weight_decay = 0.01
